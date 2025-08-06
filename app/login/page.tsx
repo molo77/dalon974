@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { signInWithGoogle } from "@/lib/auth";
 import { auth } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
@@ -9,12 +10,13 @@ export default function LoginPage() {
   const [user, loading] = useAuthState(auth);
   const router = useRouter();
 
-  if (loading) return <p>Chargement...</p>;
+  useEffect(() => {
+    if (user) {
+      router.push("/dashboard");
+    }
+  }, [user, router]);
 
-  if (user) {
-    router.push("/dashboard");
-    return null;
-  }
+  if (loading) return <p className="p-6">Chargement...</p>;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-8">

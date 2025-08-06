@@ -3,7 +3,7 @@
 type AnnonceProps = {
   titre: string;
   ville: string;
-  prix: number;
+  prix?: number;
   imageUrl?: string;
 };
 
@@ -19,7 +19,9 @@ export default function AnnonceCard({ titre, ville, prix, imageUrl }: AnnoncePro
       )}
       <h2 className="text-lg font-bold">{titre}</h2>
       <p className="text-sm text-gray-600">{ville}</p>
-      <p className="text-blue-600 font-semibold">{prix} € / mois</p>
+      <p className="text-blue-600 font-semibold">
+        {prix ? `${prix} € / mois` : "Prix non renseigné"}
+      </p>
     </div>
   );
 }
