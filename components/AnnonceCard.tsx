@@ -5,7 +5,7 @@ type AnnonceProps = {
   prix?: number;
   imageUrl?: string;
   onDelete?: () => void;
-  onEdit?: () => void; // ✅ Ajouter cette ligne
+  onEdit?: () => void;
 };
 
 export default function AnnonceCard({
@@ -15,7 +15,7 @@ export default function AnnonceCard({
   prix,
   imageUrl,
   onDelete,
-  onEdit, // ✅ Ajouter ici aussi
+  onEdit,
 }: AnnonceProps) {
   return (
     <div className="relative border rounded-xl shadow p-4 w-full max-w-md bg-white">
