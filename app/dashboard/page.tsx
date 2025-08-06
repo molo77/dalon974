@@ -27,7 +27,6 @@ export default function DashboardPage() {
 
   const [mesAnnonces, setMesAnnonces] = useState<any[]>([]);
   const [loadingAnnonces, setLoadingAnnonces] = useState(true);
-  const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editAnnonce, setEditAnnonce] = useState<any | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -61,13 +60,15 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
       <h1 className="text-3xl font-bold mb-6">
         Bienvenue {user?.displayName || user?.email}
-      </h1>
-
+        </h1>
       {successMessage && (
-        <div className="bg-green-100 text-green-800 px-4 py-2 rounded shadow mb-4">
-          {successMessage}
+        <div className="fixed bottom-4 right-4 z-50">
+          <div className="bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg animate-fade">
+            {successMessage}
+          </div>
         </div>
       )}
+
 
       {user?.photoURL && (
         <Image
@@ -91,9 +92,6 @@ export default function DashboardPage() {
 
       <div className="w-full max-w-2xl">
         <h2 className="text-2xl font-semibold mb-4">Mes annonces</h2>
-        {deleteSuccess && (
-          <p className="text-green-600 mb-4">Annonce supprimée avec succès ✅</p>
-        )}
         {loadingAnnonces ? (
           <p className="text-gray-500">Chargement de vos annonces...</p>
         ) : mesAnnonces.length === 0 ? (
@@ -107,8 +105,8 @@ export default function DashboardPage() {
                 onDelete={async () => {
                   if (confirm("Supprimer cette annonce ?")) {
                     await deleteDoc(doc(db, "annonces", annonce.id));
-                    setDeleteSuccess(true);
-                    setTimeout(() => setDeleteSuccess(false), 3000);
+                    setSuccessMessage("Annonce supprimée avec succès ✅");
+                    setTimeout(() => setSuccessMessage(null), 3000);
                   }
                 }}
                 onEdit={() => {
