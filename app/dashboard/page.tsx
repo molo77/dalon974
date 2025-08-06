@@ -30,6 +30,7 @@ export default function DashboardPage() {
   const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editAnnonce, setEditAnnonce] = useState<any | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -62,6 +63,12 @@ export default function DashboardPage() {
         Bienvenue {user?.displayName || user?.email}
       </h1>
 
+      {successMessage && (
+        <div className="bg-green-100 text-green-800 px-4 py-2 rounded shadow mb-4">
+          {successMessage}
+        </div>
+      )}
+
       {user?.photoURL && (
         <Image
           src={user.photoURL}
@@ -74,7 +81,7 @@ export default function DashboardPage() {
 
       <button
         onClick={() => {
-          setEditAnnonce(null); // mode création
+          setEditAnnonce(null); // création
           setModalOpen(true);
         }}
         className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 mb-6"
@@ -131,6 +138,7 @@ export default function DashboardPage() {
                 prix: Number(prix),
                 imageUrl,
               });
+              setSuccessMessage("Annonce modifiée avec succès ✅");
             } else {
               await addDoc(collection(db, "annonces"), {
                 titre,
@@ -141,7 +149,10 @@ export default function DashboardPage() {
                 userId: user!.uid,
                 userEmail: user!.email,
               });
+              setSuccessMessage("Annonce créée avec succès ✅");
             }
+
+            setTimeout(() => setSuccessMessage(null), 3000);
           } catch (err) {
             console.error("Erreur Firestore :", err);
             alert("Une erreur est survenue.");
