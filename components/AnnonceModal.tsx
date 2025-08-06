@@ -1,7 +1,7 @@
 "use client";
 
-import { Dialog } from "@headlessui/react";
-import { useState, useEffect } from "react";
+import { Dialog, Transition } from "@headlessui/react";
+import { Fragment, useEffect, useState } from "react";
 
 export default function AnnonceModal({
   isOpen,
@@ -45,68 +45,91 @@ export default function AnnonceModal({
   };
 
   return (
-    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
-      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <Dialog.Panel className="bg-white rounded-lg max-w-md w-full p-6 shadow-lg">
-          <Dialog.Title className="text-xl font-bold mb-4">
-            {annonce ? "✏️ Modifier l’annonce" : "➕ Nouvelle annonce"}
-          </Dialog.Title>
+    <Transition show={isOpen} as={Fragment}>
+      <Dialog onClose={onClose} className="relative z-50">
+        <Transition.Child
+          as={Fragment}
+          enter="ease-out duration-300"
+          enterFrom="opacity-0"
+          enterTo="opacity-100"
+          leave="ease-in duration-200"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+        </Transition.Child>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <input
-              type="text"
-              placeholder="Titre"
-              value={titre}
-              onChange={(e) => setTitre(e.target.value)}
-              className="w-full p-2 border rounded"
-              required
-            />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="scale-95 opacity-0"
+            enterTo="scale-100 opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="scale-100 opacity-100"
+            leaveTo="scale-95 opacity-0"
+          >
+            <Dialog.Panel className="bg-white rounded-lg max-w-md w-full p-6 shadow-lg">
+              <Dialog.Title className="text-xl font-bold mb-4">
+                {annonce ? "✏️ Modifier l’annonce" : "➕ Nouvelle annonce"}
+              </Dialog.Title>
 
-            <input
-              type="text"
-              placeholder="Ville"
-              value={ville}
-              onChange={(e) => setVille(e.target.value)}
-              className="w-full p-2 border rounded"
-              required
-            />
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <input
+                  type="text"
+                  placeholder="Titre"
+                  value={titre}
+                  onChange={(e) => setTitre(e.target.value)}
+                  className="w-full p-2 border rounded"
+                  required
+                />
 
-            <input
-              type="number"
-              placeholder="Prix (€)"
-              value={prix}
-              onChange={(e) => setPrix(e.target.value)}
-              className="w-full p-2 border rounded"
-              required
-            />
+                <input
+                  type="text"
+                  placeholder="Ville"
+                  value={ville}
+                  onChange={(e) => setVille(e.target.value)}
+                  className="w-full p-2 border rounded"
+                  required
+                />
 
-            <input
-              type="text"
-              placeholder="URL de l’image"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              className="w-full p-2 border rounded"
-            />
+                <input
+                  type="number"
+                  placeholder="Prix (€)"
+                  value={prix}
+                  onChange={(e) => setPrix(e.target.value)}
+                  className="w-full p-2 border rounded"
+                  required
+                />
 
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="text-gray-600 hover:underline"
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-              >
-                Publier
-              </button>
-            </div>
-          </form>
-        </Dialog.Panel>
-      </div>
-    </Dialog>
+                <input
+                  type="text"
+                  placeholder="URL de l’image"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  className="w-full p-2 border rounded"
+                />
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="text-gray-600 hover:underline"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                  >
+                    Publier
+                  </button>
+                </div>
+              </form>
+            </Dialog.Panel>
+          </Transition.Child>
+        </div>
+      </Dialog>
+    </Transition>
   );
 }
