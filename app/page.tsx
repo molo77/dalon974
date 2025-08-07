@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, orderBy, startAfter, limit } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  query,
+  orderBy,
+  startAfter,
+  where,
+  limit,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import AnnonceCard from "@/components/AnnonceCard";
 
@@ -11,17 +19,33 @@ export default function HomePage() {
   const [hasMore, setHasMore] = useState(true);
   const [lastDoc, setLastDoc] = useState<any | null>(null);
 
+  const [ville, setVille] = useState("");
+  const [prixMax, setPrixMax] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<"date" | "prix">("date");
+
   const loadAnnonces = async () => {
     if (loadingMore || !hasMore) return;
-
     setLoadingMore(true);
 
     try {
-      const baseQuery = query(
+      let baseQuery: any = query(
         collection(db, "annonces"),
-        orderBy("createdAt", "desc"),
-        limit(5)
+        orderBy(sortBy === "date" ? "createdAt" : "prix", sortBy === "date" ? "desc" : "asc")
       );
+
+      if (ville) {
+        baseQuery = query(
+          baseQuery,
+          where("ville", ">=", ville),
+          where("ville", "<=", ville + "\uf8ff")
+        );
+      }
+
+      if (prixMax !== null) {
+        baseQuery = query(baseQuery, where("prix", "<=", prixMax));
+      }
+
+      baseQuery = query(baseQuery, limit(5));
 
       const paginatedQuery = lastDoc
         ? query(baseQuery, startAfter(lastDoc))
@@ -34,7 +58,6 @@ export default function HomePage() {
         ...doc.data(),
       }));
 
-      // Éviter les doublons
       setAnnonces((prev) => {
         const existingIds = new Set(prev.map((a) => a.id));
         return [...prev, ...docs.filter((d) => !existingIds.has(d.id))];
@@ -73,6 +96,74 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
       <h1 className="text-3xl font-bold mb-6 text-center">Annonces de colocation</h1>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          setAnnonces([]);
+          setLastDoc(null);
+          setHasMore(true);
+          loadAnnonces();
+        }}
+        className="mb-6 w-full max-w-3xl flex flex-wrap gap-4 items-end justify-center"
+      >
+        <div>
+          <label className="block text-sm font-medium mb-1">Ville</label>
+          <input
+            type="text"
+            value={ville}
+            onChange={(e) => setVille(e.target.value)}
+            className="border border-gray-300 rounded px-3 py-2 w-full"
+            placeholder="Ex: Saint-Denis"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Prix max (€)</label>
+          <input
+            type="number"
+            value={prixMax ?? ""}
+            onChange={(e) => setPrixMax(Number(e.target.value) || null)}
+            className="border border-gray-300 rounded px-3 py-2 w-full"
+            placeholder="Ex: 600"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Trier par</label>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as "date" | "prix")}
+            className="border border-gray-300 rounded px-3 py-2 w-full"
+          >
+            <option value="date">Date récente</option>
+            <option value="prix">Prix croissant</option>
+          </select>
+        </div>
+
+        <button
+          type="submit"
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          Filtrer
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setVille("");
+            setPrixMax(null);
+            setSortBy("date");
+            setAnnonces([]);
+            setLastDoc(null);
+            setHasMore(true);
+            loadAnnonces();
+          }}
+          className="border border-gray-400 text-gray-700 px-4 py-2 rounded hover:bg-gray-100"
+        >
+          Réinitialiser
+        </button>
+      </form>
 
       <div className="w-full max-w-3xl flex flex-col gap-4 items-center">
         {annonces.map((annonce) => (
