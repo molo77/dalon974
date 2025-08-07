@@ -20,6 +20,8 @@ import {
 import Image from "next/image";
 import AnnonceCard from "@/components/AnnonceCard";
 import AnnonceModal from "@/components/AnnonceModal";
+import Toast, { ToastMessage } from "@/components/Toast";
+import { v4 as uuidv4 } from "uuid";
 
 export default function DashboardPage() {
   const [user, loading] = useAuthState(auth);
@@ -29,10 +31,13 @@ export default function DashboardPage() {
   const [loadingAnnonces, setLoadingAnnonces] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editAnnonce, setEditAnnonce] = useState<any | null>(null);
-  const [toast, setToast] = useState<{
-    type: "success" | "error" | "info";
-    message: string;
-  } | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const showToast = (type: "success" | "error" | "info", message: string) => {
+    const id = uuidv4();
+    setToasts((prev) => [...prev, { id, type, message }]);
+  };
+
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -102,18 +107,10 @@ export default function DashboardPage() {
                   if (confirm("Supprimer cette annonce ?")) {
                     try {
                       await deleteDoc(doc(db, "annonces", annonce.id));
-                      setToast({
-                        type: "success",
-                        message: "Annonce supprimée avec succès ✅",
-                      });
-                      setTimeout(() => setToast(null), 3000);
+                      showToast("success", "Annonce supprimée avec succès ✅");
                     } catch (err) {
                       console.error(err);
-                      setToast({
-                        type: "error",
-                        message: "Erreur lors de la suppression ❌",
-                      });
-                      setTimeout(() => setToast(null), 3000);
+                      showToast("error", "Erreur lors de la suppression ❌");
                     }
                   }
                 }}
@@ -144,10 +141,7 @@ export default function DashboardPage() {
                 prix: Number(prix),
                 imageUrl,
               });
-              setToast({
-                type: "success",
-                message: "Annonce modifiée avec succès ✅",
-              });
+              showToast("success", "Annonce modifié avec succès ✅");
             } else {
               await addDoc(collection(db, "annonces"), {
                 titre,
@@ -158,40 +152,27 @@ export default function DashboardPage() {
                 userId: user!.uid,
                 userEmail: user!.email,
               });
-              setToast({
-                type: "success",
-                message: "Annonce créée avec succès ✅",
-              });
+              showToast("success", "Annonce créé avec succès ✅");
             }
 
-            setTimeout(() => setToast(null), 3000);
+            
           } catch (err) {
             console.error("Erreur Firestore :", err);
-            setToast({
-              type: "error",
-              message: "Erreur lors de l'enregistrement ❌",
-            });
-            setTimeout(() => setToast(null), 3000);
+            showToast("error", "Erreur lors de l'enregistrement ❌");
+            
           }
         }}
       />
 
       {/* ✅ Snackbar en bas à droite */}
-      {toast && (
-        <div className="fixed bottom-4 right-4 z-50">
-          <div
-            className={`px-6 py-3 rounded-lg shadow-lg animate-fade text-white ${
-              toast.type === "success"
-                ? "bg-green-600"
-                : toast.type === "error"
-                ? "bg-red-600"
-                : "bg-blue-600"
-            }`}
-          >
-            {toast.message}
-          </div>
-        </div>
-      )}
+      <Toast
+        toasts={toasts}
+        onRemove={(id) =>
+          setToasts((prevToasts) => prevToasts.filter((toast) => toast.id !== id))
+        }
+      />
+
+
     </div>
   );
 }
