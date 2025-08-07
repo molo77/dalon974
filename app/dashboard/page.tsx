@@ -29,7 +29,10 @@ export default function DashboardPage() {
   const [loadingAnnonces, setLoadingAnnonces] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editAnnonce, setEditAnnonce] = useState<any | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -60,15 +63,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
       <h1 className="text-3xl font-bold mb-6">
         Bienvenue {user?.displayName || user?.email}
-        </h1>
-      {successMessage && (
-        <div className="fixed bottom-4 right-4 z-50">
-          <div className="bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg animate-fade">
-            {successMessage}
-          </div>
-        </div>
-      )}
-
+      </h1>
 
       {user?.photoURL && (
         <Image
@@ -92,6 +87,7 @@ export default function DashboardPage() {
 
       <div className="w-full max-w-2xl">
         <h2 className="text-2xl font-semibold mb-4">Mes annonces</h2>
+
         {loadingAnnonces ? (
           <p className="text-gray-500">Chargement de vos annonces...</p>
         ) : mesAnnonces.length === 0 ? (
@@ -104,9 +100,21 @@ export default function DashboardPage() {
                 {...annonce}
                 onDelete={async () => {
                   if (confirm("Supprimer cette annonce ?")) {
-                    await deleteDoc(doc(db, "annonces", annonce.id));
-                    setSuccessMessage("Annonce supprimée avec succès ✅");
-                    setTimeout(() => setSuccessMessage(null), 3000);
+                    try {
+                      await deleteDoc(doc(db, "annonces", annonce.id));
+                      setToast({
+                        type: "success",
+                        message: "Annonce supprimée avec succès ✅",
+                      });
+                      setTimeout(() => setToast(null), 3000);
+                    } catch (err) {
+                      console.error(err);
+                      setToast({
+                        type: "error",
+                        message: "Erreur lors de la suppression ❌",
+                      });
+                      setTimeout(() => setToast(null), 3000);
+                    }
                   }
                 }}
                 onEdit={() => {
@@ -136,7 +144,10 @@ export default function DashboardPage() {
                 prix: Number(prix),
                 imageUrl,
               });
-              setSuccessMessage("Annonce modifiée avec succès ✅");
+              setToast({
+                type: "success",
+                message: "Annonce modifiée avec succès ✅",
+              });
             } else {
               await addDoc(collection(db, "annonces"), {
                 titre,
@@ -147,16 +158,40 @@ export default function DashboardPage() {
                 userId: user!.uid,
                 userEmail: user!.email,
               });
-              setSuccessMessage("Annonce créée avec succès ✅");
+              setToast({
+                type: "success",
+                message: "Annonce créée avec succès ✅",
+              });
             }
 
-            setTimeout(() => setSuccessMessage(null), 3000);
+            setTimeout(() => setToast(null), 3000);
           } catch (err) {
             console.error("Erreur Firestore :", err);
-            alert("Une erreur est survenue.");
+            setToast({
+              type: "error",
+              message: "Erreur lors de l'enregistrement ❌",
+            });
+            setTimeout(() => setToast(null), 3000);
           }
         }}
       />
+
+      {/* ✅ Snackbar en bas à droite */}
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <div
+            className={`px-6 py-3 rounded-lg shadow-lg animate-fade text-white ${
+              toast.type === "success"
+                ? "bg-green-600"
+                : toast.type === "error"
+                ? "bg-red-600"
+                : "bg-blue-600"
+            }`}
+          >
+            {toast.message}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
