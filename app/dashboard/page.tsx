@@ -16,6 +16,8 @@ import {
   addDoc,
   updateDoc,
   serverTimestamp,
+  limit,
+  startAfter,
 } from "firebase/firestore";
 import Image from "next/image";
 import AnnonceCard from "@/components/AnnonceCard";
@@ -35,11 +37,75 @@ export default function DashboardPage() {
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [selectedAnnonceToDelete, setSelectedAnnonceToDelete] = useState<any | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-
   const showToast = (type: "success" | "error" | "info", message: string) => {
     const id = uuidv4();
     setToasts((prev) => [...prev, { id, type, message }]);
   };
+  const [lastDoc, setLastDoc] = useState<any | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadAnnonces = async () => {
+    if (!user || loadingMore || !hasMore) return;
+
+    setLoadingMore(true);
+
+    const baseQuery = query(
+      collection(db, "annonces"),
+      where("userId", "==", user.uid),
+      orderBy("createdAt", "desc"),
+      limit(5)
+    );
+
+    const paginatedQuery = lastDoc
+      ? query(baseQuery, startAfter(lastDoc))
+      : baseQuery;
+
+    const snapshot = await getDocs(paginatedQuery);
+
+    const docs = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    if (docs.length > 0) {
+      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+      setMesAnnonces((prev) => {
+        const newIds = new Set(prev.map((a) => a.id));
+        const uniqueDocs = docs.filter((doc) => !newIds.has(doc.id));
+        return [...prev, ...uniqueDocs];
+      });
+
+    } else {
+      setHasMore(false);
+    }
+
+    setLoadingMore(false);
+  };
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    loadAnnonces();
+  }, [user, loading, lastDoc]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const bottom =
+        window.innerHeight + window.scrollY >= document.body.offsetHeight - 100;
+
+      if (bottom && hasMore && !loadingMore) {
+        loadAnnonces();
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  });
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -92,7 +158,7 @@ export default function DashboardPage() {
         ➕ Nouvelle annonce
       </button>
       <div className="flex justify-center w-full">
-        <div className="w-full max-w-2xl">
+        <div className="w-full justify-center max-w-2xl">
           <h2 className="text-2xl font-semibold mb-4">Mes annonces</h2>
 
           {loadingAnnonces ? (
@@ -115,6 +181,12 @@ export default function DashboardPage() {
                   }}
                 />
               ))}
+            {loadingMore && (
+              <p className="text-center text-gray-500 mt-4">Chargement…</p>
+            )}
+            {!hasMore && (
+              <p className="text-center text-gray-400 mt-4">Toutes les annonces sont chargées.</p>
+            )}
             </div>
           )}
         </div>
