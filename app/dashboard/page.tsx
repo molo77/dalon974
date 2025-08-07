@@ -20,6 +20,7 @@ import {
 import Image from "next/image";
 import AnnonceCard from "@/components/AnnonceCard";
 import AnnonceModal from "@/components/AnnonceModal";
+import ConfirmModal from "@/components/ConfirmModal";
 import Toast, { ToastMessage } from "@/components/Toast";
 import { v4 as uuidv4 } from "uuid";
 
@@ -31,13 +32,14 @@ export default function DashboardPage() {
   const [loadingAnnonces, setLoadingAnnonces] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editAnnonce, setEditAnnonce] = useState<any | null>(null);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [selectedAnnonceToDelete, setSelectedAnnonceToDelete] = useState<any | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const showToast = (type: "success" | "error" | "info", message: string) => {
     const id = uuidv4();
     setToasts((prev) => [...prev, { id, type, message }]);
   };
-
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -65,7 +67,7 @@ export default function DashboardPage() {
   }, [user]);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
+    <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center justify-center">
       <h1 className="text-3xl font-bold mb-6">
         Bienvenue {user?.displayName || user?.email}
       </h1>
@@ -82,46 +84,40 @@ export default function DashboardPage() {
 
       <button
         onClick={() => {
-          setEditAnnonce(null); // création
+          setEditAnnonce(null);
           setModalOpen(true);
         }}
         className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 mb-6"
       >
         ➕ Nouvelle annonce
       </button>
+      <div className="flex justify-center w-full">
+        <div className="w-full max-w-2xl">
+          <h2 className="text-2xl font-semibold mb-4">Mes annonces</h2>
 
-      <div className="w-full max-w-2xl">
-        <h2 className="text-2xl font-semibold mb-4">Mes annonces</h2>
-
-        {loadingAnnonces ? (
-          <p className="text-gray-500">Chargement de vos annonces...</p>
-        ) : mesAnnonces.length === 0 ? (
-          <p className="text-gray-500">Aucune annonce pour le moment.</p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {mesAnnonces.map((annonce) => (
-              <AnnonceCard
-                key={annonce.id}
-                {...annonce}
-                onDelete={async () => {
-                  if (confirm("Supprimer cette annonce ?")) {
-                    try {
-                      await deleteDoc(doc(db, "annonces", annonce.id));
-                      showToast("success", "Annonce supprimée avec succès ✅");
-                    } catch (err) {
-                      console.error(err);
-                      showToast("error", "Erreur lors de la suppression ❌");
-                    }
-                  }
-                }}
-                onEdit={() => {
-                  setEditAnnonce(annonce);
-                  setModalOpen(true);
-                }}
-              />
-            ))}
-          </div>
-        )}
+          {loadingAnnonces ? (
+            <p className="text-gray-500">Chargement de vos annonces...</p>
+          ) : mesAnnonces.length === 0 ? (
+            <p className="text-gray-500">Aucune annonce pour le moment.</p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {mesAnnonces.map((annonce) => (
+                <AnnonceCard
+                  key={annonce.id}
+                  {...annonce}
+                  onDelete={() => {
+                    setSelectedAnnonceToDelete(annonce);
+                    setConfirmModalOpen(true);
+                  }}
+                  onEdit={() => {
+                    setEditAnnonce(annonce);
+                    setModalOpen(true);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <AnnonceModal
@@ -141,7 +137,7 @@ export default function DashboardPage() {
                 prix: Number(prix),
                 imageUrl,
               });
-              showToast("success", "Annonce modifié avec succès ✅");
+              showToast("success", "Annonce modifiée avec succès ✅");
             } else {
               await addDoc(collection(db, "annonces"), {
                 titre,
@@ -152,27 +148,37 @@ export default function DashboardPage() {
                 userId: user!.uid,
                 userEmail: user!.email,
               });
-              showToast("success", "Annonce créé avec succès ✅");
+              showToast("success", "Annonce créée avec succès ✅");
             }
-
-            
           } catch (err) {
             console.error("Erreur Firestore :", err);
             showToast("error", "Erreur lors de l'enregistrement ❌");
-            
           }
         }}
       />
 
-      {/* ✅ Snackbar en bas à droite */}
-      <Toast
-        toasts={toasts}
-        onRemove={(id) =>
-          setToasts((prevToasts) => prevToasts.filter((toast) => toast.id !== id))
-        }
+      <ConfirmModal
+        isOpen={confirmModalOpen}
+        onClose={() => setConfirmModalOpen(false)}
+        onConfirm={async () => {
+          if (!selectedAnnonceToDelete) return;
+          showToast("info", "Suppression en cours...");
+          try {
+            await deleteDoc(doc(db, "annonces", selectedAnnonceToDelete.id));
+            showToast("success", "Annonce supprimée avec succès ✅");
+          } catch (err) {
+            console.error(err);
+            showToast("error", "Erreur lors de la suppression ❌");
+          } finally {
+            setSelectedAnnonceToDelete(null);
+          }
+        }}
       />
 
-
+      <Toast
+        toasts={toasts}
+        onRemove={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))}
+      />
     </div>
   );
 }
