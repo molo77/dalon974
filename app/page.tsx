@@ -113,22 +113,9 @@ export default function HomePage() {
 
       {/* Affichage utilisateur connecté */}
       {user && (
-        <>
-          <div className="bg-white shadow rounded p-4 mb-8 w-full max-w-md text-green-700 font-semibold text-center">
-            Connecté en tant que {user.email || user.displayName}
-          </div>
-          {/* Dashboard affiché si connecté */}
-          <section className="bg-white shadow rounded p-6 mb-8 w-full max-w-3xl">
-            <h2 className="text-2xl font-bold mb-4 text-blue-700">Dashboard</h2>
-            <p className="mb-2">Bienvenue sur votre espace personnel.</p>
-            {/* Ajoutez ici des infos ou actions spécifiques au dashboard */}
-            <ul className="list-disc pl-5 text-gray-700">
-              <li>Voir vos annonces</li>
-              <li>Créer une nouvelle annonce</li>
-              <li>Modifier votre profil</li>
-            </ul>
-          </section>
-        </>
+        <div className="bg-white shadow rounded p-4 mb-8 w-full max-w-md text-green-700 font-semibold text-center">
+          Connecté en tant que {user.email || user.displayName}
+        </div>
       )}
 
       <form
