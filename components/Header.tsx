@@ -40,22 +40,36 @@ export default function Header() {
             Accueil
           </Link>
 
-          {user && (
+          {user ? (
             <>
-              <Link href="/dashboard" className="hover:underline">
-                Dashboard
+              {/* Avatar et nom du compte cliquables, texte personnalisé */}
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-2 hover:underline"
+              >
+                {user.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt="Avatar"
+                    className="w-8 h-8 rounded-full border"
+                  />
+                ) : (
+                  <span className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
+                    {user.displayName?.charAt(0) || user.email?.charAt(0) || "?"}
+                  </span>
+                )}
+                <span className="font-medium text-gray-700">
+                  Bienvenue {user.displayName || user.email?.split("@")[0]}
+                </span>
               </Link>
-
               <button
                 onClick={handleLogout}
-                className="text-red-600 hover:underline"
+                className="text-red-600 hover:underline ml-4"
               >
                 Déconnexion
               </button>
             </>
-          )}
-
-          {!user && (
+          ) : (
             <Link href="/login" className="text-blue-600 hover:underline">
               Connexion
             </Link>
@@ -70,22 +84,29 @@ export default function Header() {
             Accueil
           </Link>
 
-          {user && (
+          {user ? (
             <>
-              <Link href="/dashboard" className="hover:underline" onClick={toggleMobile}>
-                Dashboard
+              {/* Avatar et nom du compte cliquables en mobile, texte personnalisé */}
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-2 mb-2 hover:underline"
+                onClick={toggleMobile}
+              >
+                {user.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt="Avatar"
+                    className="w-8 h-8 rounded-full border"
+                  />
+                ) : (
+                  <span className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
+                    {user.displayName?.charAt(0) || user.email?.charAt(0) || "?"}
+                  </span>
+                )}
+                <span className="font-medium text-gray-700">
+                  Bienvenue {user.displayName || user.email?.split("@")[0]}
+                </span>
               </Link>
-
-              {pathname === "/dashboard" && (
-                <a
-                  href="#formulaire-annonce"
-                  onClick={toggleMobile}
-                  className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition"
-                >
-                  ➕ Nouvelle annonce
-                </a>
-              )}
-
               <button
                 onClick={() => {
                   handleLogout();
@@ -96,9 +117,7 @@ export default function Header() {
                 Déconnexion
               </button>
             </>
-          )}
-
-          {!user && (
+          ) : (
             <Link href="/login" className="text-blue-600 hover:underline" onClick={toggleMobile}>
               Connexion
             </Link>

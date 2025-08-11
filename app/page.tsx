@@ -111,13 +111,6 @@ export default function HomePage() {
     <main className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
       <h1 className="text-3xl font-bold mb-6 text-center">Annonces de colocation</h1>
 
-      {/* Affichage utilisateur connecté */}
-      {user && (
-        <div className="bg-white shadow rounded p-4 mb-8 w-full max-w-md text-green-700 font-semibold text-center">
-          Connecté en tant que {user.email || user.displayName}
-        </div>
-      )}
-
       <form
         onSubmit={(e) => {
           e.preventDefault();
