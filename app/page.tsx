@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import AnnonceCard from "@/components/AnnonceCard";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { getAuth } from "firebase/auth";
 
 export default function HomePage() {
   const [annonces, setAnnonces] = useState<any[]>([]);
@@ -24,6 +24,13 @@ export default function HomePage() {
   const [prixMax, setPrixMax] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<"date" | "prix">("date");
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = auth.onAuthStateChanged((u) => setUser(u));
+    return () => unsubscribe();
+  }, []);
 
   const loadAnnonces = async () => {
     if (loadingMore || !hasMore) return;
@@ -100,73 +107,28 @@ export default function HomePage() {
     return () => window.removeEventListener("scroll", handleScroll);
   });
 
-  const handleEmailSignup = async () => {
-    const auth = getAuth();
-    const email = prompt("Votre email :");
-    const password = prompt("Votre mot de passe :");
-    if (!email || !password) return;
-    try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      setAuthMessage("Inscription Email réussie !");
-    } catch (error: any) {
-      setAuthMessage("Erreur Email : " + error.message);
-    }
-  };
-
-  const handleEmailLogin = async () => {
-    const auth = getAuth();
-    const email = prompt("Votre email :");
-    const password = prompt("Votre mot de passe :");
-    if (!email || !password) return;
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      setAuthMessage("Connexion Email réussie !");
-    } catch (error: any) {
-      setAuthMessage("Erreur Connexion Email : " + error.message);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    const auth = getAuth();
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-      setAuthMessage("Connexion Google réussie !");
-    } catch (error: any) {
-      setAuthMessage("Erreur Connexion Google : " + error.message);
-    }
-  };
-
   return (
     <main className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
       <h1 className="text-3xl font-bold mb-6 text-center">Annonces de colocation</h1>
 
-      {/* Bouton d'inscription Email uniquement */}
-      <div className="flex gap-4 mb-2">
-        <button
-          className="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800"
-          onClick={handleEmailSignup}
-        >
-          S'inscrire avec Email
-        </button>
-      </div>
-      {/* Boutons de connexion */}
-      <div className="flex gap-4 mb-6">
-        <button
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          onClick={handleEmailLogin}
-        >
-          Se connecter avec Email
-        </button>
-        <button
-          className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-          onClick={handleGoogleLogin}
-        >
-          Se connecter avec Google
-        </button>
-      </div>
-      {authMessage && (
-        <div className="mb-4 text-center text-sm text-green-700">{authMessage}</div>
+      {/* Affichage utilisateur connecté */}
+      {user && (
+        <>
+          <div className="bg-white shadow rounded p-4 mb-8 w-full max-w-md text-green-700 font-semibold text-center">
+            Connecté en tant que {user.email || user.displayName}
+          </div>
+          {/* Dashboard affiché si connecté */}
+          <section className="bg-white shadow rounded p-6 mb-8 w-full max-w-3xl">
+            <h2 className="text-2xl font-bold mb-4 text-blue-700">Dashboard</h2>
+            <p className="mb-2">Bienvenue sur votre espace personnel.</p>
+            {/* Ajoutez ici des infos ou actions spécifiques au dashboard */}
+            <ul className="list-disc pl-5 text-gray-700">
+              <li>Voir vos annonces</li>
+              <li>Créer une nouvelle annonce</li>
+              <li>Modifier votre profil</li>
+            </ul>
+          </section>
+        </>
       )}
 
       <form
