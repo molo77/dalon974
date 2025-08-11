@@ -42,7 +42,7 @@ export default function Header() {
 
           {user ? (
             <>
-              {/* Avatar et nom du compte cliquables, texte personnalisé */}
+              {/* Avatar et nom du compte cliquables */}
               <Link
                 href="/dashboard"
                 className="flex items-center gap-2 hover:underline"
@@ -59,7 +59,7 @@ export default function Header() {
                   </span>
                 )}
                 <span className="font-medium text-gray-700">
-                  Bienvenue {user.displayName || user.email?.split("@")[0]}
+                  {user.displayName || user.email?.split("@")[0]}
                 </span>
               </Link>
               <button
@@ -86,24 +86,27 @@ export default function Header() {
 
           {user ? (
             <>
-              {/* Avatar et nom du compte cliquables en mobile, texte personnalisé */}
+              {/* Avatar et nom du compte cliquables en mobile, texte personnalisé centré */}
               <Link
                 href="/dashboard"
-                className="flex items-center gap-2 mb-2 hover:underline"
+                className="flex flex-col items-center gap-1 mb-2 hover:underline"
                 onClick={toggleMobile}
+                style={{ minWidth: "120px" }}
               >
-                {user.photoURL ? (
-                  <img
-                    src={user.photoURL}
-                    alt="Avatar"
-                    className="w-8 h-8 rounded-full border"
-                  />
-                ) : (
-                  <span className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
-                    {user.displayName?.charAt(0) || user.email?.charAt(0) || "?"}
-                  </span>
-                )}
-                <span className="font-medium text-gray-700">
+                <div className="flex items-center justify-center gap-2">
+                  {user.photoURL ? (
+                    <img
+                      src={user.photoURL}
+                      alt="Avatar"
+                      className="w-8 h-8 rounded-full border"
+                    />
+                  ) : (
+                    <span className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
+                      {user.displayName?.charAt(0) || user.email?.charAt(0) || "?"}
+                    </span>
+                  )}
+                </div>
+                <span className="font-medium text-gray-700 text-center block">
                   Bienvenue {user.displayName || user.email?.split("@")[0]}
                 </span>
               </Link>

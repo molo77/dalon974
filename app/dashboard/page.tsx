@@ -134,19 +134,27 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center justify-center">
-      <h1 className="text-3xl font-bold mb-6">
-        Bienvenue {user?.displayName || user?.email}
-      </h1>
-
-      {user?.photoURL && (
-        <Image
-          src={user.photoURL}
-          alt="Avatar"
-          width={100}
-          height={100}
-          className="rounded-full mb-6"
-        />
-      )}
+      {/* Avatar et Bienvenue centrés dans le div */}
+      <div className="w-full max-w-2xl flex flex-col items-center justify-center mb-6">
+        <div className="flex items-center justify-center gap-4 w-full">
+          {user?.photoURL ? (
+            <Image
+              src={user.photoURL}
+              alt="Avatar"
+              width={100}
+              height={100}
+              className="rounded-full"
+            />
+          ) : (
+            <span className="w-24 h-24 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold text-3xl">
+              {user?.displayName?.charAt(0) || user?.email?.charAt(0) || "?"}
+            </span>
+          )}
+          <h1 className="text-3xl font-bold text-center">
+            Bienvenue {user?.displayName || user?.email}
+          </h1>
+        </div>
+      </div>
 
       <button
         onClick={() => {
@@ -157,19 +165,20 @@ export default function DashboardPage() {
       >
         ➕ Nouvelle annonce
       </button>
-      <div className="flex justify-center w-full">
-        <div className="w-full justify-center max-w-2xl">
-          <h2 className="text-2xl font-semibold mb-4">Mes annonces</h2>
+      {/* Liste des annonces élargie à la même taille que le div de Bienvenue */}
+      <div className="w-full max-w-2xl flex flex-col items-center">
+        <h2 className="text-2xl font-semibold mb-4">Mes annonces</h2>
 
-          {loadingAnnonces ? (
-            <p className="text-gray-500">Chargement de vos annonces...</p>
-          ) : mesAnnonces.length === 0 ? (
-            <p className="text-gray-500">Aucune annonce pour le moment.</p>
-          ) : (
-            <div className="flex flex-col gap-4">
-              {mesAnnonces.map((annonce) => (
+        {loadingAnnonces ? (
+          <p className="text-gray-500">Chargement de vos annonces...</p>
+        ) : mesAnnonces.length === 0 ? (
+          <p className="text-gray-500">Aucune annonce pour le moment.</p>
+        ) : (
+          <div className="flex flex-col gap-4 w-full">
+            {/* Chaque AnnonceCard prend toute la largeur disponible et est centrée */}
+            {mesAnnonces.map((annonce) => (
+              <div key={annonce.id} className="w-full">
                 <AnnonceCard
-                  key={annonce.id}
                   {...annonce}
                   onDelete={() => {
                     setSelectedAnnonceToDelete(annonce);
@@ -180,16 +189,16 @@ export default function DashboardPage() {
                     setModalOpen(true);
                   }}
                 />
-              ))}
+              </div>
+            ))}
             {loadingMore && (
               <p className="text-center text-gray-500 mt-4">Chargement…</p>
             )}
             {!hasMore && (
               <p className="text-center text-gray-400 mt-4">Toutes les annonces sont chargées.</p>
             )}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <AnnonceModal
@@ -254,3 +263,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
