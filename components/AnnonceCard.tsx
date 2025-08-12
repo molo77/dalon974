@@ -18,7 +18,7 @@ export default function AnnonceCard({
   onEdit,
 }: AnnonceProps) {
   return (
-    <div className="relative border rounded-xl shadow p-4 w-full max-w-md bg-white">
+    <div className="relative border rounded-xl shadow p-4 w-full bg-white">
       {imageUrl && (
         <img
           src={imageUrl}
