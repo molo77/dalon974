@@ -37,12 +37,10 @@ export default function HomePage() {
     setLoadingMore(true);
 
     try {
-      // Base de la requête avec le tri
       let baseQuery: any = query(
         collection(db, "annonces")
       );
 
-      // Applique les filtres dans un ordre spécifique pour éviter les erreurs d'index
       if (prixMax !== null) {
         baseQuery = query(baseQuery, where("prix", "<=", prixMax));
       }
@@ -50,15 +48,15 @@ export default function HomePage() {
       if (ville) {
         baseQuery = query(
           baseQuery,
-          where("ville", "==", ville) // Changé de >= à == pour éviter les conflits d'index
+          where("ville", "==", ville)
         );
       }
 
-      // Ajoute le tri à la fin
+      // Augmentez la limite pour charger plus d'annonces d'un coup
       baseQuery = query(
         baseQuery,
         orderBy(sortBy === "date" ? "createdAt" : "prix", sortBy === "date" ? "desc" : "asc"),
-        limit(5)
+        limit(10)
       );
 
       const paginatedQuery = lastDoc
@@ -181,7 +179,15 @@ export default function HomePage() {
 
       <div className="w-full max-w-3xl flex flex-col gap-4 items-center">
         {annonces.map((annonce) => (
-          <AnnonceCard key={annonce.id} {...annonce} />
+          <AnnonceCard
+            key={annonce.id}
+            id={annonce.id}
+            titre={annonce.titre}
+            ville={annonce.ville}
+            prix={annonce.prix}
+            surface={annonce.surface}
+            description={annonce.description}
+          />
         ))}
 
         {loadingMore && (

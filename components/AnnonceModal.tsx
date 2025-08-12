@@ -16,6 +16,10 @@ export default function AnnonceModal({
     ville: string;
     prix: string;
     imageUrl: string;
+    surface?: string;
+    nbChambres?: string;
+    equipements?: string;
+    description?: string;
   }) => void;
   annonce?: any | null;
 }) {
@@ -23,6 +27,10 @@ export default function AnnonceModal({
   const [ville, setVille] = useState("");
   const [prix, setPrix] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [surface, setSurface] = useState("");
+  const [nbChambres, setNbChambres] = useState("");
+  const [equipements, setEquipements] = useState("");
+  const [description, setDescription] = useState("");
 
   useEffect(() => {
     if (annonce) {
@@ -30,17 +38,39 @@ export default function AnnonceModal({
       setVille(annonce.ville || "");
       setPrix(annonce.prix?.toString() || "");
       setImageUrl(annonce.imageUrl || "");
+      setSurface(annonce.surface?.toString() || "");
+      setNbChambres(annonce.nbChambres?.toString() || "");
+      // Correction : évite .join si ce n'est pas un tableau
+      if (Array.isArray(annonce.equipements)) {
+        setEquipements(annonce.equipements.join(", "));
+      } else {
+        setEquipements(annonce.equipements || "");
+      }
+      setDescription(annonce.description || "");
     } else {
       setTitre("");
       setVille("");
       setPrix("");
       setImageUrl("");
+      setSurface("");
+      setNbChambres("");
+      setEquipements("");
+      setDescription("");
     }
   }, [annonce]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ titre, ville, prix, imageUrl });
+    onSubmit({
+      titre,
+      ville,
+      prix,
+      imageUrl,
+      surface,
+      nbChambres,
+      equipements,
+      description,
+    });
     onClose();
   };
 
@@ -69,7 +99,7 @@ export default function AnnonceModal({
             leaveFrom="scale-100 opacity-100"
             leaveTo="scale-95 opacity-0"
           >
-            <Dialog.Panel className="bg-white rounded-lg max-w-md w-full p-6 shadow-lg">
+            <Dialog.Panel className="bg-white rounded-lg max-w-2xl w-full p-6 shadow-lg">
               <Dialog.Title className="text-xl font-bold mb-4">
                 {annonce ? "✏️ Modifier l’annonce" : "➕ Nouvelle annonce"}
               </Dialog.Title>
@@ -108,6 +138,42 @@ export default function AnnonceModal({
                   value={imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
                   className="w-full p-2 border rounded"
+                />
+
+                <input
+                  type="number"
+                  name="surface"
+                  placeholder="Surface (m²)"
+                  value={surface}
+                  onChange={(e) => setSurface(e.target.value)}
+                  className="w-full p-2 border rounded"
+                />
+
+                <input
+                  type="number"
+                  name="nbChambres"
+                  placeholder="Nombre de chambres"
+                  value={nbChambres}
+                  onChange={(e) => setNbChambres(e.target.value)}
+                  className="w-full p-2 border rounded"
+                />
+
+                <input
+                  type="text"
+                  name="equipements"
+                  placeholder="Équipements (séparés par des virgules)"
+                  value={equipements}
+                  onChange={(e) => setEquipements(e.target.value)}
+                  className="w-full p-2 border rounded"
+                />
+
+                <textarea
+                  name="description"
+                  placeholder="Description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full p-2 border rounded"
+                  style={{ minHeight: "9em" }} // Hauteur triplée (~3x la hauteur standard)
                 />
 
                 <div className="flex justify-end gap-3">

@@ -49,11 +49,11 @@ export default function DashboardPage() {
 
     setLoadingMore(true);
 
+    // Utilisez getDocs sans orderBy si possible pour accélérer
     const baseQuery = query(
       collection(db, "annonces"),
       where("userId", "==", user.uid),
-      orderBy("createdAt", "desc"),
-      limit(5)
+      limit(10) // Augmentez la limite pour moins de requêtes
     );
 
     const paginatedQuery = lastDoc
@@ -74,7 +74,6 @@ export default function DashboardPage() {
         const uniqueDocs = docs.filter((doc) => !newIds.has(doc.id));
         return [...prev, ...uniqueDocs];
       });
-
     } else {
       setHasMore(false);
     }
@@ -208,23 +207,50 @@ export default function DashboardPage() {
           setEditAnnonce(null);
         }}
         annonce={editAnnonce}
-        onSubmit={async ({ titre, ville, prix, imageUrl }) => {
+        onSubmit={async ({
+          titre,
+          ville,
+          prix,
+          imageUrl,
+          surface,
+          description,
+          nbChambres,
+          equipements,
+        }: {
+          titre: string;
+          ville: string;
+          prix: string;
+          imageUrl: string;
+          surface?: string;
+          description?: string;
+          nbChambres?: string;
+          equipements?: string;
+        }) => {
           try {
+            // Ajout des champs dans la base Firestore
+            const annonceData: any = {
+              titre,
+              ville,
+              prix: prix ? Number(prix) : null,
+              imageUrl,
+              surface: surface ? Number(surface) : null,
+              description: description || "",
+              nbChambres: nbChambres ? Number(nbChambres) : null,
+              equipements: equipements || "",
+            };
+
+            // Supprimez les champs vides ou null
+            Object.keys(annonceData).forEach(
+              (key) => (annonceData[key] === null || annonceData[key] === "") && delete annonceData[key]
+            );
+
             if (editAnnonce) {
               const docRef = doc(db, "annonces", editAnnonce.id);
-              await updateDoc(docRef, {
-                titre,
-                ville,
-                prix: Number(prix),
-                imageUrl,
-              });
+              await updateDoc(docRef, annonceData);
               showToast("success", "Annonce modifiée avec succès ✅");
             } else {
               await addDoc(collection(db, "annonces"), {
-                titre,
-                ville,
-                prix: Number(prix),
-                imageUrl,
+                ...annonceData,
                 createdAt: serverTimestamp(),
                 userId: user!.uid,
                 userEmail: user!.email,
