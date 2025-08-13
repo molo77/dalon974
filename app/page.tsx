@@ -97,20 +97,8 @@ export default function HomePage() {
   });
 
   return (
-    <main className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
+    <main className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
       <h1 className="text-3xl font-bold mb-6 text-center">Annonces de colocation</h1>
-
-      {/* SUPPRIMER ce bloc, le bouton admin est maintenant dans le header */}
-      {/* {role === "admin" && (
-        <div className="mb-4 w-full max-w-3xl flex justify-end">
-          <a
-            href="/admin"
-            className="bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-800 font-semibold"
-          >
-            Accéder à l'administration
-          </a>
-        </div>
-      )} */}
 
       <form
         onSubmit={(e) => {
@@ -120,7 +108,7 @@ export default function HomePage() {
           setHasMore(true);
           loadAnnonces();
         }}
-        className="mb-6 w-full max-w-3xl flex flex-wrap gap-4 items-end justify-center"
+        className="mb-6 w-full max-w-4xl bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-wrap gap-4 items-end justify-center"
       >
         <div>
           <label className="block text-sm font-medium mb-1">Ville</label>
@@ -156,13 +144,9 @@ export default function HomePage() {
           </select>
         </div>
 
-        <button
-          type="submit"
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
+        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
           Filtrer
         </button>
-
         <button
           type="button"
           onClick={() => {
@@ -174,13 +158,13 @@ export default function HomePage() {
             setHasMore(true);
             loadAnnonces();
           }}
-          className="border border-gray-400 text-gray-700 px-4 py-2 rounded hover:bg-gray-100"
+          className="border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50"
         >
           Réinitialiser
         </button>
       </form>
 
-      <div className="w-full max-w-3xl flex flex-col gap-4 items-center">
+      <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {annonces.map((annonce) => (
           <AnnonceCard
             key={annonce.id}
@@ -193,25 +177,13 @@ export default function HomePage() {
           />
         ))}
 
-        {loadingMore && (
-          <p className="text-gray-500 text-center mt-4">Chargement...</p>
-        )}
+        {loadingMore && <p className="text-slate-500 text-center mt-4 col-span-full">Chargement...</p>}
 
         {!hasMore && annonces.length > 0 && (
-          <p className="text-gray-400 text-center mt-4">Toutes les annonces sont affichées.</p>
+          <p className="text-slate-400 text-center mt-4 col-span-full">Toutes les annonces sont affichées.</p>
         )}
       </div>
     </main>
   );
 }
-        {loadingMore && (
-          <p className="text-gray-500 text-center mt-4">Chargement...</p>
-        )}
 
-        {!hasMore && annonces.length > 0 && (
-          <p className="text-gray-400 text-center mt-4">Toutes les annonces sont affichées.</p>
-        )}
-      </div>
-    </main>
-  );
-}

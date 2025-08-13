@@ -142,18 +142,13 @@ export default function DashboardPage() {
   }, [user, firestoreError, userDocLoaded]);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center justify-center">
+    <div className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
       {firestoreError && (
-        <div className="w-full max-w-2xl mb-4 p-4 rounded bg-red-100 text-red-700 text-sm font-medium whitespace-pre-line">
+        <div className="w-full max-w-3xl mb-4 px-4 py-3 rounded-xl bg-rose-50 text-rose-700 border border-rose-200">
           {firestoreError}
         </div>
       )}
-      <div className="w-full max-w-2xl mb-4 text-xs text-gray-500 space-y-1">
-        <div>Rôle Firestore: {userRole ?? "(aucun)"}</div>
-        <div>Doc utilisateur chargé: {userDocLoaded ? "oui" : "non"}</div>
-      </div>
-      {/* Avatar et Bienvenue centrés dans le div */}
-      <div className="w-full max-w-2xl flex flex-col items-center justify-center mb-6">
+      <div className="w-full max-w-3xl flex flex-col items-center mb-6">
         <div className="flex items-center justify-center gap-4 w-full">
           {user?.photoURL ? (
             <Image
@@ -179,12 +174,12 @@ export default function DashboardPage() {
           setEditAnnonce(null);
           setModalOpen(true);
         }}
-        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 mb-6"
+        className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 mb-6 shadow-sm"
       >
-        ➕ Nouvelle annonce
+        <span>➕</span> Nouvelle annonce
       </button>
-      {/* Liste des annonces élargie à la même taille que le div de Bienvenue */}
-      <div className="w-full max-w-2xl flex flex-col items-center">
+
+      <div className="w-full max-w-3xl">
         <h2 className="text-2xl font-semibold mb-4">Mes annonces</h2>
 
         {loadingAnnonces ? (
@@ -263,7 +258,7 @@ export default function DashboardPage() {
       />
 
       {/* Section messagerie */}
-      <div className="w-full max-w-2xl mt-10">
+      <div className="w-full max-w-3xl mt-10">
         <h2 className="text-2xl font-bold mb-4">Messages reçus</h2>
         {messages.length === 0 ? (
           <p className="text-gray-500">Aucun message reçu.</p>

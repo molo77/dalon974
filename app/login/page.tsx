@@ -84,44 +84,50 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
-      <header className="w-full max-w-md mb-8 flex flex-col items-center">
+    <main className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
+      <header className="w-full max-w-md mb-8 text-center">
         <h1 className="text-3xl font-bold text-blue-700 mb-2">Bienvenue sur Dalon974</h1>
-        <p className="text-gray-600 text-center">
+        <p className="text-slate-600">
           Connectez-vous ou inscrivez-vous pour accéder aux annonces de colocation.
         </p>
       </header>
-      <div className="bg-white shadow rounded p-6 mb-8 w-full max-w-md flex flex-col items-center">
-        <button
-          className="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800 w-full mb-2 flex items-center justify-center gap-2"
-          onClick={() => setShowSignup(true)}
-        >
-          <span>📧</span>
-          S'inscrire avec Email
-        </button>
-        <button
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 w-full mb-2 flex items-center justify-center gap-2"
-          onClick={() => setShowLogin(true)}
-        >
-          <span>🔑</span>
-          Se connecter avec Email
-        </button>
-        <button
-          className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 w-full flex items-center justify-center gap-2"
-          onClick={handleGoogleLogin}
-        >
-          <span>🔍</span>
-          Se connecter avec Google
-        </button>
+
+      <div className="bg-white/90 border border-slate-200 backdrop-blur rounded-2xl shadow-sm p-6 mb-8 w-full max-w-md">
+        <div className="flex flex-col gap-3">
+          <button
+            className="bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-900 w-full flex items-center justify-center gap-2"
+            onClick={() => setShowSignup(true)}
+          >
+            <span>📧</span> S'inscrire avec Email
+          </button>
+          <button
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 w-full flex items-center justify-center gap-2"
+            onClick={() => setShowLogin(true)}
+          >
+            <span>🔑</span> Se connecter avec Email
+          </button>
+          <div className="relative my-1">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200" /></div>
+            <div className="relative flex justify-center">
+              <span className="bg-white px-2 text-xs text-slate-500">ou</span>
+            </div>
+          </div>
+          <button
+            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 w-full flex items-center justify-center gap-2"
+            onClick={handleGoogleLogin}
+          >
+            <span>🟢</span> Se connecter avec Google
+          </button>
+        </div>
         {authMessage && (
           <div className="mt-4 text-center text-sm text-green-700">{authMessage}</div>
         )}
       </div>
 
-      {/* Modal inscription */}
+      {/* Modales */}
       {showSignup && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white rounded shadow p-6 w-full max-w-sm flex flex-col gap-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
             <h2 className="text-xl font-bold mb-2 text-center">Inscription Email</h2>
             <Register onSuccess={() => setShowSignup(false)} />
             <button
@@ -134,13 +140,11 @@ export default function LoginPage() {
           </div>
         </div>
       )}
-
-      {/* Modal connexion */}
       {showLogin && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <form
             onSubmit={handleEmailLogin}
-            className="bg-white rounded shadow p-6 w-full max-w-sm flex flex-col gap-4"
+            className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm flex flex-col gap-4"
           >
             <h2 className="text-xl font-bold mb-2 text-center">Connexion Email</h2>
             <input
@@ -188,11 +192,9 @@ export default function LoginPage() {
           </form>
         </div>
       )}
-
-      {/* Modal erreur connexion */}
       {loginErrorModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white rounded shadow p-6 w-full max-w-sm flex flex-col gap-4 items-center">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
             <h2 className="text-xl font-bold text-red-700 mb-2 text-center">Erreur de connexion</h2>
             <p className="text-gray-700 text-center">{loginErrorModal}</p>
             <button
@@ -204,13 +206,11 @@ export default function LoginPage() {
           </div>
         </div>
       )}
-
-      {/* Modal reset password */}
       {showReset && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <form
             onSubmit={handleResetPassword}
-            className="bg-white rounded shadow p-6 w-full max-w-sm flex flex-col gap-4"
+            className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm flex flex-col gap-4"
           >
             <h2 className="text-xl font-bold mb-2 text-center">Réinitialiser le mot de passe</h2>
             <input

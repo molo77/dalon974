@@ -45,20 +45,37 @@ export default function Toast({
 
   return (
     <div className="fixed bottom-4 right-4 z-50 space-y-3">
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className={`px-6 py-3 rounded-lg shadow-lg text-white animate-fade transition-all ${
-            toast.type === "success"
-              ? "bg-green-600"
-              : toast.type === "error"
-              ? "bg-red-600"
-              : "bg-blue-600"
-          }`}
-        >
-          {toast.message}
-        </div>
-      ))}
+      {toasts.map((toast) => {
+        const base =
+          toast.type === "success"
+            ? "bg-emerald-600"
+            : toast.type === "error"
+            ? "bg-rose-600"
+            : "bg-blue-600";
+        const icon =
+          toast.type === "success"
+            ? "✅"
+            : toast.type === "error"
+            ? "⚠️"
+            : "ℹ️";
+        return (
+          <div
+            key={toast.id}
+            role="alert"
+            className={`flex items-start gap-3 px-5 py-3 rounded-xl shadow-lg text-white ${base}`}
+          >
+            <span className="text-lg leading-none">{icon}</span>
+            <div className="flex-1 text-sm">{toast.message}</div>
+            <button
+              aria-label="Fermer"
+              className="opacity-80 hover:opacity-100 transition"
+              onClick={() => onRemove(toast.id)}
+            >
+              ✖
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -60,33 +60,27 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 p-0 flex">
-      {/* Menu latéral gauche */}
-      <aside className="w-64 min-h-screen bg-white shadow-lg flex flex-col gap-2 py-8 px-4 border-r border-gray-200">
+    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-white p-0 flex">
+      <aside className="w-64 min-h-screen bg-white shadow-lg flex flex-col gap-2 py-8 px-4 border-r border-slate-200">
         <h2 className="text-xl font-bold text-blue-700 mb-8 text-center tracking-wide">Admin Panel</h2>
         <button
-          className={`text-left px-4 py-3 rounded-lg transition-all duration-150 ${
-            activeTab === "annonces"
-              ? "bg-blue-600 text-white font-bold shadow"
-              : "hover:bg-blue-50 text-gray-700"
+          className={`text-left px-4 py-3 rounded-lg transition ${
+            activeTab === "annonces" ? "bg-blue-600 text-white shadow" : "hover:bg-blue-50 text-slate-700"
           }`}
           onClick={() => setActiveTab("annonces")}
         >
           📢 Gestion des annonces
         </button>
         <button
-          className={`text-left px-4 py-3 rounded-lg transition-all duration-150 ${
-            activeTab === "users"
-              ? "bg-blue-600 text-white font-bold shadow"
-              : "hover:bg-blue-50 text-gray-700"
+          className={`text-left px-4 py-3 rounded-lg transition ${
+            activeTab === "users" ? "bg-blue-600 text-white shadow" : "hover:bg-blue-50 text-slate-700"
           }`}
           onClick={() => setActiveTab("users")}
         >
           👤 Gestion des utilisateurs
         </button>
       </aside>
-
-      <section className="flex-1 px-0 md:px-12 py-10">
+      <section className="flex-1 px-4 md:px-12 py-10">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight">
             Administration
@@ -113,4 +107,5 @@ export default function AdminPage() {
     </main>
   );
 }
+
     

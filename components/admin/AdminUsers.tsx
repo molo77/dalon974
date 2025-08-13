@@ -96,11 +96,8 @@ export default function AdminUsers({
 
   return (
     <section>
-      <h2 className="text-2xl font-semibold mb-6 text-blue-700 flex items-center gap-2">
-        👤 Utilisateurs
-      </h2>
-      {/* Formulaire création utilisateur (admin) */}
-      <div className="mb-6 flex flex-col md:flex-row gap-4 items-end bg-blue-50 rounded p-4">
+      <h2 className="text-2xl font-semibold mb-6 text-blue-700 flex items-center gap-2">👤 Utilisateurs</h2>
+      <div className="mb-6 bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
         <form
           onSubmit={async (e) => {
             e.preventDefault();
@@ -137,7 +134,7 @@ export default function AdminUsers({
               showToast("error", translateFirebaseError(e?.code) || "Erreur lors de la création.");
             }
           }}
-          className="flex flex-col md:flex-row gap-2 w-full"
+          className="flex flex-col md:flex-row gap-3 w-full"
         >
           <input
             type="email"
@@ -166,41 +163,43 @@ export default function AdminUsers({
           </select>
           <button
             type="submit"
-            className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
           >
             Créer
           </button>
         </form>
       </div>
+
       <div className="mb-4 flex flex-wrap gap-3">
         <button
           type="button"
           onClick={normalizeExistingUsers}
           disabled={normalizing}
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-60"
+          className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-60"
         >
           {normalizing ? "Normalisation..." : "Compléter champs manquants"}
         </button>
       </div>
-      <div className="overflow-x-auto">
+
+      <div className="overflow-x-auto bg-white rounded-2xl border border-slate-200 shadow-sm">
         {loading ? (
           <div className="flex items-center justify-center h-40">
-            <span className="text-lg text-gray-500">Chargement...</span>
+            <span className="text-lg text-slate-500">Chargement...</span>
           </div>
         ) : users.length === 0 ? (
-          <p className="text-gray-500">Aucun utilisateur.</p>
+          <p className="text-slate-500 p-4">Aucun utilisateur.</p>
         ) : (
-          <table className="w-full text-sm border-separate border-spacing-y-2">
-            <thead>
-              <tr className="bg-blue-50">
-                <th className="py-2 px-3 rounded-l-lg">Email</th>
-                <th className="py-2 px-3">Nom</th>
-                <th className="py-2 px-3">Rôle</th>
-                <th className="py-2 px-3">Type de compte</th>
-                <th className="py-2 px-3 rounded-r-lg">Actions</th>
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 sticky top-0">
+              <tr>
+                <th className="py-2 px-3 text-left">Email</th>
+                <th className="py-2 px-3 text-left">Nom</th>
+                <th className="py-2 px-3 text-left">Rôle</th>
+                <th className="py-2 px-3 text-left">Type de compte</th>
+                <th className="py-2 px-3 text-left">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50">
               {users.map((u) => {
                 const isEdited = !!editedUsers[u.id];
                 const edited = editedUsers[u.id] || { email: u.email, displayName: u.displayName || "", role: u.role || "user" };
@@ -210,7 +209,7 @@ export default function AdminUsers({
                   typeCompte = "Google";
                 }
                 return (
-                  <tr key={u.id} className="bg-gray-50 hover:bg-blue-50 transition">
+                  <tr key={u.id} className="hover:bg-blue-50/50 transition">
                     <td className="py-2 px-3">
                       <input
                         type="email"
@@ -221,7 +220,7 @@ export default function AdminUsers({
                             [u.id]: { ...edited, email: e.target.value },
                           }))
                         }
-                        className="border rounded px-2 py-1 w-44"
+                        className="border rounded-md px-2 py-1 w-48"
                       />
                     </td>
                     <td className="py-2 px-3">
@@ -234,7 +233,7 @@ export default function AdminUsers({
                             [u.id]: { ...edited, displayName: e.target.value },
                           }))
                         }
-                        className="border rounded px-2 py-1 w-32"
+                        className="border rounded-md px-2 py-1 w-40"
                       />
                     </td>
                     <td className="py-2 px-3">
@@ -246,18 +245,20 @@ export default function AdminUsers({
                             [u.id]: { ...edited, role: e.target.value },
                           }))
                         }
-                        className="border rounded px-2 py-1 w-32"
+                        className="border rounded-md px-2 py-1 w-32"
                       >
                         <option value="user">user</option>
                         <option value="admin">admin</option>
                       </select>
                     </td>
                     <td className="py-2 px-3">
-                      {typeCompte}
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${typeCompte === "Google" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-700"}`}>
+                        {typeCompte}
+                      </span>
                     </td>
                     <td className="py-2 px-3 flex gap-2">
                       <button
-                        className="bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700"
+                        className="bg-purple-600 text-white px-3 py-1.5 rounded-md hover:bg-purple-700"
                         onClick={() => handleUserSave(u.id)}
                         disabled={
                           !isEdited ||
@@ -271,18 +272,17 @@ export default function AdminUsers({
                         Enregistrer
                       </button>
                       <button
-                        className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                        className="bg-rose-600 text-white px-3 py-1.5 rounded-md hover:bg-rose-700"
                         onClick={() => handleDeleteUser(u.id)}
                       >
                         Supprimer
                       </button>
                       <button
-                        className="bg-yellow-400 text-white px-3 py-1 rounded hover:bg-yellow-500 flex items-center gap-1"
-                        title="Réinitialiser le mot de passe (envoyer un email)"
+                        className="bg-amber-400 text-white px-3 py-1.5 rounded-md hover:bg-amber-500"
+                        title="Réinitialiser le mot de passe"
                         onClick={() => handleAdminResetPassword(u.email)}
                         type="button"
                       >
-                        <span role="img" aria-label="mouton">🐑</span>
                         Réinit.
                       </button>
                     </td>
