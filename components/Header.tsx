@@ -6,7 +6,11 @@ import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "@/lib/firebase";
 import { useRouter, usePathname } from "next/navigation";
 
-export default function Header() {
+type HeaderProps = {
+  role?: string;
+};
+
+export default function Header({ role }: HeaderProps) {
   const [user] = useAuthState(auth);
   const [mobileOpen, setMobileOpen] = useState(false);
   const router = useRouter();
@@ -25,6 +29,13 @@ export default function Header() {
         <Link href="/" className="text-xl font-bold text-blue-600">
           Dalon974
         </Link>
+
+        {/* Affichage du rôle utilisateur si présent */}
+        {role && (
+          <div className="text-sm text-gray-600">
+            Rôle utilisateur : {role}
+          </div>
+        )}
 
         <button
           onClick={toggleMobile}
