@@ -18,6 +18,7 @@ import {
   serverTimestamp,
   limit,
   startAfter,
+  getDoc,
 } from "firebase/firestore";
 import Image from "next/image";
 import AnnonceCard from "@/components/AnnonceCard";
@@ -26,6 +27,10 @@ import ConfirmModal from "@/components/ConfirmModal";
 import Toast, { ToastMessage } from "@/components/Toast";
 import { v4 as uuidv4 } from "uuid";
 import MessageModal from "@/components/MessageModal";
+import { translateFirebaseError } from "@/lib/firebaseErrors";
+import { listUserAnnoncesPage, subscribeUserAnnonces, addAnnonce, updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/lib/services/annonceService";
+import { listMessagesForOwner } from "@/lib/services/messageService";
+import { getUserRole } from "@/lib/services/userService";
 
 export default function DashboardPage() {
   const [user, loading] = useAuthState(auth);
@@ -47,54 +52,78 @@ export default function DashboardPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [replyTo, setReplyTo] = useState<any | null>(null);
+  const [firestoreError, setFirestoreError] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userDocLoaded, setUserDocLoaded] = useState(false);
+
+  const loadUserDoc = async (u: any) => {
+    try {
+      if (!u) return;
+      const role = await getUserRole(u.uid);
+      setUserRole(role);
+    } catch (e) {
+      console.warn("[Dashboard][UserDoc] échec :", e);
+    } finally {
+      setUserDocLoaded(true);
+    }
+  };
+
+  const handleFirestoreError = (err: any, context: string) => {
+    console.error(`[Dashboard][${context}]`, err);
+    const code = err?.code;
+    if (code === "permission-denied") {
+      let msg = "Accès refusé (permission-denied).";
+      msg += userRole
+        ? ` Rôle Firestore détecté: "${userRole}".`
+        : " Aucun rôle Firestore détecté (doc manquant / champ 'role').";
+      msg += " Vérifie les règles Firestore: utilisent-elles la lecture du doc users ou un custom claim que tu n'emploies plus ?";
+      setFirestoreError(msg);
+      showToast("error", msg);
+      setHasMore(false);
+    } else {
+      showToast("error", code ? translateFirebaseError(code) : "Erreur Firestore.");
+    }
+  };
 
   const loadAnnonces = async () => {
-    if (!user || loadingMore || !hasMore) return;
+    if (!user || loadingMore || !hasMore || firestoreError) return;
 
     setLoadingMore(true);
 
-    // Utilisez getDocs sans orderBy si possible pour accélérer
-    const baseQuery = query(
-      collection(db, "annonces"),
-      where("userId", "==", user.uid),
-      limit(10) // Augmentez la limite pour moins de requêtes
-    );
+    try {
+      const { items, lastDoc: newLast } = await listUserAnnoncesPage(user.uid, { lastDoc, pageSize: 10 });
 
-    const paginatedQuery = lastDoc
-      ? query(baseQuery, startAfter(lastDoc))
-      : baseQuery;
-
-    const snapshot = await getDocs(paginatedQuery);
-
-    const docs = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-
-    if (docs.length > 0) {
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-      setMesAnnonces((prev) => {
-        const newIds = new Set(prev.map((a) => a.id));
-        const uniqueDocs = docs.filter((doc) => !newIds.has(doc.id));
-        return [...prev, ...uniqueDocs];
-      });
-    } else {
-      setHasMore(false);
+      if (items.length) {
+        setLastDoc(newLast);
+        setMesAnnonces(prev => {
+          const ids = new Set(prev.map(a => a.id));
+          return [...prev, ...items.filter(i => !ids.has(i.id))];
+        });
+      } else {
+        setHasMore(false);
+      }
+    } catch (err:any) {
+      handleFirestoreError(err, "loadAnnonces");
     }
 
     setLoadingMore(false);
   };
 
   useEffect(() => {
-    if (loading) return;
+    if (user) loadUserDoc(user);
+  }, [user]);
+
+  useEffect(() => {
+    if (loading || firestoreError) return;
 
     if (!user) {
       router.push("/login");
       return;
     }
-
+    // Attendre d’avoir tenté de charger le doc user pour éviter permission-denied précoce
+    if (!userDocLoaded) return;
     loadAnnonces();
-  }, [user, loading, lastDoc]);
+  }, [user, loading, lastDoc, firestoreError, userDocLoaded]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -115,7 +144,7 @@ export default function DashboardPage() {
   }, [user, loading, router]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || firestoreError || !userDocLoaded) return;
 
     const q = query(
       collection(db, "annonces"),
@@ -123,35 +152,58 @@ export default function DashboardPage() {
       orderBy("createdAt", "desc")
     );
 
-    getDocs(q).then((snapshot) => {
-      setMesAnnonces(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-      setLoadingAnnonces(false);
-    });
+    (async () => {
+      try {
+        const snapshot = await getDocs(q);
+        setMesAnnonces(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setLoadingAnnonces(false);
+      } catch (err:any) {
+        setLoadingAnnonces(false);
+        handleFirestoreError(err, "initialGetDocs");
+      }
+    })();
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setMesAnnonces(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-    });
-
-    return () => unsubscribe();
-  }, [user]);
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          setMesAnnonces(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        },
+        (err) => {
+          handleFirestoreError(err, "onSnapshot");
+        }
+      );
+    } catch (err:any) {
+      handleFirestoreError(err, "onSnapshot-setup");
+    }
+    return () => { if (unsubscribe) unsubscribe(); };
+  }, [user, firestoreError, userDocLoaded]);
 
   // Charger les messages reçus
   useEffect(() => {
-    if (!user) return;
-    const fetchMessages = async () => {
-      const q = query(
-        collection(db, "messages"),
-        where("annonceOwnerId", "==", user.uid),
-        orderBy("createdAt", "desc")
-      );
-      const snap = await getDocs(q);
-      setMessages(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    };
-    fetchMessages();
-  }, [user]);
+    if (!user || firestoreError || !userDocLoaded) return;
+    (async () => {
+      try {
+        const msgs = await listMessagesForOwner(user.uid);
+        setMessages(msgs);
+      } catch (err:any) {
+        handleFirestoreError(err, "messages");
+      }
+    })();
+  }, [user, firestoreError, userDocLoaded]);
 
   return (
     <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center justify-center">
+      {firestoreError && (
+        <div className="w-full max-w-2xl mb-4 p-4 rounded bg-red-100 text-red-700 text-sm font-medium whitespace-pre-line">
+          {firestoreError}
+        </div>
+      )}
+      <div className="w-full max-w-2xl mb-4 text-xs text-gray-500 space-y-1">
+        <div>Rôle Firestore: {userRole ?? "(aucun)"}</div>
+        <div>Doc utilisateur chargé: {userDocLoaded ? "oui" : "non"}</div>
+      </div>
       {/* Avatar et Bienvenue centrés dans le div */}
       <div className="w-full max-w-2xl flex flex-col items-center justify-center mb-6">
         <div className="flex items-center justify-center gap-4 w-full">
@@ -226,59 +278,20 @@ export default function DashboardPage() {
           setEditAnnonce(null);
         }}
         annonce={editAnnonce}
-        onSubmit={async ({
-          titre,
-          ville,
-          prix,
-          imageUrl,
-          surface,
-          description,
-          nbChambres,
-          equipements,
-        }: {
-          titre: string;
-          ville: string;
-          prix: string;
-          imageUrl: string;
-          surface?: string;
-          description?: string;
-          nbChambres?: string;
-          equipements?: string;
-        }) => {
+        onSubmit={async ({ titre, ville, prix, imageUrl, surface, description, nbChambres, equipements }) => {
           try {
-            // Ajout des champs dans la base Firestore
-            const annonceData: any = {
-              titre,
-              ville,
-              prix: prix ? Number(prix) : null,
-              imageUrl,
-              surface: surface ? Number(surface) : null,
-              description: description || "",
-              nbChambres: nbChambres ? Number(nbChambres) : null,
-              equipements: equipements || "",
-            };
-
-            // Supprimez les champs vides ou null
-            Object.keys(annonceData).forEach(
-              (key) => (annonceData[key] === null || annonceData[key] === "") && delete annonceData[key]
-            );
-
+            const annonceData: any = { titre, ville, prix: prix ? Number(prix) : null, imageUrl, surface: surface ? Number(surface) : null, description: description || "", nbChambres: nbChambres ? Number(nbChambres) : null, equipements: equipements || "" };
+            Object.keys(annonceData).forEach(k => (annonceData[k] === null || annonceData[k] === "") && delete annonceData[k]);
             if (editAnnonce) {
-              const docRef = doc(db, "annonces", editAnnonce.id);
-              await updateDoc(docRef, annonceData);
+              await updateAnnonce(editAnnonce.id, annonceData);
               showToast("success", "Annonce modifiée avec succès ✅");
             } else {
-              await addDoc(collection(db, "annonces"), {
-                ...annonceData,
-                createdAt: serverTimestamp(),
-                userId: user!.uid,
-                userEmail: user!.email,
-              });
+              await addAnnonce({ uid: user!.uid, email: user!.email }, annonceData);
               showToast("success", "Annonce créée avec succès ✅");
             }
-          } catch (err) {
-            console.error("Erreur Firestore :", err);
-            showToast("error", "Erreur lors de l'enregistrement ❌");
+          } catch (err: any) {
+            console.error("[Dashboard][AnnonceSubmit] Erreur Firestore brute :", err);
+            showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de l'enregistrement ❌");
           }
         }}
       />
@@ -290,11 +303,11 @@ export default function DashboardPage() {
           if (!selectedAnnonceToDelete) return;
           showToast("info", "Suppression en cours...");
           try {
-            await deleteDoc(doc(db, "annonces", selectedAnnonceToDelete.id));
+            await deleteAnnonceSvc(selectedAnnonceToDelete.id);
             showToast("success", "Annonce supprimée avec succès ✅");
-          } catch (err) {
-            console.error(err);
-            showToast("error", "Erreur lors de la suppression ❌");
+          } catch (err: any) {
+            console.error("[Dashboard][DeleteAnnonce] Erreur brute :", err);
+            showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de la suppression ❌");
           } finally {
             setSelectedAnnonceToDelete(null);
           }

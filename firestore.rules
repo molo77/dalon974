@@ -1,0 +1,132 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function roleOf(uid) {
+      return userDoc(uid).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && roleOf(request.auth.uid) == "admin";
+    }
+
+    // Validation helpers
+    function isString(field) {
+      return field is string;
+    }
+
+    function optionalString(field) {
+      return !(field in request.resource.data) || isString(request.resource.data[field]);
+    }
+
+    // USERS COLLECTION
+    match /users/{userId} {
+
+      // Read:
+      // - Un utilisateur ne peut lire que son propre document
+      // - Un admin peut lire tous les documents
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // Listing complet réservé aux admins
+      allow list: if isAdmin();
+
+      // Create: auto (Firebase Auth + Cloud Function souvent) – on autorise l'utilisateur à créer son propre doc si inexistant
+      allow create: if isSignedIn() && request.auth.uid == userId
+        && request.resource.data.role == "user" // On empêche l'auto‑attribution admin
+        && request.resource.data.email == request.auth.token.email;
+
+      // Update:
+      // - Un utilisateur peut modifier displayName uniquement (et éventuellement providerId neutre)
+      // - Un admin peut tout modifier (sauf se retirer lui-même totalement si vous souhaitez empêcher ça)
+      allow update: if isSignedIn() && (
+        // Self-limited
+        (request.auth.uid == userId &&
+          !('role' in request.resource.data.diff(resource.data)) && // pas de changement de rôle
+          request.resource.data.email == resource.data.email // email immuable ici
+        )
+        ||
+        // Admin global
+        isAdmin()
+      );
+
+      // Delete: admin uniquement
+      allow delete: if isAdmin();
+    }
+
+    // ANNONCES COLLECTION
+    match /annonces/{annonceId} {
+
+      // Lecture publique
+      allow get, list: if true;
+
+      // Create: utilisateur connecté, ownership cohérent
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.userEmail == request.auth.token.email
+        && validateAnnonce(request.resource.data);
+
+      // Update: propriétaire ou admin + validation
+      allow update: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin())
+        && validateAnnonce(request.resource.data);
+
+      // Delete: propriétaire ou admin
+      allow delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // MESSAGES COLLECTION
+    match /messages/{msgId} {
+
+      // Lecture: seulement participants (expéditeur ou destinataire annonceOwner) ou admin
+      allow get: if isSignedIn() && (
+        resource.data.fromUserId == request.auth.uid ||
+        resource.data.annonceOwnerId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Liste: filtrée par propriétaire ou expéditeur (requiert règle côté requête pour where)
+      allow list: if isSignedIn();
+
+      // Create: expéditeur authentifié, cohérence champs
+      allow create: if isSignedIn()
+        && request.resource.data.fromUserId == request.auth.uid
+        && isString(request.resource.data.content)
+        && request.resource.data.content.size() > 0
+        && request.resource.data.annonceId is string
+        && request.resource.data.annonceOwnerId is string
+        && request.resource.data.fromEmail == request.auth.token.email
+        && request.resource.data.createdAt == request.time;
+
+      // Update / Delete: interdit (immutable) sauf admin
+      allow update, delete: if isAdmin();
+    }
+
+    // (OPTIONNEL) AUTRES COLLECTIONS – verrouillage par défaut
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ----- VALIDATION FONCTIONS -----
+    function validateAnnonce(data) {
+      return
+        data.titre is string
+        && data.ville is string
+        && (!('prix' in data) || (data.prix is number && data.prix >= 0))
+        && (!('surface' in data) || (data.surface is number && data.surface >= 0))
+        && (!('nbChambres' in data) || (data.nbChambres is number && data.nbChambres >= 0))
+        && optionalString('description')
+        && optionalString('equipements')
+        && data.userId is string
+        && data.userEmail is string;
+    }
+  }
+}

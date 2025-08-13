@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getAuth, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail } from "firebase/auth";
+import { getAuth } from "firebase/auth";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import Register from "@/components/Register";
+import { translateFirebaseError } from "@/lib/firebaseErrors";
+import { signInEmail, signInGoogle, resetPassword } from "@/lib/services/authService";
 
 export default function LoginPage() {
   const [authMessage, setAuthMessage] = useState<string | null>(null);
@@ -35,43 +37,35 @@ export default function LoginPage() {
     const auth = getAuth();
     if (!loginEmail || !loginPassword) return;
     try {
-      await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+      await signInEmail(loginEmail, loginPassword);
       setAuthMessage("Connexion Email réussie !");
       setShowLogin(false);
       setLoginEmail("");
       setLoginPassword("");
     } catch (error: any) {
-      if (error.code === "auth/wrong-password") {
-        setAuthMessage("Mot de passe incorrect.");
-      } else if (error.code === "auth/user-not-found") {
-        setAuthMessage("Aucun compte trouvé avec cet email.");
-      } else if (error.code === "auth/invalid-login-credentials" || error.code === "auth/invalid-credential") {
-        setLoginErrorModal("Impossible de se connecter : identifiants invalides. Vérifiez votre email et votre mot de passe.");
+      console.error("[Auth][EmailLogin] Erreur brute :", error);
+      if (error?.code) {
+        if (["auth/invalid-login-credentials","auth/invalid-credential"].includes(error.code)) {
+          setLoginErrorModal("Impossible de se connecter : identifiants invalides. Vérifiez votre email et votre mot de passe.");
+        } else {
+          setAuthMessage(translateFirebaseError(error.code));
+        }
       } else {
-        setAuthMessage("Erreur Connexion Email : " + error.message);
+        setAuthMessage("Erreur Connexion Email.");
       }
     }
   };
 
+  const googleErrorFr = (code: string) => translateFirebaseError(code);
+
   const handleGoogleLogin = async () => {
-    const auth = getAuth();
-    const provider = new GoogleAuthProvider();
     try {
-      const result = await signInWithPopup(auth, provider);
+      await signInGoogle();
       setAuthMessage("Connexion Google réussie !");
-      // Ajout dans la collection users si pas déjà présent
-      const user = result.user;
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          email: user.email,
-          displayName: user.displayName || "",
-          role: "user",
-        });
-      }
+      // plus de création doc ici: géré dans le service
     } catch (error: any) {
-      setAuthMessage("Erreur Connexion Google : " + error.message);
+      console.error("[Auth][Google] Erreur brute :", error);
+      setAuthMessage(error?.code ? translateFirebaseError(error.code) : "Erreur de connexion Google.");
     }
   };
 
@@ -83,12 +77,13 @@ export default function LoginPage() {
       return;
     }
     try {
-      await sendPasswordResetEmail(auth, resetEmail);
+      await resetPassword(resetEmail);
       setAuthMessage("Un email de réinitialisation a été envoyé.");
       setShowReset(false);
       setResetEmail("");
     } catch (error: any) {
-      setAuthMessage("Erreur lors de la réinitialisation : " + error.message);
+      console.error("[Auth][ResetPassword] Erreur brute :", error);
+      setAuthMessage(error?.code ? translateFirebaseError(error.code) : "Erreur lors de la réinitialisation.");
     }
   };
 
@@ -251,4 +246,5 @@ export default function LoginPage() {
     </main>
   );
 }
+
 

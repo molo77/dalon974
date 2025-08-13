@@ -9,8 +9,12 @@ import {
   doc,
   updateDoc,
   addDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { v4 as uuidv4 } from "uuid";
+import { getAuth, sendPasswordResetEmail } from "firebase/auth";
+import { translateFirebaseError } from "@/lib/firebaseErrors";
+import { listUsers, updateUserDoc, deleteUserDoc, createUserDoc, normalizeUsers, sendResetTo } from "@/lib/services/userService";
 
 export default function AdminUsers({
   showToast,
@@ -22,6 +26,7 @@ export default function AdminUsers({
   const [editedUsers, setEditedUsers] = useState<{ [userId: string]: { email: string; displayName: string; role: string } }>({});
   const [newUser, setNewUser] = useState({ email: "", displayName: "", role: "" });
   const [confirmModal, setConfirmModal] = useState<string | null>(null);
+  const [normalizing, setNormalizing] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -29,8 +34,8 @@ export default function AdminUsers({
 
   const fetchUsers = async () => {
     setLoading(true);
-    const usersSnap = await getDocs(collection(db, "users"));
-    setUsers(usersSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const data = await listUsers();
+    setUsers(data as any[]);
     setLoading(false);
   };
 
@@ -38,7 +43,7 @@ export default function AdminUsers({
     const edited = editedUsers[userId];
     if (!edited) return;
     try {
-      await updateDoc(doc(db, "users", userId), {
+      await updateUserDoc(userId, {
         email: edited.email,
         displayName: edited.displayName,
         role: edited.role,
@@ -49,8 +54,9 @@ export default function AdminUsers({
         )
       );
       showToast("success", "Utilisateur modifié !");
-    } catch (e) {
-      showToast("error", "Erreur lors de la modification de l'utilisateur.");
+    } catch (e: any) {
+      console.error("[AdminUsers][Save]", e);
+      showToast("error", translateFirebaseError(e?.code) || "Erreur lors de la modification.");
     }
   };
 
@@ -61,13 +67,43 @@ export default function AdminUsers({
   const confirmDelete = async () => {
     if (!confirmModal) return;
     try {
-      await deleteDoc(doc(db, "users", confirmModal));
+      await deleteUserDoc(confirmModal);
       setUsers((prev) => prev.filter((u) => u.id !== confirmModal));
       showToast("success", "Utilisateur supprimé avec succès !");
-    } catch (e) {
-      showToast("error", "Erreur lors de la suppression.");
+    } catch (e: any) {
+      console.error("[AdminUsers][Delete]", e);
+      showToast("error", translateFirebaseError(e?.code) || "Erreur lors de la suppression.");
     }
     setConfirmModal(null);
+  };
+
+  const handleAdminResetPassword = async (email: string) => {
+    if (!email) {
+      showToast("error", "Email manquant pour la réinitialisation.");
+      return;
+    }
+    try {
+      await sendResetTo(email);
+      showToast("success", `Un email de réinitialisation a été envoyé à ${email}`);
+    } catch (e: any) {
+      console.error("[AdminUsers][ResetPassword]", e);
+      showToast("error", translateFirebaseError(e?.code) || "Erreur lors de la réinitialisation.");
+    }
+  };
+
+  const normalizeExistingUsers = async () => {
+    setNormalizing(true);
+    try {
+      const count = await normalizeUsers();
+      if (count) showToast("success", `${count} utilisateur(s) mis à jour.`);
+      else showToast("info" as any, "Aucune mise à jour nécessaire.");
+      fetchUsers();
+    } catch (e:any) {
+      console.error("[AdminUsers][Normalize]", e);
+      showToast("error", translateFirebaseError(e?.code) || "Erreur normalisation.");
+    } finally {
+      setNormalizing(false);
+    }
   };
 
   return (
@@ -100,7 +136,7 @@ export default function AdminUsers({
               return;
             }
             try {
-              await addDoc(collection(db, "users"), {
+              await createUserDoc({
                 email: newUser.email,
                 displayName: newUser.displayName,
                 role: newUser.role,
@@ -108,8 +144,9 @@ export default function AdminUsers({
               showToast("success", `Utilisateur "${newUser.displayName || newUser.email}" créé !`);
               setNewUser({ email: "", displayName: "", role: "" });
               fetchUsers();
-            } catch {
-              showToast("error", "Erreur lors de la création de l'utilisateur.");
+            } catch (e: any) {
+              console.error("[AdminUsers][Create]", e);
+              showToast("error", translateFirebaseError(e?.code) || "Erreur lors de la création.");
             }
           }}
           className="flex flex-col md:flex-row gap-2 w-full"
@@ -147,6 +184,16 @@ export default function AdminUsers({
           </button>
         </form>
       </div>
+      <div className="mb-4 flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={normalizeExistingUsers}
+          disabled={normalizing}
+          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-60"
+        >
+          {normalizing ? "Normalisation..." : "Compléter champs manquants"}
+        </button>
+      </div>
       <div className="overflow-x-auto">
         {loading ? (
           <div className="flex items-center justify-center h-40">
@@ -161,6 +208,7 @@ export default function AdminUsers({
                 <th className="py-2 px-3 rounded-l-lg">Email</th>
                 <th className="py-2 px-3">Nom</th>
                 <th className="py-2 px-3">Rôle</th>
+                <th className="py-2 px-3">Type de compte</th>
                 <th className="py-2 px-3 rounded-r-lg">Actions</th>
               </tr>
             </thead>
@@ -168,6 +216,11 @@ export default function AdminUsers({
               {users.map((u) => {
                 const isEdited = !!editedUsers[u.id];
                 const edited = editedUsers[u.id] || { email: u.email, displayName: u.displayName || "", role: u.role || "user" };
+                // Détection du type de compte
+                let typeCompte = "Email";
+                if (u.providerId === "google.com" || (u.email && u.email.endsWith("@gmail.com") && !u.passwordHash)) {
+                  typeCompte = "Google";
+                }
                 return (
                   <tr key={u.id} className="bg-gray-50 hover:bg-blue-50 transition">
                     <td className="py-2 px-3">
@@ -211,6 +264,9 @@ export default function AdminUsers({
                         <option value="admin">admin</option>
                       </select>
                     </td>
+                    <td className="py-2 px-3">
+                      {typeCompte}
+                    </td>
                     <td className="py-2 px-3 flex gap-2">
                       <button
                         className="bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700"
@@ -231,6 +287,15 @@ export default function AdminUsers({
                         onClick={() => handleDeleteUser(u.id)}
                       >
                         Supprimer
+                      </button>
+                      <button
+                        className="bg-yellow-400 text-white px-3 py-1 rounded hover:bg-yellow-500 flex items-center gap-1"
+                        title="Réinitialiser le mot de passe (envoyer un email)"
+                        onClick={() => handleAdminResetPassword(u.email)}
+                        type="button"
+                      >
+                        <span role="img" aria-label="mouton">🐑</span>
+                        Réinit.
                       </button>
                     </td>
                   </tr>
@@ -272,3 +337,5 @@ export default function AdminUsers({
     </section>
   );
 }
+
+
