@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getAuth, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail } from "firebase/auth";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import Register from "@/components/Register";
@@ -14,6 +14,9 @@ export default function LoginPage() {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [user, setUser] = useState<any>(null);
+  const [showReset, setShowReset] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [loginErrorModal, setLoginErrorModal] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -38,7 +41,15 @@ export default function LoginPage() {
       setLoginEmail("");
       setLoginPassword("");
     } catch (error: any) {
-      setAuthMessage("Erreur Connexion Email : " + error.message);
+      if (error.code === "auth/wrong-password") {
+        setAuthMessage("Mot de passe incorrect.");
+      } else if (error.code === "auth/user-not-found") {
+        setAuthMessage("Aucun compte trouvé avec cet email.");
+      } else if (error.code === "auth/invalid-login-credentials" || error.code === "auth/invalid-credential") {
+        setLoginErrorModal("Impossible de se connecter : identifiants invalides. Vérifiez votre email et votre mot de passe.");
+      } else {
+        setAuthMessage("Erreur Connexion Email : " + error.message);
+      }
     }
   };
 
@@ -61,6 +72,23 @@ export default function LoginPage() {
       }
     } catch (error: any) {
       setAuthMessage("Erreur Connexion Google : " + error.message);
+    }
+  };
+
+  const handleResetPassword = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const auth = getAuth();
+    if (!resetEmail) {
+      setAuthMessage("Veuillez saisir votre email.");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      setAuthMessage("Un email de réinitialisation a été envoyé.");
+      setShowReset(false);
+      setResetEmail("");
+    } catch (error: any) {
+      setAuthMessage("Erreur lors de la réinitialisation : " + error.message);
     }
   };
 
@@ -151,6 +179,68 @@ export default function LoginPage() {
                 type="button"
                 className="bg-gray-300 text-gray-700 px-4 py-2 rounded flex-1"
                 onClick={() => setShowLogin(false)}
+              >
+                Annuler
+              </button>
+            </div>
+            <button
+              type="button"
+              className="text-blue-600 underline text-sm mt-2"
+              onClick={() => {
+                setShowLogin(false);
+                setShowReset(true);
+                setResetEmail(loginEmail);
+              }}
+            >
+              Mot de passe oublié ?
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Modal erreur connexion */}
+      {loginErrorModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white rounded shadow p-6 w-full max-w-sm flex flex-col gap-4 items-center">
+            <h2 className="text-xl font-bold text-red-700 mb-2 text-center">Erreur de connexion</h2>
+            <p className="text-gray-700 text-center">{loginErrorModal}</p>
+            <button
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 mt-4"
+              onClick={() => setLoginErrorModal(null)}
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal reset password */}
+      {showReset && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <form
+            onSubmit={handleResetPassword}
+            className="bg-white rounded shadow p-6 w-full max-w-sm flex flex-col gap-4"
+          >
+            <h2 className="text-xl font-bold mb-2 text-center">Réinitialiser le mot de passe</h2>
+            <input
+              type="email"
+              placeholder="Votre email"
+              value={resetEmail}
+              onChange={e => setResetEmail(e.target.value)}
+              className="border rounded px-3 py-2"
+              required
+            />
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex-1"
+              >
+                Envoyer
+              </button>
+              <button
+                type="button"
+                className="bg-gray-300 text-gray-700 px-4 py-2 rounded flex-1"
+                onClick={() => setShowReset(false)}
               >
                 Annuler
               </button>

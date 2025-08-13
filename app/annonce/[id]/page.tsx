@@ -1,30 +1,36 @@
+"use client";
+
 import { db } from "@/lib/firebase";
+import MessageModal from "@/components/MessageModal";
 import { doc, getDoc } from "firebase/firestore";
-import { notFound } from "next/navigation";
-import { cookies } from "next/headers";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
-type Props = {
-  params: Promise<{ id: string }>;
+export default function AnnonceDetailPage() {
+  const { id } = useParams();
+  const router = useRouter();
+  const [annonce, setAnnonce] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [showMessageModal, setShowMessageModal] = useState(false);
 
-};
+  useEffect(() => {
+    const fetchAnnonce = async () => {
+      if (!id) return;
+      const docRef = doc(db, "annonces", id as string);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        setAnnonce({ id: snap.id, ...snap.data() });
+      }
+      setLoading(false);
+    };
+    fetchAnnonce();
+  }, [id]);
 
-export default async function AnnonceDetailPage({ params }: Props) {
-  const { id } = await params; // Attendre params avant d'utiliser id
-  const docRef = doc(db, "annonces", id);
-  const snapshot = await getDoc(docRef);
-
-  if (!snapshot.exists()) {
-    return notFound();
+  if (loading) {
+    return <div className="p-8 text-center">Chargement...</div>;
   }
-
-  const annonce = snapshot.data();
-
-  // Détermine la provenance via un cookie "annonceOrigin"
-  const origin = (await cookies()).get("annonceOrigin")?.value;
-
-  let retourHref = "/";
-  if (origin === "dashboard") {
-    retourHref = "/dashboard";
+  if (!annonce) {
+    return <div className="p-8 text-center text-red-600">Annonce introuvable.</div>;
   }
 
   return (
@@ -80,12 +86,25 @@ export default async function AnnonceDetailPage({ params }: Props) {
               </p>
             )}
           </div>
-          <a
-            href={retourHref}
+          <button
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 mt-4"
+            onClick={() => setShowMessageModal(true)}
+          >
+            Contacter
+          </button>
+          <MessageModal
+            annonceId={annonce.id}
+            annonceOwnerId={annonce.userId}
+            isOpen={showMessageModal}
+            onClose={() => setShowMessageModal(false)}
+          />
+          <button
             className="mt-8 text-blue-600 hover:underline font-medium"
+            onClick={() => router.back()}
+            type="button"
           >
             ← Retour aux annonces
-          </a>
+          </button>
         </div>
       </div>
     </main>

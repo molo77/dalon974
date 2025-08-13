@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useState } from "react";
 
 type AnnonceProps = {
   id: string;
@@ -34,6 +35,8 @@ export default function AnnonceCard({
       document.cookie = `annonceOrigin=${origin};path=/`;
     }
   };
+
+  const [showMessageModal, setShowMessageModal] = useState(false);
 
   return (
     <Link
@@ -113,4 +116,5 @@ export default function AnnonceCard({
     </Link>
   );
 }
+
 

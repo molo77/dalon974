@@ -25,6 +25,7 @@ import AnnonceModal from "@/components/AnnonceModal";
 import ConfirmModal from "@/components/ConfirmModal";
 import Toast, { ToastMessage } from "@/components/Toast";
 import { v4 as uuidv4 } from "uuid";
+import MessageModal from "@/components/MessageModal";
 
 export default function DashboardPage() {
   const [user, loading] = useAuthState(auth);
@@ -44,6 +45,9 @@ export default function DashboardPage() {
   const [lastDoc, setLastDoc] = useState<any | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [replyTo, setReplyTo] = useState<any | null>(null);
+
   const loadAnnonces = async () => {
     if (!user || loadingMore || !hasMore) return;
 
@@ -129,6 +133,21 @@ export default function DashboardPage() {
     });
 
     return () => unsubscribe();
+  }, [user]);
+
+  // Charger les messages reçus
+  useEffect(() => {
+    if (!user) return;
+    const fetchMessages = async () => {
+      const q = query(
+        collection(db, "messages"),
+        where("annonceOwnerId", "==", user.uid),
+        orderBy("createdAt", "desc")
+      );
+      const snap = await getDocs(q);
+      setMessages(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    };
+    fetchMessages();
   }, [user]);
 
   return (
@@ -281,6 +300,49 @@ export default function DashboardPage() {
           }
         }}
       />
+
+      {/* Section messagerie */}
+      <div className="w-full max-w-2xl mt-10">
+        <h2 className="text-2xl font-bold mb-4">Messages reçus</h2>
+        {messages.length === 0 ? (
+          <p className="text-gray-500">Aucun message reçu.</p>
+        ) : (
+          <ul className="space-y-4">
+            {messages.map((msg) => (
+              <li key={msg.id} className="bg-white rounded shadow p-4">
+                <div className="mb-2 text-gray-700">
+                  <span className="font-semibold">De :</span> {msg.fromEmail}
+                </div>
+                <div className="mb-2 text-gray-700">
+                  <span className="font-semibold">Message :</span> {msg.content}
+                </div>
+                <div className="mb-2 text-gray-500 text-xs">
+                  {msg.createdAt?.seconds
+                    ? new Date(msg.createdAt.seconds * 1000).toLocaleString()
+                    : ""}
+                </div>
+                <button
+                  className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                  onClick={() => setReplyTo(msg)}
+                >
+                  Répondre
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Modal pour répondre */}
+      {replyTo && (
+        <MessageModal
+          annonceId={replyTo.annonceId}
+          annonceOwnerId={replyTo.fromUserId}
+          isOpen={!!replyTo}
+          onClose={() => setReplyTo(null)}
+          onSent={() => setReplyTo(null)}
+        />
+      )}
 
       <Toast
         toasts={toasts}
