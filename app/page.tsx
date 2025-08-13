@@ -12,8 +12,6 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import AnnonceCard from "@/components/AnnonceCard";
-import { getAuth } from "firebase/auth";
-import { useAuth } from "@/components/AuthProvider";
 
 export default function HomePage() {
   const [annonces, setAnnonces] = useState<any[]>([]);
@@ -24,15 +22,6 @@ export default function HomePage() {
   const [ville, setVille] = useState("");
   const [prixMax, setPrixMax] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<"date" | "prix">("date");
-  const [user, setUser] = useState<any>(null);
-
-  const { role } = useAuth();
-
-  useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = auth.onAuthStateChanged((u) => setUser(u));
-    return () => unsubscribe();
-  }, []);
 
   const loadAnnonces = async () => {
     if (loadingMore || !hasMore) return;
@@ -204,6 +193,17 @@ export default function HomePage() {
           />
         ))}
 
+        {loadingMore && (
+          <p className="text-gray-500 text-center mt-4">Chargement...</p>
+        )}
+
+        {!hasMore && annonces.length > 0 && (
+          <p className="text-gray-400 text-center mt-4">Toutes les annonces sont affichées.</p>
+        )}
+      </div>
+    </main>
+  );
+}
         {loadingMore && (
           <p className="text-gray-500 text-center mt-4">Chargement...</p>
         )}

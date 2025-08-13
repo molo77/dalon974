@@ -1,18 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { db } from "@/lib/firebase";
-import {
-  collection,
-  getDocs,
-  deleteDoc,
-  doc,
-  updateDoc,
-  addDoc,
-  writeBatch,
-} from "firebase/firestore";
-import { v4 as uuidv4 } from "uuid";
-import { getAuth, sendPasswordResetEmail } from "firebase/auth";
+import { useState, useEffect } from "react";
 import { translateFirebaseError } from "@/lib/firebaseErrors";
 import { listUsers, updateUserDoc, deleteUserDoc, createUserDoc, normalizeUsers, sendResetTo } from "@/lib/services/userService";
 
@@ -96,7 +84,7 @@ export default function AdminUsers({
     try {
       const count = await normalizeUsers();
       if (count) showToast("success", `${count} utilisateur(s) mis à jour.`);
-      else showToast("info" as any, "Aucune mise à jour nécessaire.");
+      else showToast("success", "Aucune mise à jour nécessaire.");
       fetchUsers();
     } catch (e:any) {
       console.error("[AdminUsers][Normalize]", e);

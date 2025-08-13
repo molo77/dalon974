@@ -3,23 +3,8 @@
 import { useState, useEffect } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useRouter } from "next/navigation";
-import { auth, db } from "@/lib/firebase";
-import {
-  collection,
-  getDocs,
-  onSnapshot,
-  query,
-  where,
-  orderBy,
-  doc,
-  deleteDoc,
-  addDoc,
-  updateDoc,
-  serverTimestamp,
-  limit,
-  startAfter,
-  getDoc,
-} from "firebase/firestore";
+import { auth } from "@/lib/firebase";
+// import { collection, getDocs, onSnapshot, query, where, orderBy, doc, deleteDoc, addDoc, updateDoc, serverTimestamp, limit, startAfter, getDoc } from "firebase/firestore";
 import Image from "next/image";
 import AnnonceCard from "@/components/AnnonceCard";
 import AnnonceModal from "@/components/AnnonceModal";
@@ -28,7 +13,7 @@ import Toast, { ToastMessage } from "@/components/Toast";
 import { v4 as uuidv4 } from "uuid";
 import MessageModal from "@/components/MessageModal";
 import { translateFirebaseError } from "@/lib/firebaseErrors";
-import { listUserAnnoncesPage, subscribeUserAnnonces, addAnnonce, updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/lib/services/annonceService";
+import { listUserAnnoncesPage, addAnnonce, updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/lib/services/annonceService";
 import { listMessagesForOwner } from "@/lib/services/messageService";
 import { getUserRole } from "@/lib/services/userService";
 
@@ -142,43 +127,6 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!loading && !user) router.push("/login");
   }, [user, loading, router]);
-
-  useEffect(() => {
-    if (!user || firestoreError || !userDocLoaded) return;
-
-    const q = query(
-      collection(db, "annonces"),
-      where("userId", "==", user.uid),
-      orderBy("createdAt", "desc")
-    );
-
-    (async () => {
-      try {
-        const snapshot = await getDocs(q);
-        setMesAnnonces(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        setLoadingAnnonces(false);
-      } catch (err:any) {
-        setLoadingAnnonces(false);
-        handleFirestoreError(err, "initialGetDocs");
-      }
-    })();
-
-    let unsubscribe: (() => void) | undefined;
-    try {
-      unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          setMesAnnonces(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        },
-        (err) => {
-          handleFirestoreError(err, "onSnapshot");
-        }
-      );
-    } catch (err:any) {
-      handleFirestoreError(err, "onSnapshot-setup");
-    }
-    return () => { if (unsubscribe) unsubscribe(); };
-  }, [user, firestoreError, userDocLoaded]);
 
   // Charger les messages reçus
   useEffect(() => {

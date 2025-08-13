@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
-import { db } from "@/lib/firebase";
-import { doc, setDoc, getDoc } from "firebase/firestore";
 import Register from "@/components/Register";
 import { translateFirebaseError } from "@/lib/firebaseErrors";
 import { signInEmail, signInGoogle, resetPassword } from "@/lib/services/authService";
@@ -34,7 +32,6 @@ export default function LoginPage() {
 
   const handleEmailLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const auth = getAuth();
     if (!loginEmail || !loginPassword) return;
     try {
       await signInEmail(loginEmail, loginPassword);
@@ -71,7 +68,6 @@ export default function LoginPage() {
 
   const handleResetPassword = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const auth = getAuth();
     if (!resetEmail) {
       setAuthMessage("Veuillez saisir votre email.");
       return;
