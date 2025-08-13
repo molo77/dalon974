@@ -23,6 +23,21 @@ export default function HomePage() {
   const [prixMax, setPrixMax] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<"date" | "prix">("date");
 
+  // Image d'annonce par défaut (16:9)
+  const defaultAnnonceImg =
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(
+      `<svg xmlns='http://www.w3.org/2000/svg' width='800' height='450' viewBox='0 0 800 450'>
+        <defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#e5e7eb'/><stop offset='100%' stop-color='#f3f4f6'/></linearGradient></defs>
+        <rect width='800' height='450' fill='url(#g)'/>
+        <rect x='60' y='120' width='300' height='210' rx='8' fill='#d1d5db'/>
+        <rect x='390' y='150' width='320' height='20' rx='4' fill='#9ca3af'/>
+        <rect x='390' y='185' width='280' height='16' rx='4' fill='#cbd5e1'/>
+        <rect x='390' y='215' width='240' height='16' rx='4' fill='#e2e8f0'/>
+        <rect x='390' y='260' width='180' height='28' rx='6' fill='#94a3b8'/>
+      </svg>`
+    );
+
   const loadAnnonces = async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
@@ -174,6 +189,7 @@ export default function HomePage() {
             prix={annonce.prix}
             surface={annonce.surface}
             description={annonce.description}
+            imageUrl={annonce.imageUrl || defaultAnnonceImg}
           />
         ))}
 

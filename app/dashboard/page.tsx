@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useRouter } from "next/navigation";
-import { auth } from "@/lib/firebase";
-// import { collection, getDocs, onSnapshot, query, where, orderBy, doc, deleteDoc, addDoc, updateDoc, serverTimestamp, limit, startAfter, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import Image from "next/image";
 import AnnonceCard from "@/components/AnnonceCard";
 import AnnonceModal from "@/components/AnnonceModal";
@@ -56,6 +56,11 @@ export default function DashboardPage() {
   const handleFirestoreError = (err: any, context: string) => {
     console.error(`[Dashboard][${context}]`, err);
     const code = err?.code;
+    // Cas spécifique: index requis (en cours de build)
+    if (code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
+      showToast("info", "Index Firestore en cours de création. Le tri peut être temporairement indisponible. Réessayez dans quelques minutes.");
+      return;
+    }
     if (code === "permission-denied") {
       let msg = "Accès refusé (permission-denied).";
       msg += userRole
@@ -73,8 +78,11 @@ export default function DashboardPage() {
   const loadAnnonces = async () => {
     if (!user || loadingMore || !hasMore || firestoreError) return;
 
-    setLoadingMore(true);
+    // Premier chargement: activer le spinner principal
+    const isInitial = !lastDoc && mesAnnonces.length === 0;
+    if (isInitial) setLoadingAnnonces(true);
 
+    setLoadingMore(true);
     try {
       const { items, lastDoc: newLast } = await listUserAnnoncesPage(user.uid, { lastDoc, pageSize: 10 });
 
@@ -89,9 +97,10 @@ export default function DashboardPage() {
       }
     } catch (err:any) {
       handleFirestoreError(err, "loadAnnonces");
+    } finally {
+      setLoadingMore(false);
+      if (isInitial) setLoadingAnnonces(false);
     }
-
-    setLoadingMore(false);
   };
 
   useEffect(() => {
@@ -135,11 +144,55 @@ export default function DashboardPage() {
       try {
         const msgs = await listMessagesForOwner(user.uid);
         setMessages(msgs);
-      } catch (err:any) {
-        handleFirestoreError(err, "messages");
+      } catch (err: any) {
+        // Fallback si l’index composite (annonceOwnerId + createdAt) n’est pas encore prêt
+        if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
+          try {
+            const q = query(
+              collection(db, "messages"),
+              where("annonceOwnerId", "==", user.uid)
+            );
+            const snap = await getDocs(q);
+            const unsorted = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Tri côté client par createdAt desc
+            unsorted.sort((a: any, b: any) => (b?.createdAt?.seconds || 0) - (a?.createdAt?.seconds || 0));
+            setMessages(unsorted);
+            showToast("info", "Index messages en cours de création. Tri appliqué côté client.");
+          } catch (fallbackErr: any) {
+            handleFirestoreError(fallbackErr, "messages-fallback");
+          }
+        } else {
+          handleFirestoreError(err, "messages");
+        }
       }
     })();
   }, [user, firestoreError, userDocLoaded]);
+
+  // Avatar par défaut (SVG embarqué)
+  const defaultAvatarSvg =
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(
+      `<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'>
+        <rect fill='#e5e7eb' width='100' height='100'/>
+        <circle cx='50' cy='38' r='18' fill='#9ca3af'/>
+        <rect x='20' y='60' width='60' height='28' fill='#9ca3af' rx='14'/>
+      </svg>`
+    );
+
+  // Image d'annonce par défaut (16:9)
+  const defaultAnnonceImg =
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(
+      `<svg xmlns='http://www.w3.org/2000/svg' width='800' height='450' viewBox='0 0 800 450'>
+        <defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#e5e7eb'/><stop offset='100%' stop-color='#f3f4f6'/></linearGradient></defs>
+        <rect width='800' height='450' fill='url(#g)'/>
+        <rect x='60' y='120' width='300' height='210' rx='8' fill='#d1d5db'/>
+        <rect x='390' y='150' width='320' height='20' rx='4' fill='#9ca3af'/>
+        <rect x='390' y='185' width='280' height='16' rx='4' fill='#cbd5e1'/>
+        <rect x='390' y='215' width='240' height='16' rx='4' fill='#e2e8f0'/>
+        <rect x='390' y='260' width='180' height='28' rx='6' fill='#94a3b8'/>
+      </svg>`
+    );
 
   return (
     <div className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
@@ -150,19 +203,13 @@ export default function DashboardPage() {
       )}
       <div className="w-full max-w-3xl flex flex-col items-center mb-6">
         <div className="flex items-center justify-center gap-4 w-full">
-          {user?.photoURL ? (
-            <Image
-              src={user.photoURL}
-              alt="Avatar"
-              width={100}
-              height={100}
-              className="rounded-full"
-            />
-          ) : (
-            <span className="w-24 h-24 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold text-3xl">
-              {user?.displayName?.charAt(0) || user?.email?.charAt(0) || "?"}
-            </span>
-          )}
+          <Image
+            src={user?.photoURL || defaultAvatarSvg}
+            alt="Avatar"
+            width={100}
+            height={100}
+            className="rounded-full bg-gray-300"
+          />
           <h1 className="text-3xl font-bold text-center">
             Bienvenue {user?.displayName || user?.email}
           </h1>
@@ -193,6 +240,7 @@ export default function DashboardPage() {
               <div key={annonce.id} className="w-full">
                 <AnnonceCard
                   {...annonce}
+                  imageUrl={annonce.imageUrl || defaultAnnonceImg}
                   onDelete={() => {
                     setSelectedAnnonceToDelete(annonce);
                     setConfirmModalOpen(true);

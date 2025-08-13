@@ -11,6 +11,7 @@ type AnnonceProps = {
   userEmail?: string;
   onDelete?: () => void;
   onEdit?: () => void;
+  imageUrl: string;
 };
 
 export default function AnnonceCard({
