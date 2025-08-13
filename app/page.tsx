@@ -13,6 +13,7 @@ import {
 import { db } from "@/lib/firebase";
 import AnnonceCard from "@/components/AnnonceCard";
 import { getAuth } from "firebase/auth";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function HomePage() {
   const [annonces, setAnnonces] = useState<any[]>([]);
@@ -22,9 +23,10 @@ export default function HomePage() {
 
   const [ville, setVille] = useState("");
   const [prixMax, setPrixMax] = useState<number | null>(null);
-  const [sortBy, setSortBy] = useState<"date" | "prix">("date");
-  const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<"date" | "prix">("date"));
   const [user, setUser] = useState<any>(null);
+
+  const { role } = useAuth();
 
   useEffect(() => {
     const auth = getAuth();
@@ -108,6 +110,18 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
       <h1 className="text-3xl font-bold mb-6 text-center">Annonces de colocation</h1>
+
+      {/* Lien admin si admin */}
+      {role === "admin" && (
+        <div className="mb-4 w-full max-w-3xl flex justify-end">
+          <a
+            href="/admin"
+            className="bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-800 font-semibold"
+          >
+            Accéder à l'administration
+          </a>
+        </div>
+      )}
 
       <form
         onSubmit={(e) => {
@@ -201,3 +215,4 @@ export default function HomePage() {
     </main>
   );
 }
+      

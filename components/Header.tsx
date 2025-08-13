@@ -76,13 +76,6 @@ export default function Header() {
               Connexion
             </Link>
           )}
-
-          {/* Affichage du rôle utilisateur si présent */}
-          {user && !loading && (
-            <span className="ml-4 text-sm text-gray-600">
-              {role ? `Rôle : ${role}` : "Rôle inconnu"}
-            </span>
-          )}
         </nav>
       </div>
 

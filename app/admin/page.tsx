@@ -9,6 +9,7 @@ import {
   doc,
   getDoc,
   updateDoc,
+  addDoc,
 } from "firebase/firestore";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "@/lib/firebase";
@@ -33,6 +34,16 @@ export default function AdminPage() {
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const toastTimeout = useRef<NodeJS.Timeout | null>(null);
   const router = useRouter();
+  const [showCreateAnnonce, setShowCreateAnnonce] = useState(false);
+  const [newAnnonce, setNewAnnonce] = useState({
+    titre: "",
+    ville: "",
+    prix: "",
+    surface: "",
+    chambres: "",
+    description: "",
+  });
+  const [creationMessage, setCreationMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -162,6 +173,38 @@ export default function AdminPage() {
     setConfirmModal({ type: null, id: null });
   };
 
+  const [newUser, setNewUser] = useState({ email: "", displayName: "", role: "" });
+
+  // Ajoutez la fonction de création d'annonce pour l'admin
+  const handleCreateAnnonce = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await addDoc(collection(db, "annonces"), {
+        ...newAnnonce,
+        prix: Number(newAnnonce.prix),
+        surface: Number(newAnnonce.surface),
+        chambres: Number(newAnnonce.chambres),
+        createdAt: new Date(),
+      });
+      setCreationMessage("Annonce créée !");
+      setShowCreateAnnonce(false);
+      setNewAnnonce({
+        titre: "",
+        ville: "",
+        prix: "",
+        surface: "",
+        chambres: "",
+        description: "",
+      });
+      // Recharge les annonces
+      const annoncesSnap = await getDocs(collection(db, "annonces"));
+      setAnnonces(annoncesSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (e) {
+      setCreationMessage("Erreur lors de la création de l'annonce.");
+    }
+    setTimeout(() => setCreationMessage(null), 3000);
+  };
+
   if (loading || checkingAdmin) {
     return (
       <main className="min-h-screen bg-gray-100 p-8 flex items-center justify-center">
@@ -225,6 +268,95 @@ export default function AdminPage() {
                   <h2 className="text-2xl font-semibold mb-6 text-blue-700 flex items-center gap-2">
                     📢 Annonces
                   </h2>
+                  {/* Bouton création annonce */}
+                  <div className="mb-4 flex justify-end">
+                    <button
+                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                      onClick={() => setShowCreateAnnonce(true)}
+                    >
+                      + Nouvelle annonce
+                    </button>
+                  </div>
+                  {/* Modal création annonce */}
+                  {showCreateAnnonce && (
+                    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+                      <form
+                        onSubmit={handleCreateAnnonce}
+                        className="bg-white rounded shadow p-6 w-full max-w-md flex flex-col gap-4"
+                      >
+                        <h2 className="text-xl font-bold mb-2 text-center">Créer une annonce</h2>
+                        <input
+                          type="text"
+                          placeholder="Titre"
+                          value={newAnnonce.titre}
+                          onChange={e => setNewAnnonce({ ...newAnnonce, titre: e.target.value })}
+                          className="border rounded px-3 py-2"
+                          required
+                        />
+                        <input
+                          type="text"
+                          placeholder="Ville"
+                          value={newAnnonce.ville}
+                          onChange={e => setNewAnnonce({ ...newAnnonce, ville: e.target.value })}
+                          className="border rounded px-3 py-2"
+                          required
+                        />
+                        <input
+                          type="number"
+                          placeholder="Prix"
+                          value={newAnnonce.prix}
+                          onChange={e => setNewAnnonce({ ...newAnnonce, prix: e.target.value })}
+                          className="border rounded px-3 py-2"
+                          required
+                        />
+                        <input
+                          type="number"
+                          placeholder="Surface"
+                          value={newAnnonce.surface}
+                          onChange={e => setNewAnnonce({ ...newAnnonce, surface: e.target.value })}
+                          className="border rounded px-3 py-2"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Chambres"
+                          value={newAnnonce.chambres}
+                          onChange={e => setNewAnnonce({ ...newAnnonce, chambres: e.target.value })}
+                          className="border rounded px-3 py-2"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Description"
+                          value={newAnnonce.description}
+                          onChange={e => setNewAnnonce({ ...newAnnonce, description: e.target.value })}
+                          className="border rounded px-3 py-2"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="submit"
+                            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex-1"
+                          >
+                            Créer
+                          </button>
+                          <button
+                            type="button"
+                            className="bg-gray-300 text-gray-700 px-4 py-2 rounded flex-1"
+                            onClick={() => setShowCreateAnnonce(false)}
+                          >
+                            Annuler
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+                  {/* Message de création */}
+                  {creationMessage && (
+                    <div className="fixed bottom-6 right-6 z-50 px-6 py-3 rounded shadow-lg text-white transition-all
+                      bg-green-600"
+                      style={{ minWidth: 220 }}
+                    >
+                      {creationMessage}
+                    </div>
+                  )}
                   <div className="overflow-x-auto">
                     {annonces.length === 0 ? (
                       <p className="text-gray-500">Aucune annonce.</p>
@@ -363,6 +495,58 @@ export default function AdminPage() {
                   <h2 className="text-2xl font-semibold mb-6 text-blue-700 flex items-center gap-2">
                     👤 Utilisateurs
                   </h2>
+                  {/* Formulaire création utilisateur (admin) */}
+                  <div className="mb-6 flex flex-col md:flex-row gap-4 items-end bg-blue-50 rounded p-4">
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        try {
+                          await addDoc(collection(db, "roles"), {
+                            email: newUser.email,
+                            displayName: newUser.displayName,
+                            role: newUser.role,
+                          });
+                          setToast({ type: "success", message: `Utilisateur "${newUser.displayName || newUser.email}" créé !` });
+                          setNewUser({ email: "", displayName: "", role: "" });
+                        } catch {
+                          setToast({ type: "error", message: "Erreur lors de la création de l'utilisateur." });
+                        }
+                        if (toastTimeout.current) clearTimeout(toastTimeout.current);
+                        toastTimeout.current = setTimeout(() => setToast(null), 3500);
+                      }}
+                      className="flex flex-col md:flex-row gap-2 w-full"
+                    >
+                      <input
+                        type="email"
+                        placeholder="Email"
+                        value={newUser.email}
+                        onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+                        className="border rounded px-3 py-2 flex-1"
+                        required
+                      />
+                      <input
+                        type="text"
+                        placeholder="Nom"
+                        value={newUser.displayName}
+                        onChange={e => setNewUser({ ...newUser, displayName: e.target.value })}
+                        className="border rounded px-3 py-2 flex-1"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Rôle (admin, user, etc)"
+                        value={newUser.role}
+                        onChange={e => setNewUser({ ...newUser, role: e.target.value })}
+                        className="border rounded px-3 py-2 flex-1"
+                        required
+                      />
+                      <button
+                        type="submit"
+                        className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+                      >
+                        Créer
+                      </button>
+                    </form>
+                  </div>
                   <div className="overflow-x-auto">
                     {users.length === 0 ? (
                       <p className="text-gray-500">Aucun utilisateur.</p>
