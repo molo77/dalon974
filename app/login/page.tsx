@@ -2,14 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { db } from "@/lib/firebase";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import Register from "@/components/Register";
 
 export default function LoginPage() {
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [showSignup, setShowSignup] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
-  const [signupEmail, setSignupEmail] = useState("");
-  const [signupPassword, setSignupPassword] = useState("");
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [user, setUser] = useState<any>(null);
@@ -25,21 +26,6 @@ export default function LoginPage() {
     });
     return () => unsubscribe();
   }, [router]);
-
-  const handleEmailSignup = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const auth = getAuth();
-    if (!signupEmail || !signupPassword) return;
-    try {
-      await createUserWithEmailAndPassword(auth, signupEmail, signupPassword);
-      setAuthMessage("Inscription Email réussie !");
-      setShowSignup(false);
-      setSignupEmail("");
-      setSignupPassword("");
-    } catch (error: any) {
-      setAuthMessage("Erreur Email : " + error.message);
-    }
-  };
 
   const handleEmailLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -60,8 +46,19 @@ export default function LoginPage() {
     const auth = getAuth();
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
       setAuthMessage("Connexion Google réussie !");
+      // Ajout dans la collection users si pas déjà présent
+      const user = result.user;
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) {
+        await setDoc(userRef, {
+          email: user.email,
+          displayName: user.displayName || "",
+          role: "user",
+        });
+      }
     } catch (error: any) {
       setAuthMessage("Erreur Connexion Google : " + error.message);
     }
@@ -105,43 +102,17 @@ export default function LoginPage() {
       {/* Modal inscription */}
       {showSignup && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <form
-            onSubmit={handleEmailSignup}
-            className="bg-white rounded shadow p-6 w-full max-w-sm flex flex-col gap-4"
-          >
+          <div className="bg-white rounded shadow p-6 w-full max-w-sm flex flex-col gap-4">
             <h2 className="text-xl font-bold mb-2 text-center">Inscription Email</h2>
-            <input
-              type="email"
-              placeholder="Email"
-              value={signupEmail}
-              onChange={e => setSignupEmail(e.target.value)}
-              className="border rounded px-3 py-2"
-              required
-            />
-            <input
-              type="password"
-              placeholder="Mot de passe"
-              value={signupPassword}
-              onChange={e => setSignupPassword(e.target.value)}
-              className="border rounded px-3 py-2"
-              required
-            />
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                className="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800 flex-1"
-              >
-                S'inscrire
-              </button>
-              <button
-                type="button"
-                className="bg-gray-300 text-gray-700 px-4 py-2 rounded flex-1"
-                onClick={() => setShowSignup(false)}
-              >
-                Annuler
-              </button>
-            </div>
-          </form>
+            <Register onSuccess={() => setShowSignup(false)} />
+            <button
+              type="button"
+              className="bg-gray-300 text-gray-700 px-4 py-2 rounded mt-4"
+              onClick={() => setShowSignup(false)}
+            >
+              Annuler
+            </button>
+          </div>
         </div>
       )}
 
@@ -190,3 +161,4 @@ export default function LoginPage() {
     </main>
   );
 }
+

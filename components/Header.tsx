@@ -70,6 +70,15 @@ export default function Header() {
               >
                 Déconnexion
               </button>
+              {/* Bouton accès admin après Déconnexion */}
+              {role === "admin" && (
+                <Link
+                  href="/admin"
+                  className="bg-blue-700 text-white px-3 py-1.5 rounded hover:bg-blue-800 font-semibold text-sm ml-2"
+                >
+                  Accéder à l'administration
+                </Link>
+              )}
             </>
           ) : (
             <Link href="/login" className="text-blue-600 hover:underline">
@@ -121,6 +130,16 @@ export default function Header() {
               >
                 Déconnexion
               </button>
+              {/* Bouton accès admin après Déconnexion en mobile */}
+              {role === "admin" && (
+                <Link
+                  href="/admin"
+                  className="bg-blue-700 text-white px-3 py-1.5 rounded hover:bg-blue-800 font-semibold text-sm text-center mt-1"
+                  onClick={toggleMobile}
+                >
+                  Accéder à l'administration
+                </Link>
+              )}
             </>
           ) : (
             <Link href="/login" className="text-blue-600 hover:underline" onClick={toggleMobile}>

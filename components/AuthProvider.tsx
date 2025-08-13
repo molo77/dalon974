@@ -24,7 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
 
       if (u) {
-        const userDoc = await getDoc(doc(db, "roles", u.uid)); // Correction ici
+        const userDoc = await getDoc(doc(db, "users", u.uid)); // Correction ici
         if (userDoc.exists()) {
           const data = userDoc.data();
           console.log("Données Firestore utilisateur :", data); // Debug

@@ -23,7 +23,7 @@ export default function HomePage() {
 
   const [ville, setVille] = useState("");
   const [prixMax, setPrixMax] = useState<number | null>(null);
-  const [sortBy, setSortBy] = useState<"date" | "prix">("date"));
+  const [sortBy, setSortBy] = useState<"date" | "prix">("date");
   const [user, setUser] = useState<any>(null);
 
   const { role } = useAuth();
@@ -111,8 +111,8 @@ export default function HomePage() {
     <main className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
       <h1 className="text-3xl font-bold mb-6 text-center">Annonces de colocation</h1>
 
-      {/* Lien admin si admin */}
-      {role === "admin" && (
+      {/* SUPPRIMER ce bloc, le bouton admin est maintenant dans le header */}
+      {/* {role === "admin" && (
         <div className="mb-4 w-full max-w-3xl flex justify-end">
           <a
             href="/admin"
@@ -121,7 +121,7 @@ export default function HomePage() {
             Accéder à l'administration
           </a>
         </div>
-      )}
+      )} */}
 
       <form
         onSubmit={(e) => {
@@ -215,4 +215,3 @@ export default function HomePage() {
     </main>
   );
 }
-      

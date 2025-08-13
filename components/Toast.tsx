@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 
 export type ToastType = "success" | "error" | "info";
 
@@ -17,22 +17,35 @@ export default function Toast({
   toasts: ToastMessage[];
   onRemove: (id: string) => void;
 }) {
-  const [visibleToasts, setVisibleToasts] = useState(toasts);
+  const timers = useRef<{ [id: string]: NodeJS.Timeout }>({});
 
   useEffect(() => {
-    setVisibleToasts(toasts);
-  }, [toasts]);
-
-  useEffect(() => {
-    const timers = visibleToasts.map((toast) =>
-      setTimeout(() => onRemove(toast.id), 3000)
-    );
-    return () => timers.forEach(clearTimeout);
-  }, [visibleToasts, onRemove]);
+    // Pour chaque toast, si pas déjà timer, on en crée un
+    toasts.forEach((toast) => {
+      if (!timers.current[toast.id]) {
+        timers.current[toast.id] = setTimeout(() => {
+          onRemove(toast.id);
+          delete timers.current[toast.id];
+        }, 3000);
+      }
+    });
+    // Nettoyage des timers pour les toasts supprimés
+    Object.keys(timers.current).forEach((id) => {
+      if (!toasts.find((t) => t.id === id)) {
+        clearTimeout(timers.current[id]);
+        delete timers.current[id];
+      }
+    });
+    // Nettoyage global à l'unmount
+    return () => {
+      Object.values(timers.current).forEach(clearTimeout);
+      timers.current = {};
+    };
+  }, [toasts, onRemove]);
 
   return (
     <div className="fixed bottom-4 right-4 z-50 space-y-3">
-      {visibleToasts.map((toast) => (
+      {toasts.map((toast) => (
         <div
           key={toast.id}
           className={`px-6 py-3 rounded-lg shadow-lg text-white animate-fade transition-all ${
