@@ -5,16 +5,14 @@ import Link from "next/link";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "@/lib/firebase";
 import { useRouter, usePathname } from "next/navigation";
+import { useAuth } from "@/components/AuthProvider";
 
-type HeaderProps = {
-  role?: string;
-};
-
-export default function Header({ role }: HeaderProps) {
+export default function Header() {
   const [user] = useAuthState(auth);
   const [mobileOpen, setMobileOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const { role, loading } = useAuth();
 
   const handleLogout = async () => {
     await auth.signOut();
@@ -29,13 +27,6 @@ export default function Header({ role }: HeaderProps) {
         <Link href="/" className="text-xl font-bold text-blue-600">
           Dalon974
         </Link>
-
-        {/* Affichage du rôle utilisateur si présent */}
-        {role && (
-          <div className="text-sm text-gray-600">
-            Rôle utilisateur : {role}
-          </div>
-        )}
 
         <button
           onClick={toggleMobile}
@@ -84,6 +75,13 @@ export default function Header({ role }: HeaderProps) {
             <Link href="/login" className="text-blue-600 hover:underline">
               Connexion
             </Link>
+          )}
+
+          {/* Affichage du rôle utilisateur si présent */}
+          {user && !loading && (
+            <span className="ml-4 text-sm text-gray-600">
+              {role ? `Rôle : ${role}` : "Rôle inconnu"}
+            </span>
           )}
         </nav>
       </div>
