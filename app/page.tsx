@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import {
   collection,
   getDocs,
@@ -9,12 +9,26 @@ import {
   startAfter,
   where,
   limit,
+  onSnapshot,
 } from "firebase/firestore";
+import type { Query, QuerySnapshot, DocumentData } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import AnnonceCard from "@/components/AnnonceCard";
 // import MapReunion from "@/components/MapReunion";
-import MapReunionLeaflet from "@/components/MapReunionLeaflet";
+import dynamic from "next/dynamic";
+const MapReunionLeaflet = dynamic(() => import("@/components/MapReunionLeaflet"), { ssr: false });
 import useCommuneCp from "@/hooks/useCommuneCp";
+
+// Helper: compare deux listes de slugs sans tenir compte de l’ordre
+const sameIds = (a: string[], b: string[]) => {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return false;
+  return true;
+};
 
 export default function HomePage() {
   const [annonces, setAnnonces] = useState<any[]>([]);
@@ -64,6 +78,19 @@ export default function HomePage() {
     communeData?.communesSorted ??
     [...COMMUNES_CP].sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
 
+  // NOUVEAU: map “nom (commune/sous-commune) -> slug parent de la commune”
+  const nameToParentSlug = useMemo(() => {
+    const m: Record<string, string> = {};
+    (COMMUNES_CP_SORTED as any[]).forEach((c) => {
+      const parentSlug = slugify(c.name);
+      m[parentSlug] = parentSlug; // la commune pointe vers elle-même
+      (c.alts || []).forEach((a: any) => {
+        m[slugify(a.name)] = parentSlug; // la sous-commune pointe vers la commune parente
+      });
+    });
+    return m;
+  }, [COMMUNES_CP_SORTED]);
+
   const findByCp = (cp: string) =>
     COMMUNES_CP.find(c => c.cps.includes(cp) || c.alts?.some(a => a.cp === cp))?.name || "";
 
@@ -79,9 +106,17 @@ export default function HomePage() {
     return "";
   };
 
-  // Handlers synchronisés (inchangé côté logique, profite de findByName étendu)
+  // Handlers synchronisés (mise en cohérence avec la carte)
   const onVilleChange = (val: string) => {
     setVille(val);
+    const norm = slugify(val || "");
+    if (!val) {
+      setCommunesSelected((prev) => (sameIds(prev, []) ? prev : []));
+    } else if (nameToParentSlug[norm]) {
+      const next = [nameToParentSlug[norm]];
+      setCommunesSelected((prev) => (sameIds(prev, next) ? prev : next));
+    }
+
     if (/^\d{5}$/.test(val)) {
       const name = findByCp(val);
       if (name) {
@@ -103,163 +138,272 @@ export default function HomePage() {
     }
   };
 
+  const subsRef = useRef<(() => void)[]>([]); // abonnements actifs
+
+  const clearAllSubs = () => {
+    subsRef.current.forEach((u) => { try { u(); } catch {} });
+    subsRef.current = [];
+    // IMPORTANT: libérer le blocage de loadAnnonces
+    setLoadingMore(false);
+  };
+
+  // Helper: déduire le slug parent de l'annonce depuis communeSlug ou ville
+  const getDocParentSlug = (d: any) => {
+    const raw = d?.communeSlug || d?.ville || "";
+    const s = slugify(raw);
+    return nameToParentSlug[s] || s;
+  };
+
   const loadAnnonces = async () => {
     // Ne rien charger si aucun choix n’a été fait
     if (activeHomeTab === null) return;
     if (loadingMore || !hasMore || firestoreError) return;
+
     setLoadingMore(true);
 
     try {
       const isColoc = activeHomeTab === "colocataires";
-      const collectionName = isColoc ? "colocataires" : "annonces";
+      const collectionName = isColoc ? "colocProfiles" : "annonces";
       const priceField = isColoc ? "budget" : "prix";
       const orderField = sortBy === "date" ? "createdAt" : priceField;
 
-      let baseQuery: any = query(collection(db, collectionName));
-      if (prixMax !== null) baseQuery = query(baseQuery, where(priceField, "<=", prixMax));
-      // MAJ: si on a un CP pour les annonces, on n’ajoute pas le filtre 'ville'
-      if (ville && (isColoc || !codePostal)) {
-        baseQuery = query(baseQuery, where("ville", "==", ville));
-      }
-      if (!isColoc && codePostal) {
-        baseQuery = query(baseQuery, where("codePostal", "==", codePostal));
-      }
-
-      // NOUVEAU: filtre communes (priorité aux champs slugs en base)
       const hasCommuneFilter = communesSelected.length > 0;
+
+      // Prépare séparément le where prix et les filtres "base" (sans prix)
+      const baseColRef = collection(db, collectionName);
+      const priceWhere = prixMax !== null ? where(priceField, "<=", prixMax) : null;
+
+      const commonFiltersBase: any[] = [];
+      // Si on utilise la carte, on ignore ville/codePostal (déjà filtrés par slug)
+      if (!hasCommuneFilter) {
+        if (ville && (isColoc || !codePostal)) commonFiltersBase.push(where("ville", "==", ville));
+        if (!isColoc && codePostal) commonFiltersBase.push(where("codePostal", "==", codePostal));
+      }
+      const commonFiltersWithPrice: any[] = priceWhere ? [priceWhere, ...commonFiltersBase] : [...commonFiltersBase];
+
       const chunks = (arr: string[], size = 10) => {
         const out: string[][] = [];
         for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
         return out;
       };
 
-      // Applique tri/pagination
-      baseQuery = query(baseQuery, orderBy(orderField, sortBy === "date" ? "desc" : "asc"), limit(10));
-      const runPaged = async (qBase: any) => lastDoc ? getDocs(query(qBase, startAfter(lastDoc))) : getDocs(qBase);
+      const qWithOrder = (qBase: Query<DocumentData>) =>
+        query(qBase, orderBy(orderField, sortBy === "date" ? "desc" : "asc"), limit(10));
 
-      let snapshot;
-      if (hasCommuneFilter) {
-        try {
-          // Essai 1: champs slugs
-          const allDocs: any[] = [];
-          for (const c of chunks(communesSelected, 10)) {
-            const qComm = query(
-              collection(db, collectionName),
-              where(isColoc ? "communesSlugs" : "communeSlug", isColoc ? "array-contains-any" : "in", c),
-              orderBy(orderField, sortBy === "date" ? "desc" : "asc"),
-              limit(10)
-            );
-            const snap = await (lastDoc ? getDocs(query(qComm, startAfter(lastDoc))) : getDocs(qComm));
-            allDocs.push(...snap.docs);
-          }
-          snapshot = { docs: allDocs };
-        } catch {
-          // Fallback 2: on charge la page normale puis filtre côté client par ville -> slug
-          const snap = await runPaged(baseQuery);
-          const toSlug = (s: string) =>
-            (s || "")
-              .normalize("NFD").replace(/\p{Diacritic}/gu, "")
-              .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-          const filtered = snap.docs.filter(d => {
-            const data = d.data() as any;
-            if (isColoc) {
-              const arr: string[] = Array.isArray(data?.communes) ? data.communes : [];
-              const arrSlugs = arr.map(toSlug);
-              return arrSlugs.some((id) => communesSelected.includes(id));
-            } else {
-              return communesSelected.includes(toSlug(data?.ville || ""));
+      // Filtre client "ET" pour coloc (toutes les communes sélectionnées)
+      const requireAllSelected =
+        isColoc && communesSelected.length > 1
+          ? (d: any) => {
+              const arr = Array.isArray(d?.communesSlugs) ? d.communesSlugs : [];
+              if (arr.length === 0) return false;
+              const set = new Set(arr);
+              return communesSelected.every((s) => set.has(s));
             }
+          : undefined;
+
+      // Filtre client pour annonces: slug parent ∈ communesSelected
+      const annoncesClientFilter =
+        !isColoc && hasCommuneFilter
+          ? (d: any) => communesSelected.includes(getDocParentSlug(d))
+          : undefined;
+
+      // Filtre prix client (utilisé si l’index composite manque)
+      const clientPriceFilter =
+        prixMax !== null
+          ? (d: any) => {
+              const v = d?.[priceField];
+              return typeof v === "number" ? v <= (prixMax as number) : false;
+            }
+          : undefined;
+
+      const combineFilters = (a?: (d: any) => boolean, b?: (d: any) => boolean) => {
+        if (!a && !b) return undefined;
+        return (d: any) => (a ? a(d) : true) && (b ? b(d) : true);
+      };
+
+      const attachListener = (
+        qOrdered: Query<DocumentData>,
+        {
+          label,
+          clientFilter,
+          fallback,
+          fallbackNoPrice,
+        }: {
+          label: string;
+          clientFilter?: (d: any) => boolean;
+          fallback: Query<DocumentData>;
+          fallbackNoPrice: Query<DocumentData>;
+        }
+      ) => {
+        const unsub = onSnapshot(
+          qOrdered,
+          (snap: QuerySnapshot<DocumentData>) => {
+            let docsArr = snap.docs;
+            if (clientFilter) docsArr = docsArr.filter((d: any) => clientFilter(d.data()));
+            const mapped = docsArr.map((doc: any) => {
+              const d = doc.data() as Record<string, any>;
+              return isColoc
+                ? { id: doc.id, titre: d.nom || "Recherche colocation", ville: d.ville, prix: d.budget, surface: undefined, description: d.description, imageUrl: d.imageUrl || defaultAnnonceImg, createdAt: d.createdAt }
+                : { id: doc.id, titre: d.titre, ville: d.ville, prix: d.prix, surface: d.surface, description: d.description, imageUrl: d.imageUrl || defaultAnnonceImg, createdAt: d.createdAt };
+            });
+            setAnnonces((prev) => {
+              const byId = new Map(prev.map((x) => [x.id, x]));
+              mapped.forEach((m) => byId.set(m.id, { ...(byId.get(m.id) || {}), ...m }));
+              const arr = Array.from(byId.values());
+              const toMs = (x: any) => {
+                const v = x?.createdAt;
+                if (!v) return 0;
+                if (typeof v === "number") return v;
+                if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+                const p = Date.parse(v);
+                return isNaN(p) ? 0 : p;
+              };
+              if (sortBy === "date") arr.sort((a, b) => toMs(b) - toMs(a));
+              else arr.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
+              return arr;
+            });
+            if (docsArr.length > 0) setLastDoc(docsArr[docsArr.length - 1]); else setHasMore(false);
+            setLoadingMore(false);
+          },
+          (err: any) => {
+            if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
+              // Fallback sans orderBy. Si le where prix pose problème (index composite manquant),
+              // basculer sur une requête SANS prix et filtrer le prix côté client.
+              const useNoPrice = !!priceWhere;
+              const qNoOrder = lastDoc
+                ? query(useNoPrice ? fallbackNoPrice : fallback, startAfter(lastDoc))
+                : useNoPrice
+                ? fallbackNoPrice
+                : fallback;
+
+              const unsub2 = onSnapshot(
+                qNoOrder as Query<DocumentData>,
+                (snap2: QuerySnapshot<DocumentData>) => {
+                  let docsArr = snap2.docs;
+                  // Applique filtre client combiné (ET commun(es) + prix si besoin)
+                  const combined = combineFilters(clientFilter, useNoPrice ? clientPriceFilter : undefined);
+                  if (combined) docsArr = docsArr.filter((d: any) => combined(d.data()));
+                  const mapped = docsArr.map((doc: any) => {
+                    const d = doc.data() as any;
+                    return isColoc
+                      ? { id: doc.id, titre: d.nom || "Recherche colocation", ville: d.ville, prix: d.budget, surface: undefined, description: d.description, imageUrl: d.imageUrl || defaultAnnonceImg, createdAt: d.createdAt }
+                      : { id: doc.id, titre: d.titre, ville: d.ville, prix: d.prix, surface: d.surface, description: d.description, imageUrl: d.imageUrl || defaultAnnonceImg, createdAt: d.createdAt };
+                  });
+                  setAnnonces((prev) => {
+                    const byId = new Map(prev.map((x) => [x.id, x]));
+                    mapped.forEach((m) => byId.set(m.id, { ...(byId.get(m.id) || {}), ...m }));
+                    const arr = Array.from(byId.values());
+                    const toMs = (x: any) => {
+                      const v = x?.createdAt;
+                      if (!v) return 0;
+                      if (typeof v === "number") return v;
+                      if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+                      const p = Date.parse(v);
+                      return isNaN(p) ? 0 : p;
+                    };
+                    if (sortBy === "date") arr.sort((a, b) => toMs(b) - toMs(a));
+                    else arr.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
+                    return arr;
+                  });
+                  if (docsArr.length > 0) setLastDoc(docsArr[docsArr.length - 1]); else setHasMore(false);
+                  setLoadingMore(false);
+                },
+                (err2: any) => {
+                  console.error("[Accueil][onSnapshot][fallback-noOrder][" + label + "]", err2);
+                  setLoadingMore(false);
+                }
+              );
+              subsRef.current.push(unsub2);
+            } else {
+              console.error("[Accueil][onSnapshot][" + label + "]", err);
+              setLoadingMore(false);
+            }
+          }
+        );
+        subsRef.current.push(unsub);
+      };
+
+      if (hasCommuneFilter) {
+        if (isColoc) {
+          // Coloc: on garde le filtrage Firestore par communesSlugs + clientFilter "ET" si besoin
+          const field = "communesSlugs";
+          const op = "array-contains-any";
+          const clientFilterCombined = combineFilters(requireAllSelected, undefined);
+          for (const c of chunks(communesSelected, 10)) {
+            const chunkWhere = where(field as any, op as any, c);
+            const qFilterOnly = query(baseColRef, ...commonFiltersWithPrice, chunkWhere);
+            const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase, chunkWhere);
+            const qOrdered = qWithOrder(qFilterOnly);
+            const qPaged = lastDoc ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
+            attachListener(qPaged as Query<DocumentData>, {
+              label: "communes-slugs-coloc",
+              clientFilter: clientFilterCombined,
+              fallback: qFilterOnly as Query<DocumentData>,
+              fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
+            });
+          }
+        } else {
+          // Annonces: pas de where("communeSlug","in",...), filtrage communes côté client
+          const qFilterOnly = query(baseColRef, ...commonFiltersWithPrice);
+          const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase);
+          const qOrdered = qWithOrder(qFilterOnly);
+          const qPaged = lastDoc ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
+          attachListener(qPaged as Query<DocumentData>, {
+            label: "annonces-communes-client",
+            clientFilter: annoncesClientFilter,
+            fallback: qFilterOnly as Query<DocumentData>,
+            fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
           });
-          snapshot = { docs: filtered };
         }
       } else {
-        snapshot = await runPaged(baseQuery);
-      }
-
-      // Normalisation: map en forme AnnonceCard-friendly
-      const docs = snapshot.docs.map((doc: any) => {
-        const d = doc.data() as Record<string, any>;
-        return isColoc
-          ? {
-              id: doc.id,
-              titre: d.nom || "Recherche colocation",
-              ville: d.ville,
-              prix: d.budget,
-              surface: undefined,
-              description: d.description,
-              imageUrl: d.imageUrl || defaultAnnonceImg,
-            }
-          : {
-              id: doc.id,
-              titre: d.titre,
-              ville: d.ville,
-              prix: d.prix,
-              surface: d.surface,
-              description: d.description,
-              imageUrl: d.imageUrl || defaultAnnonceImg,
-            };
-      });
-
-      setAnnonces((prev) => {
-        const existingIds = new Set(prev.map((a) => a.id));
-        return [...prev, ...docs.filter((d) => !existingIds.has(d.id))];
-      });
-      if (snapshot.docs.length > 0) {
-        const last = snapshot.docs[snapshot.docs.length - 1];
-        setLastDoc(last);
-      } else {
-        setHasMore(false);
+        // Pas de filtre communes: comportement standard
+        const qFilterOnly = query(baseColRef, ...commonFiltersWithPrice);
+        const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase);
+        const qOrdered = qWithOrder(qFilterOnly);
+        const qPaged = lastDoc ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
+        attachListener(qPaged as Query<DocumentData>, {
+          label: "page",
+          fallback: qFilterOnly as Query<DocumentData>,
+          fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
+        });
       }
     } catch (err: any) {
-      console.error("Erreur chargement :", err);
-      if (err?.code === "permission-denied") {
-        const cible = activeHomeTab === "colocataires" ? "la liste des colocataires" : "les annonces";
-        setFirestoreError(
-          `Accès refusé pour ${cible}. Vérifie les règles Firestore (lecture publique de la collection "${activeHomeTab}").`
-        );
-        setHasMore(false);
-      }
+      console.error("Erreur chargement temps réel :", err);
+      setLoadingMore(false);
     }
-
-    setLoadingMore(false);
   };
 
-  // loadAnnonces n'est plus appelé au mount: on attend le choix de l'utilisateur
-
-  // Reset quand on change d’onglet: ne lance que si onglet sélectionné
+  // Reset quand on change d’onglet: nettoie + reset filtres (ne dépend que de activeHomeTab)
   useEffect(() => {
     if (activeHomeTab === null) return;
+    clearAllSubs();
     setFirestoreError(null);
     setAnnonces([]);
     setLastDoc(null);
     setHasMore(true);
-    // reset communes quand on change de tab
+    // reset filtres ici (ok car l’effet ne dépend pas de ces états)
     setCommunesSelected([]);
     setVille("");
-    setCodePostal(""); // reset CP aussi
-    loadAnnonces();
+    setCodePostal("");
+    // Ne pas appeler loadAnnonces ici (il sera déclenché par l’effet “filtres”)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeHomeTab]);
 
+  // Rechargement quand les filtres changent (sans réinitialiser les filtres eux‑mêmes)
   useEffect(() => {
-    const handleScroll = () => {
-      const bottom =
-        window.innerHeight + window.scrollY >= document.body.offsetHeight - 100;
+    if (activeHomeTab === null) return;
+    clearAllSubs();
+    setAnnonces([]);
+    setLastDoc(null);
+    setHasMore(true);
+    loadAnnonces();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortBy, prixMax, ville, codePostal, communesSelected]);
 
-      if (
-        activeHomeTab !== null && // bloquer si pas de choix
-        bottom &&
-        hasMore &&
-        !loadingMore &&
-        !firestoreError
-      ) {
-        loadAnnonces();
-      }
-    };
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  });
+  // Nettoyage global à l’unmount
+  useEffect(() => {
+    return () => clearAllSubs();
+  }, []);
 
   return (
     <main className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
@@ -349,12 +493,8 @@ export default function HomePage() {
 
           <form
             onSubmit={(e) => {
-              e.preventDefault();
-              setFirestoreError(null);
-              setAnnonces([]); setLastDoc(null); setHasMore(true);
-              loadAnnonces();
-            }
-            }
+              e.preventDefault(); // mise à jour auto: pas d’appel manuel
+            }}
             className="mb-6 w-full max-w-4xl bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4"
           >
             <div className="flex flex-wrap gap-4 items-end justify-center">
@@ -410,9 +550,9 @@ export default function HomePage() {
                 </select>
               </div>
 
-              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                Filtrer
-              </button>
+              {/* Retrait du bouton "Filtrer" (maj auto) */}
+              <span className="text-xs text-slate-500 self-center">Mise à jour automatique</span>
+
               <button
                 type="button"
                 onClick={() => {
@@ -424,7 +564,7 @@ export default function HomePage() {
                   setAnnonces([]);
                   setLastDoc(null);
                   setHasMore(true);
-                  loadAnnonces();
+                  // pas d’appel direct à loadAnnonces: l’effet "filtres" va relancer proprement
                 }}
                 className="border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50"
               >
@@ -446,7 +586,9 @@ export default function HomePage() {
                   {/* NOUVEAU: Filtrer par communes (carte satellite) */}
                   <MapReunionLeaflet
                     defaultSelected={communesSelected}
-                    onSelectionChange={(ids) => setCommunesSelected(ids)}
+                    onSelectionChange={(ids) =>
+                      setCommunesSelected((prev) => (sameIds(prev, ids) ? prev : ids))
+                    }
                     height={420}
                     className="w-full"
                     alwaysMultiSelect

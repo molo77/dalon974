@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   collection,
   getDocs,
@@ -14,11 +14,28 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
+type AdminAnnoncesProps = {
+  showToast: (type: "success" | "error", message: string) => void;
+  // Sélection multiple (optionnelle)
+  selectable?: boolean;
+  selectedIds?: string[];
+  onToggleSelect?: (id: string) => void;
+  onSelectAll?: (allIds?: string[]) => void;
+  onDeselectAll?: () => void;
+  onBulkDelete?: (ids?: string[]) => Promise<void> | void;
+  bulkDeleting?: boolean;
+};
+
 export default function AdminAnnonces({
   showToast,
-}: {
-  showToast: (type: "success" | "error", message: string) => void;
-}) {
+  selectable,
+  selectedIds = [],
+  onToggleSelect,
+  onSelectAll,
+  onDeselectAll,
+  onBulkDelete,
+  bulkDeleting,
+}: AdminAnnoncesProps) {
   const [annonces, setAnnonces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editAnnonceId, setEditAnnonceId] = useState<string | null>(null);
@@ -136,6 +153,20 @@ export default function AdminAnnonces({
     }
   };
 
+  // Récupère les IDs visibles pour "Tout sélectionner"
+  const visibleIds = useMemo(() => {
+    return annonces.map(a => a.id);
+  }, [annonces]);
+
+  const handleSelectAll = () => {
+    if (onSelectAll) onSelectAll(visibleIds);
+  };
+
+  const handleBulkDelete = async () => {
+    if (!onBulkDelete || selectedIds.length === 0) return;
+    await onBulkDelete(selectedIds);
+  };
+
   return (
     <>
       <section className="mb-12">
@@ -222,6 +253,35 @@ export default function AdminAnnonces({
             </form>
           </div>
         )}
+        {/* Barre d’actions sélection multiple */}
+        {selectable && (
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <button
+              type="button"
+              onClick={handleSelectAll}
+              disabled={!onSelectAll}
+              className="border px-3 py-1.5 rounded hover:bg-slate-50 disabled:opacity-60"
+            >
+              Tout sélectionner
+            </button>
+            <button
+              type="button"
+              onClick={onDeselectAll}
+              disabled={!onDeselectAll || selectedIds.length === 0}
+              className="border px-3 py-1.5 rounded hover:bg-slate-50 disabled:opacity-60"
+            >
+              Tout désélectionner
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              disabled={!onBulkDelete || selectedIds.length === 0 || bulkDeleting}
+              className="bg-rose-600 text-white px-3 py-1.5 rounded hover:bg-rose-700 disabled:opacity-60"
+            >
+              {bulkDeleting ? "Suppression..." : `Supprimer la sélection (${selectedIds.length})`}
+            </button>
+          </div>
+        )}
         <div className="overflow-x-auto">
           {loading ? (
             <div className="flex items-center justify-center h-40">
@@ -233,6 +293,7 @@ export default function AdminAnnonces({
             <table className="w-full text-sm border-separate border-spacing-y-2">
               <thead>
                 <tr className="bg-blue-50">
+                  {selectable && <th className="py-2 px-3 rounded-l-lg">Sélection</th>}
                   <th className="py-2 px-3 rounded-l-lg">Titre</th>
                   <th className="py-2 px-3">Ville</th>
                   <th className="py-2 px-3">Prix</th>
@@ -246,6 +307,15 @@ export default function AdminAnnonces({
               <tbody>
                 {annonces.map((a) => (
                   <tr key={a.id} className="bg-gray-50 hover:bg-blue-50 transition">
+                    {selectable && (
+                      <td className="py-2 px-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(a.id)}
+                          onChange={() => onToggleSelect && onToggleSelect(a.id)}
+                        />
+                      </td>
+                    )}
                     {editAnnonceId === a.id ? (
                       <>
                         <td className="py-2 px-3">

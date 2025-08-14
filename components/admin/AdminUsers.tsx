@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { translateFirebaseError } from "@/lib/firebaseErrors";
 import { listUsers, updateUserDoc, deleteUserDoc, createUserDoc, normalizeUsers, sendResetTo } from "@/lib/services/userService";
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 
 export default function AdminUsers({
   showToast,
@@ -17,9 +19,24 @@ export default function AdminUsers({
   const [confirmModal, setConfirmModal] = useState<string | null>(null);
   const [normalizing, setNormalizing] = useState(false);
 
+  // Abonnement temps réel aux utilisateurs
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    const q = query(collection(db, "users"), orderBy("email", "asc"));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setUsers(data as any[]);
+        setLoading(false);
+      },
+      (err) => {
+        console.error("[AdminUsers][onSnapshot]", err);
+        setLoading(false);
+        showToast("error", translateFirebaseError((err as any)?.code) || "Erreur chargement temps réel.");
+      }
+    );
+    return () => unsub();
+  }, [showToast]);
 
   const fetchUsers = async () => {
     setLoading(true);

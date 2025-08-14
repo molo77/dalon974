@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
-import { collection, getDocs, query, where, onSnapshot, orderBy, doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, orderBy, onSnapshot, doc, getDoc, serverTimestamp, setDoc, deleteDoc, getDocs } from "firebase/firestore";
 import Image from "next/image";
 import AnnonceCard from "@/components/AnnonceCard";
 import AnnonceModal from "@/components/AnnonceModal";
@@ -17,7 +17,6 @@ import { listUserAnnoncesPage, addAnnonce, updateAnnonce, deleteAnnonce as delet
 import { listMessagesForOwner } from "@/lib/services/messageService";
 import { getUserRole } from "@/lib/services/userService";
 import Link from "next/link";
-import MapReunionLeaflet from "@/components/MapReunionLeaflet";
 import useCommuneSelection from "@/hooks/useCommuneSelection";
 import useMessagesData from "@/hooks/useMessagesData";
 
@@ -182,6 +181,8 @@ export default function DashboardPage() {
   const [activeMsgTab, setActiveMsgTab] = useState<"received" | "sent">("received");
   const [annonceTitles, setAnnonceTitles] = useState<Record<string, string>>({});
   const [replyTo, setReplyTo] = useState<any | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
 
   const handleFirestoreError = (err: any, context: string) => {
     console.error(`[Dashboard][${context}]`, err);
@@ -234,6 +235,36 @@ export default function DashboardPage() {
     }
   };
 
+  // Helper pour comparer createdAt de manière robuste (Timestamp Firestore/Date/number/string)
+  const createdAtMs = (x: any) => {
+    const v = x?.createdAt;
+    if (!v) return 0;
+    if (typeof v === "number") return v;
+    if (v instanceof Date) return v.getTime();
+    if (typeof v === "string") {
+      const d = Date.parse(v);
+      return isNaN(d) ? 0 : d;
+    }
+    if (typeof v === "object" && typeof v.seconds === "number") {
+      return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+    }
+    return 0;
+  };
+
+  // Liste triée par date desc pour l’affichage
+  const sortedAnnonces = useMemo(
+    () => [...mesAnnonces].sort((a, b) => createdAtMs(b) - createdAtMs(a)),
+    [mesAnnonces]
+  );
+
+  // IDs visibles (pour tout sélectionner/désélectionner)
+  const visibleIds = useMemo(() => sortedAnnonces.map(a => a.id), [sortedAnnonces]);
+
+  // Nettoie la sélection si la liste visible change (évite les IDs orphelins)
+  useEffect(() => {
+    setSelectedIds((prev) => prev.filter((id) => visibleIds.includes(id)));
+  }, [visibleIds]);
+
   const loadAnnonces = async () => {
     if (!user || loadingMore || !hasMore || firestoreError) return;
 
@@ -249,7 +280,10 @@ export default function DashboardPage() {
         setLastDoc(newLast);
         setMesAnnonces(prev => {
           const ids = new Set(prev.map(a => a.id));
-          return [...prev, ...items.filter(i => !ids.has(i.id))];
+          const merged = [...prev, ...items.filter(i => !ids.has(i.id))];
+          // Tri par date desc après fusion
+          merged.sort((a, b) => createdAtMs(b) - createdAtMs(a));
+          return merged;
         });
       } else {
         setHasMore(false);
@@ -462,6 +496,102 @@ export default function DashboardPage() {
     fetchAnnonces();
   }, [messages, sentMessages, annonceTitles, db]);
 
+  useEffect(() => {
+    if (!user || firestoreError || !userDocLoaded) return;
+    let unsubs: Array<() => void> = [];
+    setLoadingAnnonces(true);
+
+    const attach = (qAny: any, label: string) => {
+      try {
+        const u = onSnapshot(
+          qAny,
+          (snap: { docs: any[]; }) => {
+            const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            setMesAnnonces((prev) => {
+              const byId = new Map(prev.map((x) => [x.id, x]));
+              docs.forEach((m) => byId.set(m.id, { ...(byId.get(m.id) || {}), ...m }));
+              const arr = Array.from(byId.values());
+              arr.sort((a, b) => createdAtMs(b) - createdAtMs(a));
+              return arr;
+            });
+            setLoadingAnnonces(false);
+          },
+          (err) => {
+            if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
+              // Fallback sans orderBy: tri côté client
+              const u2 = onSnapshot(
+                query(collection(db, "annonces"), where("uid", "==", user.uid)),
+                (snap2) => {
+                  const docs2 = snap2.docs.map((d) => ({ id: d.id, ...d.data() }));
+                  setMesAnnonces((prev) => {
+                    const byId = new Map(prev.map((x) => [x.id, x]));
+                    docs2.forEach((m) => byId.set(m.id, { ...(byId.get(m.id) || {}), ...m }));
+                    const arr = Array.from(byId.values());
+                    arr.sort((a, b) => createdAtMs(b) - createdAtMs(a));
+                    return arr;
+                  });
+                  setLoadingAnnonces(false);
+                }
+              );
+              unsubs.push(u2);
+            } else {
+              handleFirestoreError(err, "annonces-snapshot-" + label);
+              setLoadingAnnonces(false);
+            }
+          }
+        );
+        unsubs.push(u);
+      } catch (e) {
+        console.warn("[Dashboard][annonces] subscribe error", e);
+      }
+    };
+
+    // Essayer avec uid
+    attach(
+      query(collection(db, "annonces"), where("uid", "==", user.uid), orderBy("createdAt", "desc")),
+      "uid"
+    );
+    // Essayer aussi avec ownerId (selon service)
+    attach(
+      query(collection(db, "annonces"), where("ownerId", "==", user.uid), orderBy("createdAt", "desc")),
+      "ownerId"
+    );
+
+    return () => {
+      unsubs.forEach((u) => {
+        try { u(); } catch {}
+      });
+    };
+  }, [user, firestoreError, userDocLoaded]);
+
+  // Option: désactiver la pagination classique (le temps réel s’en charge)
+  useEffect(() => { setHasMore(false); }, []);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  };
+  const selectAllVisible = () => {
+    setSelectedIds(visibleIds);
+  };
+  const clearSelection = () => setSelectedIds([]);
+  const deselectAll = () => setSelectedIds([]);
+
+  const performBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    showToast("info", `Suppression de ${selectedIds.length} annonce(s)...`);
+    try {
+      await Promise.all(selectedIds.map(id => deleteAnnonceSvc(id).catch(e => e)));
+      setMesAnnonces(prev => prev.filter(a => !selectedIds.includes(a.id)));
+      clearSelection();
+      showToast("success", "Sélection supprimée ✅");
+    } catch (e) {
+      showToast("error", "Erreur lors de la suppression multiple ❌");
+    }
+  };
+
+  // Master checkbox (tout/cocher ou tout/décocher)
+  const allSelected = visibleIds.length > 0 && selectedIds.length === visibleIds.length;
+
   return (
     <div className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
       {/* En-tête */}
@@ -523,16 +653,60 @@ export default function DashboardPage() {
             >
               <span>➕</span> Nouvelle annonce
             </button>
+
+            {/* Barre d’actions toujours visible */}
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={() => (allSelected ? deselectAll() : selectAllVisible())}
+                />
+                <span className="text-sm text-slate-700">
+                  Tout ({visibleIds.length})
+                </span>
+              </label>
+              <button
+                type="button"
+                onClick={selectAllVisible}
+                className="border border-slate-300 px-3 py-1.5 rounded hover:bg-slate-50"
+              >
+                Tout sélectionner
+              </button>
+              <button
+                type="button"
+                onClick={deselectAll}
+                className="border border-slate-300 px-3 py-1.5 rounded hover:bg-slate-50"
+              >
+                Tout désélectionner
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmBulkOpen(true)}
+                disabled={selectedIds.length === 0}
+                className="bg-rose-600 text-white px-3 py-1.5 rounded hover:bg-rose-700 disabled:opacity-60"
+              >
+                Supprimer la sélection ({selectedIds.length})
+              </button>
+            </div>
+
             <h2 className="text-2xl font-semibold mb-4">Mes annonces</h2>
             {loadingAnnonces ? (
               <p className="text-gray-500">Chargement de vos annonces...</p>
-            ) : mesAnnonces.length === 0 ? (
+            ) : sortedAnnonces.length === 0 ? (
               <p className="text-gray-500">Aucune annonce pour le moment.</p>
             ) : (
               <div className="flex flex-col gap-4 w-full">
-                {/* Chaque AnnonceCard prend toute la largeur disponible et est centrée */}
-                {mesAnnonces.map((annonce) => (
-                  <div key={annonce.id} className="w-full">
+                {sortedAnnonces.map((annonce) => (
+                  <div key={annonce.id} className="w-full flex items-start gap-3">
+                    {/* Checkbox toujours visible */}
+                    <input
+                      type="checkbox"
+                      className="mt-2"
+                      checked={selectedIds.includes(annonce.id)}
+                      onChange={() => toggleSelect(annonce.id)
+                      }
+                    />
                     <AnnonceCard
                       {...annonce}
                       imageUrl={annonce.imageUrl || defaultAnnonceImg}
@@ -547,14 +721,21 @@ export default function DashboardPage() {
                     />
                   </div>
                 ))}
-                {loadingMore && (
-                  <p className="text-center text-gray-500 mt-4">Chargement…</p>
-                )}
-                {!hasMore && (
-                  <p className="text-center text-gray-400 mt-4">Toutes les annonces sont chargées.</p>
-                )}
+                {loadingMore && <p className="text-center text-gray-500 mt-4">Chargement…</p>}
+                {!hasMore && <p className="text-center text-gray-400 mt-4">Toutes les annonces sont chargées.</p>}
               </div>
             )}
+
+            {/* Confirmation suppression multiple */}
+            <ConfirmModal
+              isOpen={confirmBulkOpen}
+              onClose={() => setConfirmBulkOpen(false)}
+              onConfirm={async () => {
+                await performBulkDelete();
+                setConfirmBulkOpen(false);
+              }}
+            />
+
             <AnnonceModal
               isOpen={modalOpen}
               onClose={() => {
@@ -586,12 +767,17 @@ export default function DashboardPage() {
                     showToast("error", "Commune invalide. Merci de choisir une commune de La Réunion (ex: Saint-Denis, Saint-Paul, Le Tampon…).");
                     return;
                   }
-                  const villeName = official.name;
+
+                  // NOUVEAU: si la saisie correspond à une sous‑commune, garder le nom de la sous‑commune comme 'ville'
+                  const subMatch = SUB_COMMUNES.find(s => slugify(s.name) === slugify(villeInput));
+                  const villeName = subMatch ? subMatch.name : official.name;
+
                   const communeSlug = official.slug;
                   const codePostal = official.cp;
+
                   const annonceData: any = {
                     titre,
-                    ville: villeName,
+                    ville: villeName, // gardée en sous‑commune si applicable
                     communeSlug,
                     ...(codePostal ? { codePostal } : {}),
                     prix: prix ? Number(prix) : null,
@@ -606,7 +792,9 @@ export default function DashboardPage() {
                     chargesIncluses: typeof chargesIncluses === "boolean" ? chargesIncluses : !!chargesIncluses,
                     caution: caution ? Number(caution) : null,
                   };
+
                   Object.keys(annonceData).forEach((k) => (annonceData[k] === null || annonceData[k] === "") && delete (annonceData as any)[k]);
+
                   if (editAnnonce) {
                     await updateAnnonce(editAnnonce.id, annonceData);
                     showToast("success", "Annonce modifiée avec succès ✅");
@@ -620,7 +808,6 @@ export default function DashboardPage() {
                 }
               }}
               annonce={editAnnonce}
-              // NOUVEAU: Ville en input + datalist (comme l’accueil)
               villeDatalist={{
                 value: overrideVille,
                 onChange: setOverrideVille,
