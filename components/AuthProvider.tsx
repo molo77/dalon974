@@ -12,6 +12,9 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType>({ user: null, loading: true });
 
+// Désactive les logs par défaut
+const DEBUG_AUTH = false;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,7 +30,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const userDoc = await getDoc(doc(db, "users", u.uid)); // Correction ici
         if (userDoc.exists()) {
           const data = userDoc.data();
-          console.log("Données Firestore utilisateur :", data); // Debug
+          // Supprimer l’affichage forcé :
+          // console.log("Données Firestore utilisateur :", data);
+
+          // Optionnel: log only en debug
+          if (DEBUG_AUTH && process.env.NODE_ENV !== "production") {
+            console.debug("[AuthProvider] Firestore user doc:", data);
+          }
+
           setRole(data.role ?? null);
         } else {
           console.log("Aucun document utilisateur trouvé pour", u.uid); // Debug

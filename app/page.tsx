@@ -14,9 +14,7 @@ import {
 import type { Query, QuerySnapshot, DocumentData } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import AnnonceCard from "@/components/AnnonceCard";
-// import MapReunion from "@/components/MapReunion";
-import dynamic from "next/dynamic";
-const MapReunionLeaflet = dynamic(() => import("@/components/MapReunionLeaflet"), { ssr: false });
+import CommuneZoneSelector from "@/components/CommuneZoneSelector";
 import useCommuneCp from "@/hooks/useCommuneCp";
 
 // Helper: compare deux listes de slugs sans tenir compte de l’ordre
@@ -583,11 +581,10 @@ export default function HomePage() {
               </button>
               {showCommuneMap && (
                 <div className="mt-3 rounded-2xl border border-slate-200 p-3">
-                  {/* NOUVEAU: Filtrer par communes (carte satellite) */}
-                  <MapReunionLeaflet
-                    defaultSelected={communesSelected}
-                    onSelectionChange={(ids) =>
-                      setCommunesSelected((prev) => (sameIds(prev, ids) ? prev : ids))
+                  <CommuneZoneSelector
+                    value={communesSelected}
+                    onChange={(slugs) =>
+                      setCommunesSelected((prev) => (sameIds(prev, slugs as string[]) ? prev : (slugs as string[])))
                     }
                     height={420}
                     className="w-full"

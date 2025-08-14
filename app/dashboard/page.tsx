@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
@@ -19,6 +19,7 @@ import { getUserRole } from "@/lib/services/userService";
 import Link from "next/link";
 import useCommuneSelection from "@/hooks/useCommuneSelection";
 import useMessagesData from "@/hooks/useMessagesData";
+import CommuneZoneSelector from "@/components/CommuneZoneSelector";
 
 // Liste complète des communes de La Réunion
 const COMMUNES = [
@@ -155,6 +156,35 @@ const pickOfficialVilleFromInput = (raw: string) => {
 // Fallback image annonce pour éviter une référence manquante
 const defaultAnnonceImg = "/images/annonce-placeholder.jpg";
 
+// Aide: mapping slug -> nom de commune (pour déduire les zones)
+const SLUG_TO_NAME = (COMMUNES as string[]).reduce<Record<string, string>>((acc, name) => {
+  const slugify = (s: string) =>
+    (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  acc[slugify(name)] = name;
+  return acc;
+}, {});
+
+// NOUVEAU: déduire les zones depuis les slugs sélectionnés
+function computeZonesFromSlugs(slugs: string[]): string[] {
+  const names = slugs.map((s) => SLUG_TO_NAME[s]).filter(Boolean);
+  const zones: string[] = [];
+  Object.entries(GROUPES).forEach(([zone, list]) => {
+    if (names.some((n) => list.includes(n))) zones.push(zone);
+  });
+  return zones;
+}
+
+// NOUVEAU: comparer deux listes (ordre ignoré)
+function sameIds(a: string[], b: string[]) {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return false;
+  return true;
+}
+
 export default function DashboardPage() {
   const [user, loading] = useAuthState(auth);
   const router = useRouter();
@@ -183,6 +213,27 @@ export default function DashboardPage() {
   const [replyTo, setReplyTo] = useState<any | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
+
+  // --- Profil colocataire: états (déplacé plus haut pour éviter l'usage avant déclaration) ---
+  const [loadingColoc, setLoadingColoc] = useState(true);
+  const [savingColoc, setSavingColoc] = useState(false);
+  const [colocNom, setColocNom] = useState("");
+  const [colocVille, setColocVille] = useState("");
+  const [colocBudget, setColocBudget] = useState<number | "">("");
+  const [colocImageUrl, setColocImageUrl] = useState("");
+  const [colocDescription, setColocDescription] = useState("");
+  const [colocAge, setColocAge] = useState<number | "">("");
+  const [colocProfession, setColocProfession] = useState("");
+  const [colocFumeur, setColocFumeur] = useState(false);
+  const [colocAnimaux, setColocAnimaux] = useState(false);
+  const [colocDateDispo, setColocDateDispo] = useState("");
+  const [colocQuartiers, setColocQuartiers] = useState("");
+  const [colocTelephone, setColocTelephone] = useState("");
+  const [colocZones, setColocZones] = useState<string[]>([]);
+  const [colocCommunesSlugs, setColocCommunesSlugs] = useState<string[]>([]);
+  // Suivi existence doc & prêt pour autosave
+  const [hasColocDoc, setHasColocDoc] = useState<boolean | null>(null);
+  const [colocReady, setColocReady] = useState(false);
 
   const handleFirestoreError = (err: any, context: string) => {
     console.error(`[Dashboard][${context}]`, err);
@@ -305,6 +356,7 @@ export default function DashboardPage() {
       const snap = await getDoc(ref);
       if (snap.exists()) {
         const d: any = snap.data();
+        setHasColocDoc(true);
         setColocNom(d.nom || "");
         setColocVille(d.ville || "");
         setColocBudget(typeof d.budget === "number" ? d.budget : "");
@@ -320,7 +372,8 @@ export default function DashboardPage() {
         setColocZones(Array.isArray(d.zones) ? d.zones : []);
         setColocCommunesSlugs(Array.isArray(d.communesSlugs) ? d.communesSlugs : []);
       } else {
-        // profil inexistant -> états par défaut
+        setHasColocDoc(false);
+        // valeurs par défaut (profil non créé)
         setColocNom("");
         setColocVille("");
         setColocBudget("");
@@ -340,6 +393,125 @@ export default function DashboardPage() {
       handleFirestoreError(err, "loadColocProfile");
     } finally {
       setLoadingColoc(false);
+    }
+  };
+
+  // NOUVEAU: abonnement live au profil colocataire (création/maj en temps réel)
+  useEffect(() => {
+    if (activeTab !== "coloc" || !user) return;
+    setLoadingColoc(true);
+    const ref = doc(db, "colocProfiles", user.uid);
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (snap.exists()) {
+          const d: any = snap.data();
+          setHasColocDoc(true);
+          setColocNom(d.nom || "");
+          setColocVille(d.ville || "");
+          setColocBudget(typeof d.budget === "number" ? d.budget : "");
+          setColocImageUrl(d.imageUrl || "");
+          setColocDescription(d.description || "");
+          setColocAge(typeof d.age === "number" ? d.age : "");
+          setColocProfession(d.profession || "");
+          setColocFumeur(!!d.fumeur);
+          setColocAnimaux(!!d.animaux);
+          setColocDateDispo(d.dateDispo || "");
+          setColocQuartiers(d.quartiers || "");
+          setColocTelephone(d.telephone || "");
+          setColocZones(Array.isArray(d.zones) ? d.zones : []);
+          setColocCommunesSlugs(Array.isArray(d.communesSlugs) ? d.communesSlugs : []);
+        } else {
+          setHasColocDoc(false);
+          // valeurs par défaut (profil non créé)
+          setColocNom("");
+          setColocVille("");
+          setColocBudget("");
+          setColocImageUrl("");
+          setColocDescription("");
+          setColocAge("");
+          setColocProfession("");
+          setColocFumeur(false);
+          setColocAnimaux(false);
+          setColocDateDispo("");
+          setColocQuartiers("");
+          setColocTelephone("");
+          setColocZones([]);
+          setColocCommunesSlugs([]);
+        }
+        setLoadingColoc(false);
+        setColocReady(true);
+      },
+      (err) => {
+        handleFirestoreError(err, "colocProfile-live");
+        setLoadingColoc(false);
+      }
+    );
+    return () => {
+      try { unsub(); } catch {}
+      setColocReady(false);
+    };
+  }, [activeTab, user]);
+
+  // NOUVEAU: autosave silencieux (création si besoin) avec debounce
+  useEffect(() => {
+    if (!colocReady || activeTab !== "coloc" || !user) return;
+    const t = setTimeout(() => {
+      autoSaveColoc();
+    }, 800);
+    return () => clearTimeout(t);
+  }, [
+    colocNom,
+    colocVille,
+    colocBudget,
+    colocImageUrl,
+    colocDescription,
+    colocAge,
+    colocProfession,
+    colocFumeur,
+    colocAnimaux,
+    colocDateDispo,
+    colocQuartiers,
+    colocTelephone,
+    colocZones,
+    colocCommunesSlugs,
+    colocReady,
+    activeTab,
+    user
+  ]);
+
+  // NOUVEAU: sauvegarde silencieuse (pas de toast/UI), merge + createdAt au premier enregistrement
+  const autoSaveColoc = async () => {
+    if (!user) return;
+    try {
+      const ref = doc(db, "colocProfiles", user.uid);
+      const payload: any = {
+        uid: user.uid,
+        email: user.email || null,
+        nom: colocNom,
+        ville: colocVille,
+        budget: typeof colocBudget === "number" ? colocBudget : null,
+        imageUrl: colocImageUrl,
+        description: colocDescription,
+        age: typeof colocAge === "number" ? colocAge : null,
+        profession: colocProfession,
+        fumeur: !!colocFumeur,
+        animaux: !!colocAnimaux,
+        dateDispo: colocDateDispo,
+        quartiers: colocQuartiers,
+        telephone: colocTelephone,
+        zones: colocZones,
+        communesSlugs: colocCommunesSlugs,
+        updatedAt: serverTimestamp(),
+        ...(hasColocDoc ? {} : { createdAt: serverTimestamp() }),
+      };
+      Object.keys(payload).forEach((k) => {
+        const v = (payload as any)[k];
+        if (v === "" || v === null || (Array.isArray(v) && v.length === 0)) delete (payload as any)[k];
+      });
+      await setDoc(ref, payload, { merge: true });
+    } catch {
+      // silencieux
     }
   };
 
@@ -366,17 +538,13 @@ export default function DashboardPage() {
         zones: colocZones,
         communesSlugs: colocCommunesSlugs,
         updatedAt: serverTimestamp(),
+        // NOUVEAU: poser createdAt à la première sauvegarde
+        ...(hasColocDoc ? {} : { createdAt: serverTimestamp() }),
       };
       // Nettoyage des champs vides/null (sauf booléens et tableaux)
       Object.keys(payload).forEach((k) => {
         const v = payload[k];
-        if (
-          v === "" ||
-          v === null ||
-          (Array.isArray(v) && v.length === 0)
-        ) {
-          delete payload[k];
-        }
+        if (v === "" || v === null || (Array.isArray(v) && v.length === 0)) delete payload[k];
       });
       await setDoc(ref, payload, { merge: true });
       showToast("success", "Profil colocataire enregistré ✅");
@@ -415,22 +583,7 @@ export default function DashboardPage() {
   };
 
   // --- Profil colocataire: états ---
-  const [loadingColoc, setLoadingColoc] = useState(true);
-  const [savingColoc, setSavingColoc] = useState(false);
-  const [colocNom, setColocNom] = useState("");
-  const [colocVille, setColocVille] = useState("");
-  const [colocBudget, setColocBudget] = useState<number | "">("");
-  const [colocImageUrl, setColocImageUrl] = useState("");
-  const [colocDescription, setColocDescription] = useState("");
-  const [colocAge, setColocAge] = useState<number | "">("");
-  const [colocProfession, setColocProfession] = useState("");
-  const [colocFumeur, setColocFumeur] = useState(false);
-  const [colocAnimaux, setColocAnimaux] = useState(false);
-  const [colocDateDispo, setColocDateDispo] = useState("");
-  const [colocQuartiers, setColocQuartiers] = useState("");
-  const [colocTelephone, setColocTelephone] = useState("");
-  const [colocZones, setColocZones] = useState<string[]>([]);
-  const [colocCommunesSlugs, setColocCommunesSlugs] = useState<string[]>([]);
+  // (supprimé) Ancien bloc déplacé plus haut pour éviter l’utilisation avant déclaration
 
   useEffect(() => {
     if (user) loadUserDoc(user);
@@ -954,6 +1107,19 @@ export default function DashboardPage() {
         {activeTab === "coloc" && (
           <>
             <h2 className="text-2xl font-semibold mb-4">Mon profil colocataire</h2>
+            {/* NOUVEAU: proposition de création si le doc n'existe pas */}
+            {hasColocDoc === false && !loadingColoc && (
+              <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 px-4 py-3 text-sm">
+                Aucun profil trouvé. Cliquez sur “Créer maintenant” ou commencez à remplir le formulaire, l’enregistrement est automatique.
+                <button
+                  type="button"
+                  className="ml-3 underline font-semibold"
+                  onClick={saveColocProfile}
+                >
+                  Créer maintenant
+                </button>
+              </div>
+            )}
             {loadingColoc ? (
               <p className="text-gray-500">Chargement du profil…</p>
             ) : (
@@ -1095,46 +1261,27 @@ export default function DashboardPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Zones recherchées</label>
-                    <select
-                      multiple
-                      value={colocZones}
-                      onChange={(e) => {
-                        const options = e.target.options;
-                        const value = [];
-                        for (let i = 0; i < options.length; i++) {
-                          if (options[i].selected) {
-                            value.push(options[i].value);
-                          }
-                        }
-                        setColocZones(value);
+                {/* Remplacement: zones/communes par la carte de sélection */}
+                <div className="mt-2">
+                  <label className="block text-sm font-medium mb-2">Zones recherchées (sélection par communes)</label>
+                  <div className="rounded-2xl border border-slate-200 p-3">
+                    <CommuneZoneSelector
+                      value={colocCommunesSlugs}
+                      computeZonesFromSlugs={computeZonesFromSlugs}
+                      onChange={(slugs, zones = []) => {
+                        setColocCommunesSlugs((prev) => (sameIds(prev, slugs) ? prev : slugs));
+                        setColocZones((prev) => (sameIds(prev, zones) ? prev : zones));
                       }}
-                      className="border rounded px-3 py-2 w-full"
-                    >
-                      <option value="">Sélectionnez des zones</option>
-                      {Object.keys(GROUPES).map((g) => (
-                        <optgroup key={g} label={g}>
-                          {GROUPES[g].map((c) => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Communes (slugs)</label>
-                    <input
-                      type="text"
-                      value={colocCommunesSlugs.join(", ")}
-                      onChange={(e) => setColocCommunesSlugs(e.target.value.split(",").map(s => s.trim()).filter(Boolean))}
-                      className="border rounded px-3 py-2 w-full"
-                      placeholder="Slugs des communes"
+                      height={420}
+                      className="w-full"
+                      alwaysMultiSelect
                     />
                   </div>
+                  {colocCommunesSlugs.length > 0 && (
+                    <p className="mt-2 text-xs text-slate-600">
+                      Communes sélectionnées: {colocCommunesSlugs.join(", ")}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-4">
@@ -1152,6 +1299,7 @@ export default function DashboardPage() {
                     {savingColoc ? "Enregistrement..." : "Enregistrer le profil"}
                   </button>
                 </div>
+                <p className="text-xs text-slate-500 -mt-2">Enregistrement automatique activé.</p>
               </form>
             )}
           </>
@@ -1160,3 +1308,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
