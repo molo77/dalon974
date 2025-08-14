@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { collection, getDocs, query, where, onSnapshot, orderBy, doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import Image from "next/image";
@@ -17,10 +17,149 @@ import { listUserAnnoncesPage, addAnnonce, updateAnnonce, deleteAnnonce as delet
 import { listMessagesForOwner } from "@/lib/services/messageService";
 import { getUserRole } from "@/lib/services/userService";
 import Link from "next/link";
+import MapReunionLeaflet from "@/components/MapReunionLeaflet";
+import useCommuneSelection from "@/hooks/useCommuneSelection";
+import useMessagesData from "@/hooks/useMessagesData";
+
+// Liste complète des communes de La Réunion
+const COMMUNES = [
+  "Saint-Denis","Sainte-Marie","Sainte-Suzanne",
+  "Saint-André","Bras-Panon","Salazie",
+  "Saint-Benoît","La Plaine-des-Palmistes","Sainte-Rose","Saint-Philippe",
+  "Le Port","La Possession","Saint-Paul","Trois-Bassins","Saint-Leu","Les Avirons","L'Étang-Salé",
+  "Saint-Louis","Cilaos","Le Tampon","Entre-Deux","Saint-Pierre","Petite-Île","Saint-Joseph"
+];
+
+// Map codes postaux -> commune (utilisé pour la résolution depuis un CP)
+const CP_TO_COMMUNE: Record<string, string> = {
+  "97400": "Saint-Denis",
+  "97417": "Saint-Denis",
+  "97490": "Saint-Denis",
+
+  "97438": "Sainte-Marie",
+  "97441": "Sainte-Suzanne",
+  "97440": "Saint-André",
+  "97412": "Bras-Panon",
+  "97433": "Salazie",
+  "97470": "Saint-Benoît",
+  "97431": "La Plaine-des-Palmistes",
+  "97439": "Sainte-Rose",
+  "97442": "Saint-Philippe",
+
+  "97420": "Le Port",
+  "97419": "La Possession",
+
+  "97460": "Saint-Paul",
+  "97411": "Saint-Paul",
+  "97422": "Saint-Paul",
+  "97423": "Saint-Paul",
+  "97434": "Saint-Paul",
+  "97435": "Saint-Paul",
+
+  "97426": "Trois-Bassins",
+
+  "97436": "Saint-Leu",
+  "97416": "Saint-Leu",
+  "97424": "Saint-Leu",
+
+  "97425": "Les Avirons",
+  "97427": "L'Étang-Salé",
+
+  "97450": "Saint-Louis",
+  "97421": "Saint-Louis",
+
+  "97413": "Cilaos",
+
+  "97430": "Le Tampon",
+  "97418": "Le Tampon",
+
+  "97414": "Entre-Deux",
+
+  "97410": "Saint-Pierre",
+  "97432": "Saint-Pierre",
+
+  "97429": "Petite-Île",
+  "97480": "Saint-Joseph",
+};
+
+// Ensembles de communes (groupes)
+const GROUPES: Record<string, string[]> = {
+  "Nord": ["Saint-Denis","Sainte-Marie","Sainte-Suzanne"],
+  "Est": ["Saint-André","Bras-Panon","Salazie","Saint-Benoît","La Plaine-des-Palmistes","Sainte-Rose","Saint-Philippe"],
+  "Ouest": ["Le Port","La Possession","Saint-Paul","Trois-Bassins","Saint-Leu","Les Avirons","L'Étang-Salé"],
+  "Sud": ["Saint-Louis","Saint-Pierre","Le Tampon","Entre-Deux","Petite-Île","Saint-Joseph","Cilaos"],
+  "Intérieur": ["Cilaos","Salazie","La Plaine-des-Palmistes"]
+};
+
+// NOUVEAU: sous-communes (nom affiché, CP associé, commune parente)
+const SUB_COMMUNES: { name: string; cp: string; parent: string }[] = [
+  { name: "Sainte-Clotilde", cp: "97490", parent: "Saint-Denis" },
+  { name: "La Montagne", cp: "97417", parent: "Saint-Denis" },
+
+  { name: "Saint-Gilles-les-Bains", cp: "97434", parent: "Saint-Paul" },
+  { name: "L'Hermitage-les-Bains", cp: "97434", parent: "Saint-Paul" },
+  { name: "Saint-Gilles-les-Hauts", cp: "97435", parent: "Saint-Paul" },
+  { name: "La Saline", cp: "97422", parent: "Saint-Paul" },
+  { name: "La Saline-les-Hauts", cp: "97423", parent: "Saint-Paul" },
+  { name: "Bois-de-Nèfles Saint-Paul", cp: "97411", parent: "Saint-Paul" },
+  { name: "Plateau-Caillou", cp: "97460", parent: "Saint-Paul" },
+
+  { name: "La Chaloupe", cp: "97416", parent: "Saint-Leu" },
+  { name: "Piton Saint-Leu", cp: "97424", parent: "Saint-Leu" },
+
+  { name: "L'Étang-Salé-les-Bains", cp: "97427", parent: "L'Étang-Salé" },
+
+  { name: "La Rivière", cp: "97421", parent: "Saint-Louis" },
+
+  { name: "La Plaine des Cafres", cp: "97418", parent: "Le Tampon" },
+
+  { name: "Terre-Sainte", cp: "97432", parent: "Saint-Pierre" },
+
+  { name: "Dos d'Âne", cp: "97419", parent: "La Possession" },
+];
+
+// [DÉPLACÉ ICI] utils + helpers qui utilisent les constantes ci‑dessus
+const slugify = (s: string) =>
+  (s || "")
+    .normalize("NFD").replace(/\p{Diacritic}/gu, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
+// Résolution commune depuis saisie "ville" ou code postal
+
+// Imposer que la ville provienne de la liste officielle
+const pickOfficialVilleFromInput = (raw: string) => {
+  const input = (raw || "").trim();
+  if (!input) return null;
+
+  // CP exact -> commune
+  if (/^\d{5}$/.test(input)) {
+    const name = CP_TO_COMMUNE[input];
+    return name ? { name, slug: slugify(name), cp: input } : null;
+  }
+
+  const norm = slugify(input);
+
+  // Sous-commune (exacte/partielle) -> commune parente
+  let sub = SUB_COMMUNES.find(s => slugify(s.name) === norm);
+  if (!sub) sub = SUB_COMMUNES.find(s => slugify(s.name).includes(norm) || norm.includes(slugify(s.name)));
+  if (sub) return { name: sub.parent, slug: slugify(sub.parent), cp: sub.cp };
+
+  // Commune principale (exacte/partielle)
+  let found = COMMUNES.find(c => slugify(c) === norm);
+  if (!found) found = COMMUNES.find(c => slugify(c).includes(norm) || norm.includes(slugify(c)));
+  if (found) return { name: found, slug: slugify(found), cp: undefined };
+
+  // Sinon: non valide
+  return null;
+};
+
+// Fallback image annonce pour éviter une référence manquante
+const defaultAnnonceImg = "/images/annonce-placeholder.jpg";
 
 export default function DashboardPage() {
   const [user, loading] = useAuthState(auth);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [mesAnnonces, setMesAnnonces] = useState<any[]>([]);
   const [loadingAnnonces, setLoadingAnnonces] = useState(true);
@@ -36,28 +175,13 @@ export default function DashboardPage() {
   const [lastDoc, setLastDoc] = useState<any | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [messages, setMessages] = useState<any[]>([]);
-  const [replyTo, setReplyTo] = useState<any | null>(null);
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userDocLoaded, setUserDocLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<"annonces" | "messages" | "coloc">("annonces");
   const [activeMsgTab, setActiveMsgTab] = useState<"received" | "sent">("received");
-  const [sentMessages, setSentMessages] = useState<any[]>([]);
-  // Nouveau: cache des titres d’annonces
   const [annonceTitles, setAnnonceTitles] = useState<Record<string, string>>({});
-
-  const loadUserDoc = async (u: any) => {
-    try {
-      if (!u) return;
-      const role = await getUserRole(u.uid);
-      setUserRole(role);
-    } catch (e) {
-      console.warn("[Dashboard][UserDoc] échec :", e);
-    } finally {
-      setUserDocLoaded(true);
-    }
-  };
+  const [replyTo, setReplyTo] = useState<any | null>(null);
 
   const handleFirestoreError = (err: any, context: string) => {
     console.error(`[Dashboard][${context}]`, err);
@@ -78,6 +202,35 @@ export default function DashboardPage() {
       setHasMore(false);
     } else {
       showToast("error", code ? translateFirebaseError(code) : "Erreur Firestore.");
+    }
+  };
+
+  const { overrideVille, setOverrideVille, officialVillePreview, MAIN_COMMUNES_SORTED, SUB_COMMUNES_SORTED } =
+    useCommuneSelection({
+      modalOpen,
+      editAnnonce,
+      CP_TO_COMMUNE,
+      SUB_COMMUNES,
+      pickOfficialVilleFromInput,
+    });
+
+  const { messages, sentMessages } = useMessagesData({
+    user,
+    firestoreError,
+    userDocLoaded,
+    showToast,
+    handleFirestoreError,
+  });
+
+  const loadUserDoc = async (u: any) => {
+    try {
+      if (!u) return;
+      const role = await getUserRole(u.uid);
+      setUserRole(role);
+    } catch (e) {
+      console.warn("[Dashboard][UserDoc] échec :", e);
+    } finally {
+      setUserDocLoaded(true);
     }
   };
 
@@ -108,6 +261,142 @@ export default function DashboardPage() {
       if (isInitial) setLoadingAnnonces(false);
     }
   };
+
+  // Chargement du profil coloc depuis Firestore
+  const loadColocProfile = async () => {
+    if (!user) return;
+    setLoadingColoc(true);
+    try {
+      const ref = doc(db, "colocProfiles", user.uid);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const d: any = snap.data();
+        setColocNom(d.nom || "");
+        setColocVille(d.ville || "");
+        setColocBudget(typeof d.budget === "number" ? d.budget : "");
+        setColocImageUrl(d.imageUrl || "");
+        setColocDescription(d.description || "");
+        setColocAge(typeof d.age === "number" ? d.age : "");
+        setColocProfession(d.profession || "");
+        setColocFumeur(!!d.fumeur);
+        setColocAnimaux(!!d.animaux);
+        setColocDateDispo(d.dateDispo || "");
+        setColocQuartiers(d.quartiers || "");
+        setColocTelephone(d.telephone || "");
+        setColocZones(Array.isArray(d.zones) ? d.zones : []);
+        setColocCommunesSlugs(Array.isArray(d.communesSlugs) ? d.communesSlugs : []);
+      } else {
+        // profil inexistant -> états par défaut
+        setColocNom("");
+        setColocVille("");
+        setColocBudget("");
+        setColocImageUrl("");
+        setColocDescription("");
+        setColocAge("");
+        setColocProfession("");
+        setColocFumeur(false);
+        setColocAnimaux(false);
+        setColocDateDispo("");
+        setColocQuartiers("");
+        setColocTelephone("");
+        setColocZones([]);
+        setColocCommunesSlugs([]);
+      }
+    } catch (err: any) {
+      handleFirestoreError(err, "loadColocProfile");
+    } finally {
+      setLoadingColoc(false);
+    }
+  };
+
+  const saveColocProfile = async () => {
+    if (!user) return;
+    setSavingColoc(true);
+    try {
+      const ref = doc(db, "colocProfiles", user.uid);
+      const payload: any = {
+        uid: user.uid,
+        email: user.email || null,
+        nom: colocNom,
+        ville: colocVille,
+        budget: typeof colocBudget === "number" ? colocBudget : null,
+        imageUrl: colocImageUrl,
+        description: colocDescription,
+        age: typeof colocAge === "number" ? colocAge : null,
+        profession: colocProfession,
+        fumeur: !!colocFumeur,
+        animaux: !!colocAnimaux,
+        dateDispo: colocDateDispo,
+        quartiers: colocQuartiers,
+        telephone: colocTelephone,
+        zones: colocZones,
+        communesSlugs: colocCommunesSlugs,
+        updatedAt: serverTimestamp(),
+      };
+      // Nettoyage des champs vides/null (sauf booléens et tableaux)
+      Object.keys(payload).forEach((k) => {
+        const v = payload[k];
+        if (
+          v === "" ||
+          v === null ||
+          (Array.isArray(v) && v.length === 0)
+        ) {
+          delete payload[k];
+        }
+      });
+      await setDoc(ref, payload, { merge: true });
+      showToast("success", "Profil colocataire enregistré ✅");
+    } catch (err: any) {
+      console.error("[Dashboard][saveColocProfile]", err);
+      showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de l'enregistrement ❌");
+    } finally {
+      setSavingColoc(false);
+    }
+  };
+
+  const deleteColocProfile = async () => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, "colocProfiles", user.uid));
+      // Reset des états
+      setColocNom("");
+      setColocVille("");
+      setColocBudget("");
+      setColocImageUrl("");
+      setColocDescription("");
+      setColocAge("");
+      setColocProfession("");
+      setColocFumeur(false);
+      setColocAnimaux(false);
+      setColocDateDispo("");
+      setColocQuartiers("");
+      setColocTelephone("");
+      setColocZones([]);
+      setColocCommunesSlugs([]);
+      showToast("success", "Profil supprimé ✅");
+    } catch (err: any) {
+      console.error("[Dashboard][deleteColocProfile]", err);
+      showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de la suppression ❌");
+    }
+  };
+
+  // --- Profil colocataire: états ---
+  const [loadingColoc, setLoadingColoc] = useState(true);
+  const [savingColoc, setSavingColoc] = useState(false);
+  const [colocNom, setColocNom] = useState("");
+  const [colocVille, setColocVille] = useState("");
+  const [colocBudget, setColocBudget] = useState<number | "">("");
+  const [colocImageUrl, setColocImageUrl] = useState("");
+  const [colocDescription, setColocDescription] = useState("");
+  const [colocAge, setColocAge] = useState<number | "">("");
+  const [colocProfession, setColocProfession] = useState("");
+  const [colocFumeur, setColocFumeur] = useState(false);
+  const [colocAnimaux, setColocAnimaux] = useState(false);
+  const [colocDateDispo, setColocDateDispo] = useState("");
+  const [colocQuartiers, setColocQuartiers] = useState("");
+  const [colocTelephone, setColocTelephone] = useState("");
+  const [colocZones, setColocZones] = useState<string[]>([]);
+  const [colocCommunesSlugs, setColocCommunesSlugs] = useState<string[]>([]);
 
   useEffect(() => {
     if (user) loadUserDoc(user);
@@ -143,384 +432,47 @@ export default function DashboardPage() {
     if (!loading && !user) router.push("/login");
   }, [user, loading, router]);
 
-  // Charger les messages reçus
+  // Récupération des titres d’annonces liés aux messages (cache)
   useEffect(() => {
     if (!user || firestoreError || !userDocLoaded) return;
-    (async () => {
+    const allMessages = [...messages, ...sentMessages];
+    const annonceIds = Array.from(new Set(allMessages.map(m => m.annonceId).filter(Boolean)));
+    if (annonceIds.length === 0) return;
+
+    const fetchAnnonces = async () => {
       try {
-        const msgs = await listMessagesForOwner(user.uid);
-        setMessages(msgs);
-      } catch (err: any) {
-        // Fallback si l’index composite (annonceOwnerId + createdAt) n’est pas encore prêt
-        if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
-          try {
-            const q = query(
-              collection(db, "messages"),
-              where("annonceOwnerId", "==", user.uid)
-            );
-            const snap = await getDocs(q);
-            const unsorted = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            // Tri côté client par createdAt desc
-            unsorted.sort((a: any, b: any) => (b?.createdAt?.seconds || 0) - (a?.createdAt?.seconds || 0));
-            setMessages(unsorted);
-            showToast("info", "Index messages en cours de création. Tri appliqué côté client.");
-          } catch (fallbackErr: any) {
-            handleFirestoreError(fallbackErr, "messages-fallback");
-          }
-        } else {
-          handleFirestoreError(err, "messages");
-        }
-      }
-    })();
-  }, [user, firestoreError, userDocLoaded]);
-
-  // Abonnement temps réel aux messages reçus (messagerie instantanée)
-  useEffect(() => {
-    if (!user || firestoreError || !userDocLoaded) return;
-
-    let unsubscribe: undefined | (() => void);
-    const qWithOrder = query(
-      collection(db, "messages"),
-      where("annonceOwnerId", "==", user.uid),
-      orderBy("createdAt", "desc")
-    );
-
-    try {
-      unsubscribe = onSnapshot(
-        qWithOrder,
-        (snap) => {
-          const arr = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-          setMessages(arr);
-        },
-        (err) => {
-          // Fallback si l’index n’est pas prêt: abonnement sans orderBy + tri client
-          if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
-            try {
-              const qNoOrder = query(
-                collection(db, "messages"),
-                where("annonceOwnerId", "==", user.uid)
-              );
-              unsubscribe = onSnapshot(
-                qNoOrder,
-                (snap2) => {
-                  const arr = snap2.docs.map((d) => ({ id: d.id, ...d.data() }));
-                  arr.sort((a: any, b: any) => (b?.createdAt?.seconds || 0) - (a?.createdAt?.seconds || 0));
-                  setMessages(arr);
-                },
-                (e2) => handleFirestoreError(e2, "messages-fallback-snapshot")
-              );
-              showToast("info", "Index messages en cours de création. Tri appliqué côté client.");
-            } catch (inner) {
-              handleFirestoreError(inner, "messages-fallback-setup");
-            }
-          } else {
-            handleFirestoreError(err, "messages-snapshot");
-          }
-        }
-      );
-    } catch (e: any) {
-      handleFirestoreError(e, "messages-snapshot-setup");
-    }
-    return () => { if (unsubscribe) unsubscribe(); };
-  }, [user, firestoreError, userDocLoaded]);
-
-  // NOUVEAU: abonnement temps réel aux messages ENVOYÉS
-  useEffect(() => {
-    if (!user || firestoreError || !userDocLoaded) return;
-
-    let unsubscribe: undefined | (() => void);
-    const qWithOrder = query(
-      collection(db, "messages"),
-      where("fromUserId", "==", user.uid),
-      orderBy("createdAt", "desc")
-    );
-
-    try {
-      unsubscribe = onSnapshot(
-        qWithOrder,
-        (snap) => {
-          const arr = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-          setSentMessages(arr);
-        },
-        (err) => {
-          // Fallback si index non prêt: sans orderBy + tri client
-          if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
-            try {
-              const qNoOrder = query(
-                collection(db, "messages"),
-                where("fromUserId", "==", user.uid)
-              );
-              unsubscribe = onSnapshot(
-                qNoOrder,
-                (snap2) => {
-                  const arr = snap2.docs.map((d) => ({ id: d.id, ...d.data() }));
-                  arr.sort((a: any, b: any) => (b?.createdAt?.seconds || 0) - (a?.createdAt?.seconds || 0));
-                  setSentMessages(arr);
-                },
-                (e2) => handleFirestoreError(e2, "sent-fallback-snapshot")
-              );
-              showToast("info", "Index messages envoyés en cours de création. Tri appliqué côté client.");
-            } catch (inner) {
-              handleFirestoreError(inner, "sent-fallback-setup");
-            }
-          } else {
-            handleFirestoreError(err, "sent-snapshot");
-          }
-        }
-      );
-    } catch (e: any) {
-      handleFirestoreError(e, "sent-snapshot-setup");
-    }
-
-    return () => { if (unsubscribe) unsubscribe(); };
-  }, [user, firestoreError, userDocLoaded]);
-
-  // Avatar par défaut (SVG embarqué)
-  const defaultAvatarSvg =
-    "data:image/svg+xml;utf8," +
-    encodeURIComponent(
-      `<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'>
-        <rect fill='#e5e7eb' width='100' height='100'/>
-        <circle cx='50' cy='38' r='18' fill='#9ca3af'/>
-        <rect x='20' y='60' width='60' height='28' fill='#9ca3af' rx='14'/>
-      </svg>`
-    );
-
-  // Image d'annonce par défaut (16:9)
-  const defaultAnnonceImg =
-    "data:image/svg+xml;utf8," +
-    encodeURIComponent(
-      `<svg xmlns='http://www.w3.org/2000/svg' width='800' height='450' viewBox='0 0 800 450'>
-        <defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#e5e7eb'/><stop offset='100%' stop-color='#f3f4f6'/></linearGradient></defs>
-        <rect width='800' height='450' fill='url(#g)'/>
-        <rect x='60' y='120' width='300' height='210' rx='8' fill='#d1d5db'/>
-        <rect x='390' y='150' width='320' height='20' rx='4' fill='#9ca3af'/>
-        <rect x='390' y='185' width='280' height='16' rx='4' fill='#cbd5e1'/>
-        <rect x='390' y='215' width='240' height='16' rx='4' fill='#e2e8f0'/>
-        <rect x='390' y='260' width='180' height='28' rx='6' fill='#94a3b8'/>
-      </svg>`
-    );
-
-  // Récupération des titres d’annonces liés aux messages (reçus et envoyés), avec cache
-  useEffect(() => {
-    const ids = new Set<string>(
-      [...messages, ...sentMessages]
-        .map((m: any) => m?.annonceId)
-        .filter(Boolean)
-    );
-    const missing = [...ids].filter((id) => !(id in annonceTitles));
-    if (!missing.length) return;
-
-    (async () => {
-      try {
-        const results = await Promise.all(
-          missing.map(async (id) => {
-            const snap = await getDoc(doc(db, "annonces", id));
-            const titre = snap.exists() ? (snap.data() as any)?.titre || "Annonce" : "Annonce supprimée";
-            return [id, titre] as const;
-          })
+        const q = query(
+          collection(db, "annonces"),
+          where("id", "in", annonceIds),
         );
-        setAnnonceTitles((prev) => {
-          const next = { ...prev };
-          results.forEach(([id, titre]) => (next[id] = titre));
-          return next;
-        });
-      } catch (e) {
-        console.warn("[Dashboard][AnnonceTitles] échec :", e);
-      }
-    })();
-  }, [messages, sentMessages, annonceTitles, db]);
-
-  // Profil colocataire
-  const [loadingColoc, setLoadingColoc] = useState(true);
-  const [savingColoc, setSavingColoc] = useState(false);
-  const [hasColocProfile, setHasColocProfile] = useState(false);
-  const [colocNom, setColocNom] = useState("");
-  const [colocVille, setColocVille] = useState("");
-  const [colocBudget, setColocBudget] = useState<number | "">("");
-  const [colocDescription, setColocDescription] = useState("");
-  const [colocImageUrl, setColocImageUrl] = useState("");
-
-  // Nouveaux champs
-  const [colocAge, setColocAge] = useState<number | "">("");
-  const [colocProfession, setColocProfession] = useState("");
-  const [colocFumeur, setColocFumeur] = useState(false);
-  const [colocAnimaux, setColocAnimaux] = useState(false);
-  const [colocDateDispo, setColocDateDispo] = useState("");
-  const [colocQuartiers, setColocQuartiers] = useState("");
-  const [colocTelephone, setColocTelephone] = useState("");
-  // Zones sélectionnées (Nord/Ouest/Sud/Est)
-  const [colocZones, setColocZones] = useState<string[]>([]);
-
-  // Liste complète des communes de La Réunion
-  const COMMUNES = [
-    "Saint-Denis","Sainte-Marie","Sainte-Suzanne",
-    "Saint-André","Bras-Panon","Salazie",
-    "Saint-Benoît","La Plaine-des-Palmistes","Sainte-Rose","Saint-Philippe",
-    "Le Port","La Possession","Saint-Paul","Trois-Bassins","Saint-Leu","Les Avirons","L'Étang-Salé",
-    "Saint-Louis","Cilaos","Le Tampon","Entre-Deux","Saint-Pierre","Petite-Île","Saint-Joseph"
-  ];
-  // Ensembles de communes (groupes)
-  const GROUPES: Record<string, string[]> = {
-    "Nord": ["Saint-Denis","Sainte-Marie","Sainte-Suzanne"],
-    "Est": ["Saint-André","Bras-Panon","Salazie","Saint-Benoît","La Plaine-des-Palmistes","Sainte-Rose","Saint-Philippe"],
-    "Ouest": ["Le Port","La Possession","Saint-Paul","Trois-Bassins","Saint-Leu","Les Avirons","L'Étang-Salé"],
-    "Sud": ["Saint-Louis","Saint-Pierre","Le Tampon","Entre-Deux","Petite-Île","Saint-Joseph","Cilaos"],
-    "Intérieur": ["Cilaos","Salazie","La Plaine-des-Palmistes"]
-  };
-
-  // Charger le profil colocataire (doc: colocataires/{uid})
-  useEffect(() => {
-    if (!user || !userDocLoaded) return;
-    (async () => {
-      setLoadingColoc(true);
-      try {
-        const ref = doc(db, "colocataires", user.uid);
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-          const d = snap.data() as any;
-          setColocNom(d.nom || user.displayName || user.email || "");
-          setColocVille(d.ville || "");
-          setColocBudget(typeof d.budget === "number" ? d.budget : "");
-          setColocDescription(d.description || "");
-          setColocImageUrl(d.imageUrl || "");
-          // nouveaux champs
-          setColocAge(typeof d.age === "number" ? d.age : "");
-          setColocProfession(d.profession || "");
-          setColocFumeur(!!d.fumeur);
-          setColocAnimaux(!!d.animaux);
-          setColocDateDispo(d.dateDispo || "");
-          setColocQuartiers(d.quartiers || "");
-          setColocTelephone(d.telephone || "");
-          // Init depuis communes (array) sinon fallback quartiers (string/array)
-          if (Array.isArray(d.communes)) {
-            setColocZones(d.communes.filter(Boolean));
-          } else if (Array.isArray(d.quartiers)) {
-            setColocZones(d.quartiers.filter(Boolean));
-          } else if (typeof d.quartiers === "string" && d.quartiers.trim()) {
-            setColocZones(d.quartiers.split(",").map((s: string) => s.trim()).filter(Boolean));
-          } else {
-            setColocZones([]);
+        const snap = await getDocs(q);
+        const titles: Record<string, string> = {};
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          if (data.titre) {
+            titles[d.id] = data.titre;
           }
-          setHasColocProfile(true);
-        } else {
-          setColocNom(user.displayName || user.email || "");
-          setColocVille("");
-          setColocBudget("");
-          setColocDescription("");
-          setColocImageUrl("");
-          // nouveaux champs
-          setColocAge("");
-          setColocProfession("");
-          setColocFumeur(false);
-          setColocAnimaux(false);
-          setColocDateDispo("");
-          setColocQuartiers("");
-          setColocTelephone("");
-          setColocZones([]);
-          setHasColocProfile(false);
-        }
-      } catch (e) {
-        console.warn("[Dashboard][Coloc][load]", e);
+        });
+        setAnnonceTitles(titles);
+      } catch (err: any) {
+        handleFirestoreError(err, "fetchAnnonceTitles");
       }
-      setLoadingColoc(false);
-    })();
-  }, [user, userDocLoaded]);
+    };
 
-  const saveColocProfile = async () => {
-    if (!user) return;
-    setSavingColoc(true);
-    try {
-      const ref = doc(db, "colocataires", user.uid);
-      const payload: any = {
-        uid: user.uid,
-        nom: colocNom || user.displayName || user.email || "Profil",
-        ville: colocVille || null,
-        budget: typeof colocBudget === "number" ? colocBudget : null,
-        description: colocDescription || "",
-        imageUrl: colocImageUrl || "",
-        // nouveaux champs
-        age: typeof colocAge === "number" ? colocAge : null,
-        profession: colocProfession || "",
-        fumeur: colocFumeur,
-        animaux: colocAnimaux,
-        dateDispo: colocDateDispo || "",
-        quartiers: colocZones.length ? colocZones.join(", ") : "",
-        telephone: colocTelephone || "",
-        // Enregistre les communes + représentation texte pour compat
-        communes: colocZones.slice(),
-        updatedAt: serverTimestamp(),
-      };
-      if (!hasColocProfile) payload.createdAt = serverTimestamp();
-
-      // Nettoyage des null pour rester propre
-      Object.keys(payload).forEach((k) => (payload[k] === null ? delete payload[k] : null));
-
-      await setDoc(ref, payload, { merge: true });
-      setHasColocProfile(true);
-      setColocQuartiers(colocZones.join(", "));
-      showToast("success", "Profil colocataire enregistré ✅");
-    } catch (e: any) {
-      console.error("[Dashboard][Coloc][save]", e);
-      showToast("error", translateFirebaseError(e?.code) || "Erreur sauvegarde du profil.");
-    } finally {
-      setSavingColoc(false);
-    }
-  };
-
-  const deleteColocProfile = async () => {
-    if (!user) return;
-    try {
-      await deleteDoc(doc(db, "colocataires", user.uid));
-      setHasColocProfile(false);
-      setColocVille("");
-      setColocBudget("");
-      setColocDescription("");
-      setColocImageUrl("");
-      showToast("success", "Profil colocataire supprimé ✅");
-    } catch (e: any) {
-      console.error("[Dashboard][Coloc][delete]", e);
-      showToast("error", translateFirebaseError(e?.code) || "Erreur suppression du profil.");
-    }
-  };
-
-  // Helpers sélection communes / groupes
-  const toggleCommune = (c: string) =>
-    setColocZones((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
-  const toggleGroup = (g: string) => {
-    const list = GROUPES[g] || [];
-    setColocZones((prev) => {
-      const allIn = list.every((c) => prev.includes(c));
-      return allIn
-        ? prev.filter((c) => !list.includes(c))
-        : Array.from(new Set([...prev, ...list]));
-    });
-  };
-  const groupState = (g: string) => {
-    const list = GROUPES[g] || [];
-    const count = list.filter((c) => colocZones.includes(c)).length;
-    return count === 0 ? "none" : count === list.length ? "all" : "partial";
-  };
+    fetchAnnonces();
+  }, [messages, sentMessages, annonceTitles, db]);
 
   return (
     <div className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
-      {/* {firestoreError && (
-        <div className="w-full max-w-3xl mb-4 px-4 py-3 rounded-xl bg-rose-50 text-rose-700 border border-rose-200">
-          {firestoreError}
-        </div>
-      )} */}
-      <div className="w-full max-w-3xl flex flex-col items-center mb-6">
-        <div className="flex items-center justify-center gap-4 w-full">
-          <Image
-            src={user?.photoURL || defaultAvatarSvg}
-            alt="Avatar"
-            width={100}
-            height={100}
-            className="rounded-full bg-gray-300"
-          />
-          <h1 className="text-3xl font-bold text-center">
-            Bienvenue {user?.displayName || user?.email}
+      {/* En-tête */}
+      <div className="w-full max-w-3xl mb-6">
+        <div className="rounded-lg bg-white shadow-md p-4 sm:p-6">
+          <h1 className="text-3xl font-bold mb-2">
+            Tableau de bord
           </h1>
+          <p className="text-gray-700">
+            Gère tes annonces, messages et ton profil colocataire.
+          </p>
         </div>
       </div>
 
@@ -609,7 +561,6 @@ export default function DashboardPage() {
                 setModalOpen(false);
                 setEditAnnonce(null);
               }}
-              // Étend la signature pour accepter des champs additionnels (facultatifs)
               onSubmit={async ({
                 titre, ville, prix, imageUrl, surface, description, nbChambres, equipements,
                 quartier, meuble, dateDispo, chargesIncluses, caution
@@ -629,23 +580,33 @@ export default function DashboardPage() {
                 caution?: string;
               }) => {
                 try {
+                  const villeInput = overrideVille?.trim() ? overrideVille : ville;
+                  const official = pickOfficialVilleFromInput(villeInput);
+                  if (!official) {
+                    showToast("error", "Commune invalide. Merci de choisir une commune de La Réunion (ex: Saint-Denis, Saint-Paul, Le Tampon…).");
+                    return;
+                  }
+                  const villeName = official.name;
+                  const communeSlug = official.slug;
+                  const codePostal = official.cp;
                   const annonceData: any = {
                     titre,
-                    ville,
+                    ville: villeName,
+                    communeSlug,
+                    ...(codePostal ? { codePostal } : {}),
                     prix: prix ? Number(prix) : null,
                     imageUrl,
                     surface: surface ? Number(surface) : null,
                     description: description || "",
                     nbChambres: nbChambres ? Number(nbChambres) : null,
                     equipements: equipements || "",
-                    // nouveaux champs (optionnels)
                     quartier: quartier || "",
                     meuble: typeof meuble === "boolean" ? meuble : !!meuble,
                     dateDispo: dateDispo || "",
                     chargesIncluses: typeof chargesIncluses === "boolean" ? chargesIncluses : !!chargesIncluses,
                     caution: caution ? Number(caution) : null,
                   };
-                  Object.keys(annonceData).forEach((k) => (annonceData[k] === null || annonceData[k] === "") && delete annonceData[k]);
+                  Object.keys(annonceData).forEach((k) => (annonceData[k] === null || annonceData[k] === "") && delete (annonceData as any)[k]);
                   if (editAnnonce) {
                     await updateAnnonce(editAnnonce.id, annonceData);
                     showToast("success", "Annonce modifiée avec succès ✅");
@@ -659,6 +620,15 @@ export default function DashboardPage() {
                 }
               }}
               annonce={editAnnonce}
+              // NOUVEAU: Ville en input + datalist (comme l’accueil)
+              villeDatalist={{
+                value: overrideVille,
+                onChange: setOverrideVille,
+                main: MAIN_COMMUNES_SORTED,
+                sub: SUB_COMMUNES_SORTED,
+                label: "Commune",
+                datalistId: "communes-reu-dashboard-modal",
+              }}
             />
             <ConfirmModal
               isOpen={confirmModalOpen}
@@ -866,7 +836,7 @@ export default function DashboardPage() {
                       value={colocAge}
                       onChange={(e) => setColocAge(e.target.value ? Number(e.target.value) : "")}
                       className="border rounded px-3 py-2 w-full"
-                      placeholder="Ex: 26"
+                      placeholder="Ex: 25"
                     />
                   </div>
                   <div>
@@ -876,114 +846,130 @@ export default function DashboardPage() {
                       value={colocProfession}
                       onChange={(e) => setColocProfession(e.target.value)}
                       className="border rounded px-3 py-2 w-full"
-                      placeholder="Ex: Infirmier(ère)"
+                      placeholder="Votre profession"
                     />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium mb-1">
+                      <input
+                        type="checkbox"
+                        checked={colocFumeur}
+                        onChange={(e) => setColocFumeur(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                      />
+                      Fumeur
+                    </label>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Date dispo</label>
-                    <input
-                      type="date"
-                      value={colocDateDispo}
-                      onChange={(e) => setColocDateDispo(e.target.value)}
+                    <label className="flex items-center gap-2 text-sm font-medium mb-1">
+                      <input
+                        type="checkbox"
+                        checked={colocAnimaux}
+                        onChange={(e) => setColocAnimaux(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                      />
+                      Animaux
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Disponibilité</label>
+                  <input
+                    type="date"
+                    value={colocDateDispo}
+                    onChange={(e) => setColocDateDispo(e.target.value)}
+                    className="border rounded px-3 py-2 w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Quartiers recherchés</label>
+                  <input
+                    type="text"
+                    value={colocQuartiers}
+                    onChange={(e) => setColocQuartiers(e.target.value)}
+                    className="border rounded px-3 py-2 w-full"
+                    placeholder="Ex: Centre-ville, Montagne"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Téléphone</label>
+                  <input
+                    type="tel"
+                    value={colocTelephone}
+                    onChange={(e) => setColocTelephone(e.target.value)}
+                    className="border rounded px-3 py-2 w-full"
+                    placeholder="Votre numéro de téléphone"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Zones recherchées</label>
+                    <select
+                      multiple
+                      value={colocZones}
+                      onChange={(e) => {
+                        const options = e.target.options;
+                        const value = [];
+                        for (let i = 0; i < options.length; i++) {
+                          if (options[i].selected) {
+                            value.push(options[i].value);
+                          }
+                        }
+                        setColocZones(value);
+                      }}
                       className="border rounded px-3 py-2 w-full"
-                    />
+                    >
+                      <option value="">Sélectionnez des zones</option>
+                      {Object.keys(GROUPES).map((g) => (
+                        <optgroup key={g} label={g}>
+                          {GROUPES[g].map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Téléphone</label>
+                    <label className="block text-sm font-medium mb-1">Communes (slugs)</label>
                     <input
-                      type="tel"
-                      value={colocTelephone}
-                      onChange={(e) => setColocTelephone(e.target.value)}
+                      type="text"
+                      value={colocCommunesSlugs.join(", ")}
+                      onChange={(e) => setColocCommunesSlugs(e.target.value.split(",").map(s => s.trim()).filter(Boolean))}
                       className="border rounded px-3 py-2 w-full"
-                      placeholder="Ex: 0692..."
+                      placeholder="Slugs des communes"
                     />
                   </div>
                 </div>
 
-                {/* Sélection par ensembles de communes */}
-                <div>
-                  <label className="block text-sm font-medium mb-2">Ensembles de communes</label>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.keys(GROUPES).map((g) => {
-                      const st = groupState(g);
-                      const styles =
-                        st === "all" ? "bg-blue-600 text-white border-blue-600" :
-                        st === "partial" ? "bg-blue-50 text-blue-700 border-blue-300" :
-                        "bg-white text-slate-700 border-slate-300";
-                      return (
-                        <button
-                          key={g}
-                          type="button"
-                          className={`px-3 py-1.5 rounded-full border text-sm transition ${styles}`}
-                          onClick={() => toggleGroup(g)}
-                          title={`${g} (${GROUPES[g].length} communes)`}
-                        >
-                          {g}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Sélection fine par communes */}
-                <div>
-                  <label className="block text-sm font-medium mb-2">Communes préférées</label>
-                  <div className="rounded-xl border border-slate-200 p-3 bg-slate-50 max-h-60 overflow-auto">
-                    <div className="flex flex-wrap gap-2">
-                      {COMMUNES.map((c) => {
-                        const selected = colocZones.includes(c);
-                        return (
-                          <button
-                            key={c}
-                            type="button"
-                            onClick={() => toggleCommune(c)}
-                            className={`px-3 py-1.5 rounded-full border text-sm transition ${
-                              selected
-                                ? "bg-blue-600 text-white border-blue-600"
-                                : "bg-white text-slate-700 border-slate-300 hover:bg-slate-100"
-                            }`}
-                            title={c}
-                          >
-                            {c}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Sélection: {colocZones.length ? colocZones.join(", ") : "Aucune"}
-                  </p>
-                </div>
-
-                <div className="flex gap-3">
+                <div className="flex justify-end gap-4">
+                  <button
+                    type="button"
+                    onClick={deleteColocProfile}
+                    className="px-4 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-700 transition"
+                  >
+                    Supprimer le profil
+                  </button>
                   <button
                     type="submit"
-                    disabled={savingColoc}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60"
+                    className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
                   >
-                    {savingColoc ? "Enregistrement..." : hasColocProfile ? "Mettre à jour" : "Créer mon profil"}
+                    {savingColoc ? "Enregistrement..." : "Enregistrer le profil"}
                   </button>
-                  {hasColocProfile && (
-                    <button
-                      type="button"
-                      onClick={deleteColocProfile}
-                      className="bg-rose-600 text-white px-4 py-2 rounded-lg hover:bg-rose-700"
-                    >
-                      Supprimer
-                    </button>
-                  )}
                 </div>
               </form>
             )}
           </>
         )}
       </div>
-
-      <Toast
-        toasts={toasts}
-        onRemove={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))}
-      />
     </div>
   );
 }
-

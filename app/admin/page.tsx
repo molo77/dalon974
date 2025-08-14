@@ -1,45 +1,21 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useState, useRef } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import { getDoc, doc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import AdminUsers from "@/components/admin/AdminUsers";
 import AdminAnnonces from "@/components/admin/AdminAnnonces";
+import useAdminGate from "@/hooks/useAdminGate";
 
 export default function AdminPage() {
   const [user, loading] = useAuthState(auth);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [checkingAdmin, setCheckingAdmin] = useState(true);
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"annonces" | "users">("annonces");
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string; id?: string } | null>(null);
   const toastTimeout = useRef<NodeJS.Timeout | null>(null);
-  const router = useRouter();
 
-  useEffect(() => {
-    if (loading) return;
-    if (!user) {
-      router.push("/login");
-      return;
-    }
-    const checkAdmin = async () => {
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      const data = userDoc.data();
-      const role = data?.role;
-      setIsAdmin(role === "admin");
-      setCheckingAdmin(false);
-    };
-    checkAdmin();
-  }, [user, loading, router]);
-
-  useEffect(() => {
-    if (checkingAdmin) return;
-    if (!loading && (!user || !isAdmin)) {
-      router.push("/");
-    }
-  }, [user, isAdmin, loading, checkingAdmin, router]);
+  const { isAdmin, checkingAdmin } = useAdminGate({ user, loading, router });
 
   const showToast = (type: "success" | "error", message: string) => {
     setToast({ type, message, id: Date.now().toString() });
@@ -107,5 +83,3 @@ export default function AdminPage() {
     </main>
   );
 }
-
-    

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { getAuth } from "firebase/auth";
 import Register from "@/components/Register";
 import { translateFirebaseError } from "@/lib/firebaseErrors";
 import { signInEmail, signInGoogle, resetPassword } from "@/lib/services/authService";
+import useAuthRedirect from "@/hooks/useAuthRedirect";
 
 export default function LoginPage() {
   const [authMessage, setAuthMessage] = useState<string | null>(null);
@@ -13,22 +13,11 @@ export default function LoginPage() {
   const [showLogin, setShowLogin] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-  const [user, setUser] = useState<any>(null);
   const [showReset, setShowReset] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [loginErrorModal, setLoginErrorModal] = useState<string | null>(null);
   const router = useRouter();
-
-  useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = auth.onAuthStateChanged((u) => {
-      setUser(u);
-      if (u) {
-        router.push("/dashboard");
-      }
-    });
-    return () => unsubscribe();
-  }, [router]);
+  const user = useAuthRedirect(router); // NOUVEAU
 
   const handleEmailLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();

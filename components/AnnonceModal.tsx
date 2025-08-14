@@ -8,6 +8,8 @@ export default function AnnonceModal({
   onClose,
   onSubmit,
   annonce,
+  villeDropdown, // compat (ancien)
+  villeDatalist, // NOUVEAU
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -22,6 +24,23 @@ export default function AnnonceModal({
     description?: string;
   }) => void;
   annonce?: any | null;
+  // Compat: ancien select
+  villeDropdown?: {
+    value: string;
+    onChange: (v: string) => void;
+    main: { name: string; cp: string }[];
+    sub: { name: string; cp: string }[];
+    label?: string;
+  };
+  // NOUVEAU: input + datalist comme la page d’accueil
+  villeDatalist?: {
+    value: string;
+    onChange: (v: string) => void;
+    main: { name: string; cp: string }[];
+    sub: { name: string; cp: string }[];
+    label?: string;
+    datalistId?: string;
+  };
 }) {
   const [titre, setTitre] = useState("");
   const [ville, setVille] = useState("");
@@ -40,7 +59,6 @@ export default function AnnonceModal({
       setImageUrl(annonce.imageUrl || "");
       setSurface(annonce.surface?.toString() || "");
       setNbChambres(annonce.nbChambres?.toString() || "");
-      // Correction : évite .join si ce n'est pas un tableau
       if (Array.isArray(annonce.equipements)) {
         setEquipements(annonce.equipements.join(", "));
       } else {
@@ -61,9 +79,14 @@ export default function AnnonceModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const villeValue = villeDatalist
+      ? villeDatalist.value
+      : villeDropdown
+      ? villeDropdown.value
+      : ville;
     onSubmit({
       titre,
-      ville,
+      ville: villeValue,
       prix,
       imageUrl,
       surface,
@@ -73,6 +96,8 @@ export default function AnnonceModal({
     });
     onClose();
   };
+
+  const dlId = villeDatalist?.datalistId || "communes-reu-modal";
 
   return (
     <Transition show={isOpen} as={Fragment}>
@@ -114,14 +139,76 @@ export default function AnnonceModal({
                   required
                 />
 
-                <input
-                  type="text"
-                  placeholder="Ville"
-                  value={ville}
-                  onChange={(e) => setVille(e.target.value)}
-                  className="w-full p-2 border rounded"
-                  required
-                />
+                {/* NOUVEAU: Ville en input + datalist (prioritaire) */}
+                {villeDatalist ? (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      {villeDatalist.label || "Commune"}
+                    </label>
+                    <input
+                      type="text"
+                      value={villeDatalist.value}
+                      onChange={(e) => {
+                        villeDatalist.onChange(e.target.value);
+                        setVille(e.target.value); // compat interne
+                      }}
+                      className="w-full p-2 border rounded"
+                      placeholder="Ex: Saint-Denis ou Saint-Gilles-les-Bains"
+                      list={dlId}
+                      required
+                    />
+                    <datalist id={dlId}>
+                      {villeDatalist.main.map((c) => (
+                        <option key={`c-${c.name}`} value={c.name}>{`${c.name} (${c.cp})`}</option>
+                      ))}
+                      {villeDatalist.sub.map((a) => (
+                        <option key={`a-${a.name}`} value={a.name}>{`${a.name} (${a.cp})`}</option>
+                      ))}
+                    </datalist>
+                  </div>
+                ) : villeDropdown ? (
+                  // Compat: ancien select si encore fourni
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      {villeDropdown.label || "Commune"}
+                    </label>
+                    <select
+                      value={villeDropdown.value}
+                      onChange={(e) => {
+                        villeDropdown.onChange(e.target.value);
+                        setVille(e.target.value);
+                      }}
+                      className="w-full p-2 border rounded"
+                      required
+                    >
+                      <option value="">— Sélectionner une commune —</option>
+                      <optgroup label="Communes">
+                        {villeDropdown.main.map((c) => (
+                          <option key={`c-${c.name}`} value={c.name}>
+                            {c.name} ({c.cp})
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Sous-communes">
+                        {villeDropdown.sub.map((a) => (
+                          <option key={`a-${a.name}`} value={a.name}>
+                            {a.name} ({a.cp})
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </div>
+                ) : (
+                  // Fallback
+                  <input
+                    type="text"
+                    placeholder="Ville"
+                    value={ville}
+                    onChange={(e) => setVille(e.target.value)}
+                    className="w-full p-2 border rounded"
+                    required
+                  />
+                )}
 
                 <input
                   type="number"
@@ -173,7 +260,7 @@ export default function AnnonceModal({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full p-2 border rounded"
-                  style={{ minHeight: "9em" }} // Hauteur triplée (~3x la hauteur standard)
+                  style={{ minHeight: "9em" }}
                 />
 
                 <div className="flex justify-end gap-3">
