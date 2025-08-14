@@ -65,7 +65,7 @@ export default function Toast({
             className={`flex items-start gap-3 px-5 py-3 rounded-xl shadow-lg text-white ${base}`}
           >
             <span className="text-lg leading-none">{icon}</span>
-            <div className="flex-1 text-sm">{toast.message}</div>
+            <div className="flex-1 text-sm whitespace-pre-line">{toast.message}</div>
             <button
               aria-label="Fermer"
               className="opacity-80 hover:opacity-100 transition"

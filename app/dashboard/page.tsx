@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where, onSnapshot, orderBy, doc, getDoc } from "firebase/firestore";
 import Image from "next/image";
 import AnnonceCard from "@/components/AnnonceCard";
 import AnnonceModal from "@/components/AnnonceModal";
@@ -16,6 +16,7 @@ import { translateFirebaseError } from "@/lib/firebaseErrors";
 import { listUserAnnoncesPage, addAnnonce, updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/lib/services/annonceService";
 import { listMessagesForOwner } from "@/lib/services/messageService";
 import { getUserRole } from "@/lib/services/userService";
+import Link from "next/link";
 
 export default function DashboardPage() {
   const [user, loading] = useAuthState(auth);
@@ -41,6 +42,10 @@ export default function DashboardPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userDocLoaded, setUserDocLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<"annonces" | "messages">("annonces");
+  const [activeMsgTab, setActiveMsgTab] = useState<"received" | "sent">("received");
+  const [sentMessages, setSentMessages] = useState<any[]>([]);
+  // Nouveau: cache des titres d’annonces
+  const [annonceTitles, setAnnonceTitles] = useState<Record<string, string>>({});
 
   const loadUserDoc = async (u: any) => {
     try {
@@ -169,6 +174,107 @@ export default function DashboardPage() {
     })();
   }, [user, firestoreError, userDocLoaded]);
 
+  // Abonnement temps réel aux messages reçus (messagerie instantanée)
+  useEffect(() => {
+    if (!user || firestoreError || !userDocLoaded) return;
+
+    let unsubscribe: undefined | (() => void);
+    const qWithOrder = query(
+      collection(db, "messages"),
+      where("annonceOwnerId", "==", user.uid),
+      orderBy("createdAt", "desc")
+    );
+
+    try {
+      unsubscribe = onSnapshot(
+        qWithOrder,
+        (snap) => {
+          const arr = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          setMessages(arr);
+        },
+        (err) => {
+          // Fallback si l’index n’est pas prêt: abonnement sans orderBy + tri client
+          if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
+            try {
+              const qNoOrder = query(
+                collection(db, "messages"),
+                where("annonceOwnerId", "==", user.uid)
+              );
+              unsubscribe = onSnapshot(
+                qNoOrder,
+                (snap2) => {
+                  const arr = snap2.docs.map((d) => ({ id: d.id, ...d.data() }));
+                  arr.sort((a: any, b: any) => (b?.createdAt?.seconds || 0) - (a?.createdAt?.seconds || 0));
+                  setMessages(arr);
+                },
+                (e2) => handleFirestoreError(e2, "messages-fallback-snapshot")
+              );
+              showToast("info", "Index messages en cours de création. Tri appliqué côté client.");
+            } catch (inner) {
+              handleFirestoreError(inner, "messages-fallback-setup");
+            }
+          } else {
+            handleFirestoreError(err, "messages-snapshot");
+          }
+        }
+      );
+    } catch (e: any) {
+      handleFirestoreError(e, "messages-snapshot-setup");
+    }
+    return () => { if (unsubscribe) unsubscribe(); };
+  }, [user, firestoreError, userDocLoaded]);
+
+  // NOUVEAU: abonnement temps réel aux messages ENVOYÉS
+  useEffect(() => {
+    if (!user || firestoreError || !userDocLoaded) return;
+
+    let unsubscribe: undefined | (() => void);
+    const qWithOrder = query(
+      collection(db, "messages"),
+      where("fromUserId", "==", user.uid),
+      orderBy("createdAt", "desc")
+    );
+
+    try {
+      unsubscribe = onSnapshot(
+        qWithOrder,
+        (snap) => {
+          const arr = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          setSentMessages(arr);
+        },
+        (err) => {
+          // Fallback si index non prêt: sans orderBy + tri client
+          if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
+            try {
+              const qNoOrder = query(
+                collection(db, "messages"),
+                where("fromUserId", "==", user.uid)
+              );
+              unsubscribe = onSnapshot(
+                qNoOrder,
+                (snap2) => {
+                  const arr = snap2.docs.map((d) => ({ id: d.id, ...d.data() }));
+                  arr.sort((a: any, b: any) => (b?.createdAt?.seconds || 0) - (a?.createdAt?.seconds || 0));
+                  setSentMessages(arr);
+                },
+                (e2) => handleFirestoreError(e2, "sent-fallback-snapshot")
+              );
+              showToast("info", "Index messages envoyés en cours de création. Tri appliqué côté client.");
+            } catch (inner) {
+              handleFirestoreError(inner, "sent-fallback-setup");
+            }
+          } else {
+            handleFirestoreError(err, "sent-snapshot");
+          }
+        }
+      );
+    } catch (e: any) {
+      handleFirestoreError(e, "sent-snapshot-setup");
+    }
+
+    return () => { if (unsubscribe) unsubscribe(); };
+  }, [user, firestoreError, userDocLoaded]);
+
   // Avatar par défaut (SVG embarqué)
   const defaultAvatarSvg =
     "data:image/svg+xml;utf8," +
@@ -194,6 +300,36 @@ export default function DashboardPage() {
         <rect x='390' y='260' width='180' height='28' rx='6' fill='#94a3b8'/>
       </svg>`
     );
+
+  // Récupération des titres d’annonces liés aux messages (reçus et envoyés), avec cache
+  useEffect(() => {
+    const ids = new Set<string>(
+      [...messages, ...sentMessages]
+        .map((m: any) => m?.annonceId)
+        .filter(Boolean)
+    );
+    const missing = [...ids].filter((id) => !(id in annonceTitles));
+    if (!missing.length) return;
+
+    (async () => {
+      try {
+        const results = await Promise.all(
+          missing.map(async (id) => {
+            const snap = await getDoc(doc(db, "annonces", id));
+            const titre = snap.exists() ? (snap.data() as any)?.titre || "Annonce" : "Annonce supprimée";
+            return [id, titre] as const;
+          })
+        );
+        setAnnonceTitles((prev) => {
+          const next = { ...prev };
+          results.forEach(([id, titre]) => (next[id] = titre));
+          return next;
+        });
+      } catch (e) {
+        console.warn("[Dashboard][AnnonceTitles] échec :", e);
+      }
+    })();
+  }, [messages, sentMessages, annonceTitles, db]);
 
   return (
     <div className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
@@ -332,43 +468,114 @@ export default function DashboardPage() {
 
         {activeTab === "messages" && (
           <>
-            <h2 className="text-2xl font-bold mb-4">Messages reçus</h2>
-            {messages.length === 0 ? (
-              <p className="text-gray-500">Aucun message reçu.</p>
+            <h2 className="text-2xl font-bold mb-4">Messages</h2>
+
+            <div className="flex gap-2 mb-4">
+              <button
+                className={`px-4 py-2 rounded-md font-semibold transition ${activeMsgTab === "received" ? "bg-blue-600 text-white shadow" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+                onClick={() => setActiveMsgTab("received")}
+              >
+                Reçus
+              </button>
+              <button
+                className={`px-4 py-2 rounded-md font-semibold transition ${activeMsgTab === "sent" ? "bg-blue-600 text-white shadow" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+                onClick={() => setActiveMsgTab("sent")}
+              >
+                Envoyés
+              </button>
+            </div>
+
+            {activeMsgTab === "received" ? (
+              <>
+                {messages.length === 0 ? (
+                  <p className="text-gray-500">Aucun message reçu.</p>
+                ) : (
+                  <ul className="space-y-4">
+                    {messages.map((msg) => (
+                      <li key={msg.id} className="bg-white rounded shadow p-4">
+                        <div className="mb-1 text-gray-600 text-sm">
+                          <span className="font-medium">Annonce :</span>{" "}
+                          <Link
+                            href={`/annonce/${msg.annonceId}`}
+                            className="text-blue-600 underline hover:text-blue-700"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {annonceTitles[msg.annonceId] || "Voir l'annonce"}
+                          </Link>
+                        </div>
+                        <div className="mb-2 text-gray-700">
+                          <span className="font-semibold">De :</span> {msg.fromEmail}
+                        </div>
+                        <div className="mb-2 text-gray-700">
+                          <span className="font-semibold">Message :</span>{" "}
+                          <span className="whitespace-pre-line">{msg.content}</span>
+                        </div>
+                        <div className="mb-2 text-gray-500 text-xs">
+                          {msg.createdAt?.seconds
+                            ? new Date(msg.createdAt.seconds * 1000).toLocaleString()
+                            : ""}
+                        </div>
+                        <button
+                          className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                          onClick={() => setReplyTo(msg)}
+                        >
+                          Répondre
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {replyTo && (
+                  <MessageModal
+                    annonceId={replyTo.annonceId}
+                    annonceOwnerId={replyTo.fromUserId}
+                    isOpen={!!replyTo}
+                    onClose={() => setReplyTo(null)}
+                    onSent={() => {
+                      setReplyTo(null);
+                      showToast("success", "Message envoyé ✅");
+                    }}
+                  />
+                )}
+              </>
             ) : (
-              <ul className="space-y-4">
-                {messages.map((msg) => (
-                  <li key={msg.id} className="bg-white rounded shadow p-4">
-                    <div className="mb-2 text-gray-700">
-                      <span className="font-semibold">De :</span> {msg.fromEmail}
-                    </div>
-                    <div className="mb-2 text-gray-700">
-                      <span className="font-semibold">Message :</span> {msg.content}
-                    </div>
-                    <div className="mb-2 text-gray-500 text-xs">
-                      {msg.createdAt?.seconds
-                        ? new Date(msg.createdAt.seconds * 1000).toLocaleString()
-                        : ""}
-                    </div>
-                    <button
-                      className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
-                      onClick={() => setReplyTo(msg)}
-                    >
-                      Répondre
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {/* Modal pour répondre */}
-            {replyTo && (
-              <MessageModal
-                annonceId={replyTo.annonceId}
-                annonceOwnerId={replyTo.fromUserId}
-                isOpen={!!replyTo}
-                onClose={() => setReplyTo(null)}
-                onSent={() => setReplyTo(null)}
-              />
+              // Envoyés
+              <>
+                {sentMessages.length === 0 ? (
+                  <p className="text-gray-500">Aucun message envoyé.</p>
+                ) : (
+                  <ul className="space-y-4">
+                    {sentMessages.map((msg) => (
+                      <li key={msg.id} className="bg-white rounded shadow p-4">
+                        <div className="mb-1 text-gray-600 text-sm">
+                          <span className="font-medium">Annonce :</span>{" "}
+                          <Link
+                            href={`/annonce/${msg.annonceId}`}
+                            className="text-blue-600 underline hover:text-blue-700"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {annonceTitles[msg.annonceId] || "Annonce"}
+                          </Link>
+                        </div>
+                        <div className="mb-2 text-gray-700">
+                          <span className="font-semibold">À :</span> Propriétaire de l'annonce
+                        </div>
+                        <div className="mb-2 text-gray-700">
+                          <span className="font-semibold">Message :</span>{" "}
+                          <span className="whitespace-pre-line">{msg.content}</span>
+                        </div>
+                        <div className="mb-2 text-gray-500 text-xs">
+                          {msg.createdAt?.seconds
+                            ? new Date(msg.createdAt.seconds * 1000).toLocaleString()
+                            : ""}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
             )}
           </>
         )}
