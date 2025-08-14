@@ -11,8 +11,9 @@ export default function AdminUsers({
 }) {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editedUsers, setEditedUsers] = useState<{ [userId: string]: { email: string; displayName: string; role: string } }>({});
-  const [newUser, setNewUser] = useState({ email: "", displayName: "", role: "" });
+  type EditedUser = { email: string; displayName: string; role: string; ville?: string; telephone?: string };
+  const [editedUsers, setEditedUsers] = useState<{ [userId: string]: EditedUser }>({});
+  const [newUser, setNewUser] = useState({ email: "", displayName: "", role: "", ville: "", telephone: "" });
   const [confirmModal, setConfirmModal] = useState<string | null>(null);
   const [normalizing, setNormalizing] = useState(false);
 
@@ -35,6 +36,8 @@ export default function AdminUsers({
         email: edited.email,
         displayName: edited.displayName,
         role: edited.role,
+        ...(edited.ville !== undefined ? { ville: edited.ville || "" } : {}),
+        ...(edited.telephone !== undefined ? { telephone: edited.telephone || "" } : {}),
       });
       setUsers((prev) =>
         prev.map((u) =>
@@ -97,6 +100,8 @@ export default function AdminUsers({
   return (
     <section>
       <h2 className="text-2xl font-semibold mb-6 text-blue-700 flex items-center gap-2">👤 Utilisateurs</h2>
+
+      {/* Création */}
       <div className="mb-6 bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
         <form
           onSubmit={async (e) => {
@@ -125,9 +130,11 @@ export default function AdminUsers({
                 email: newUser.email,
                 displayName: newUser.displayName,
                 role: newUser.role,
+                ...(newUser.ville ? { ville: newUser.ville } : {}),
+                ...(newUser.telephone ? { telephone: newUser.telephone } : {}),
               });
               showToast("success", `Utilisateur "${newUser.displayName || newUser.email}" créé !`);
-              setNewUser({ email: "", displayName: "", role: "" });
+              setNewUser({ email: "", displayName: "", role: "", ville: "", telephone: "" });
               fetchUsers();
             } catch (e: any) {
               console.error("[AdminUsers][Create]", e);
@@ -161,6 +168,20 @@ export default function AdminUsers({
             <option value="user">user</option>
             <option value="admin">admin</option>
           </select>
+          <input
+            type="text"
+            placeholder="Ville"
+            value={newUser.ville}
+            onChange={e => setNewUser({ ...newUser, ville: e.target.value })}
+            className="border rounded px-3 py-2 flex-1"
+          />
+          <input
+            type="tel"
+            placeholder="Téléphone"
+            value={newUser.telephone}
+            onChange={e => setNewUser({ ...newUser, telephone: e.target.value })}
+            className="border rounded px-3 py-2 flex-1"
+          />
           <button
             type="submit"
             className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
@@ -170,6 +191,7 @@ export default function AdminUsers({
         </form>
       </div>
 
+      {/* Normalisation */}
       <div className="mb-4 flex flex-wrap gap-3">
         <button
           type="button"
@@ -181,6 +203,7 @@ export default function AdminUsers({
         </button>
       </div>
 
+      {/* Liste utilisateurs */}
       <div className="overflow-x-auto bg-white rounded-2xl border border-slate-200 shadow-sm">
         {loading ? (
           <div className="flex items-center justify-center h-40">
@@ -195,6 +218,8 @@ export default function AdminUsers({
                 <th className="py-2 px-3 text-left">Email</th>
                 <th className="py-2 px-3 text-left">Nom</th>
                 <th className="py-2 px-3 text-left">Rôle</th>
+                <th className="py-2 px-3 text-left">Ville</th>
+                <th className="py-2 px-3 text-left">Téléphone</th>
                 <th className="py-2 px-3 text-left">Type de compte</th>
                 <th className="py-2 px-3 text-left">Actions</th>
               </tr>
@@ -202,7 +227,7 @@ export default function AdminUsers({
             <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50">
               {users.map((u) => {
                 const isEdited = !!editedUsers[u.id];
-                const edited = editedUsers[u.id] || { email: u.email, displayName: u.displayName || "", role: u.role || "user" };
+                const edited = editedUsers[u.id] || { email: u.email, displayName: u.displayName || "", role: u.role || "user", ville: u.ville || "", telephone: u.telephone || "" };
                 // Détection du type de compte
                 let typeCompte = "Email";
                 if (u.providerId === "google.com" || (u.email && u.email.endsWith("@gmail.com") && !u.passwordHash)) {
@@ -250,6 +275,32 @@ export default function AdminUsers({
                         <option value="user">user</option>
                         <option value="admin">admin</option>
                       </select>
+                    </td>
+                    <td className="py-2 px-3">
+                      <input
+                        type="text"
+                        value={edited.ville || ""}
+                        onChange={e =>
+                          setEditedUsers((prev) => ({
+                            ...prev,
+                            [u.id]: { ...edited, ville: e.target.value },
+                          }))
+                        }
+                        className="border rounded-md px-2 py-1 w-36"
+                      />
+                    </td>
+                    <td className="py-2 px-3">
+                      <input
+                        type="tel"
+                        value={edited.telephone || ""}
+                        onChange={e =>
+                          setEditedUsers((prev) => ({
+                            ...prev,
+                            [u.id]: { ...edited, telephone: e.target.value },
+                          }))
+                        }
+                        className="border rounded-md px-2 py-1 w-36"
+                      />
                     </td>
                     <td className="py-2 px-3">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${typeCompte === "Google" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-700"}`}>
