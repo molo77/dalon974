@@ -18,9 +18,10 @@ import {
   orderBy,
   onSnapshot,
   limit as fsLimit,
-  where,            // + import
-  getDoc,           // + import
-  getDocs,          // + import
+  where,
+  getDoc,
+  getDocs,
+  setDoc,
 } from "firebase/firestore";
 import AnnonceModal from "@/components/AnnonceModal";
 import { updateAnnonce } from "@/lib/services/annonceService";
@@ -42,7 +43,7 @@ const SEED_COMMUNES = [
 export default function AdminPage() {
   const [user, loading] = useAuthState(auth);
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"annonces" | "users">("annonces");
+  const [activeTab, setActiveTab] = useState<"annonces" | "users" | "colocs">("annonces");
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string; id?: string } | null>(null);
   const toastTimeout = useRef<NodeJS.Timeout | null>(null);
   const [seeding, setSeeding] = useState(false);
@@ -52,10 +53,28 @@ export default function AdminPage() {
   const [ownersById, setOwnersById] = useState<Record<string, { email?: string; displayName?: string }>>({});
   const [modalOpen, setModalOpen] = useState(false);
   const [editAnnonce, setEditAnnonce] = useState<any | null>(null);
+  // NOUVEAU: états pour profils colocataires
+  const [adminColocs, setAdminColocs] = useState<any[]>([]);
+  const [adminColocsSelected, setAdminColocsSelected] = useState<string[]>([]);
+  const [colocModalOpen, setColocModalOpen] = useState(false);
+  const [editColoc, setEditColoc] = useState<any | null>(null);
+  // Formulaire d’édition coloc (modale)
+  const [colocNomEdit, setColocNomEdit] = useState("");
+  const [colocVilleEdit, setColocVilleEdit] = useState("");
+  const [colocBudgetEdit, setColocBudgetEdit] = useState<string>("");
+  const [colocImageUrlEdit, setColocImageUrlEdit] = useState("");
+  const [colocDescriptionEdit, setColocDescriptionEdit] = useState("");
+  const [colocAgeEdit, setColocAgeEdit] = useState<string>("");
+  const [colocProfessionEdit, setColocProfessionEdit] = useState("");
+  const [colocTelephoneEdit, setColocTelephoneEdit] = useState("");
+  const [colocDateDispoEdit, setColocDateDispoEdit] = useState("");
 
   // NOUVEAU: modal “Changer propriétaire”
   const [bulkOwnerOpen, setBulkOwnerOpen] = useState(false);
   const [bulkOwnerInput, setBulkOwnerInput] = useState("");
+
+  // NOUVEAU: état pour la création de profils d’exemple
+  const [seedingColocs, setSeedingColocs] = useState(false);
 
   const { isAdmin, checkingAdmin } = useAdminGate({ user, loading, router });
 
@@ -93,6 +112,56 @@ export default function AdminPage() {
       showToast("error", "Erreur lors de la création des annonces d’exemple.");
     } finally {
       setSeeding(false);
+    }
+  };
+
+  // NOUVEAU: créer des profils colocataires d’exemple
+  const seedColocExamples = async () => {
+    if (seedingColocs) return;
+    setSeedingColocs(true);
+    try {
+      const placeholder = "/images/annonce-placeholder.jpg";
+      const col = collection(db, "colocProfiles");
+      const NAMES = [
+        "Alex", "Camille", "Jordan", "Lea", "Noah", "Emma",
+        "Lucas", "Maya", "Hugo", "Sarah", "Nathan", "Lina"
+      ];
+      const PROFESSIONS = [
+        "Étudiant(e)", "Développeur(se)", "Infirmier(ère)", "Enseignant(e)",
+        "Comptable", "Commercial(e)", "Designer", "Chef de projet"
+      ];
+
+      // Utilise setDoc avec un ID connu et uid = ID (compat règles)
+      const now = Date.now();
+      await Promise.all(
+        Array.from({ length: 12 }).map((_, i) => {
+          const id = `seed-${now}-${i}`;
+          const nom = NAMES[i % NAMES.length];
+          const ville = SEED_COMMUNES[i % SEED_COMMUNES.length];
+          const budget = 400 + (i % 10) * 30;
+          const age = 20 + (i % 15);
+          const profession = PROFESSIONS[i % PROFESSIONS.length];
+          const description = `Je cherche une colocation à ${ville}. ${profession}, calme et respectueux(se).`;
+          return setDoc(doc(col, id), {
+            uid: id, // important pour uidMatchesPath(uid)
+            nom,
+            ville,
+            budget,
+            age,
+            profession,
+            description,
+            imageUrl: placeholder,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+        })
+      );
+      showToast("success", "Profils d'exemple créés ✅");
+    } catch (e: any) {
+      console.error("[Admin][SeedColocExamples]", e);
+      showToast("error", e?.code ? `Erreur: ${e.code}` : "Erreur lors de la création des profils d’exemple.");
+    } finally {
+      setSeedingColocs(false);
     }
   };
 
@@ -136,11 +205,36 @@ export default function AdminPage() {
     return () => unsub();
   }, [activeTab]);
 
+  // NOUVEAU: abonnement temps réel aux profils colocataires
+  useEffect(() => {
+    if (activeTab !== "colocs") return;
+    const q = query(collection(db, "colocProfiles"), orderBy("createdAt", "desc"), fsLimit(200));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setAdminColocs(items);
+        setAdminColocsSelected((prev) => prev.filter((id) => items.some((a) => a.id === id)));
+      },
+      (err) => {
+        console.error("[Admin][colocProfiles][onSnapshot]", err);
+      }
+    );
+    return () => unsub();
+  }, [activeTab]);
+
   const toggleAdminSelect = (id: string) => {
     setAdminSelected(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   };
   const adminSelectAll = () => setAdminSelected(adminAnnonces.map(a => a.id));
   const adminDeselectAll = () => setAdminSelected([]);
+
+  // NOUVEAU: sélection pour profils colocataires
+  const toggleColocSelect = (id: string) => {
+    setAdminColocsSelected(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  };
+  const colocsSelectAll = () => setAdminColocsSelected(adminColocs.map(p => p.id));
+  const colocsDeselectAll = () => setAdminColocsSelected([]);
 
   // Helper: résoudre un userId depuis un email ou un id donné
   const resolveUserIdByEmailOrId = async (raw: string): Promise<string | null> => {
@@ -232,6 +326,74 @@ export default function AdminPage() {
     }
   };
 
+  // NOUVEAU: suppression multiple profils
+  const colocsBulkDelete = async (ids?: string[]) => {
+    const toDelete = Array.isArray(ids) && ids.length ? ids : adminColocsSelected;
+    if (toDelete.length === 0) return;
+    try {
+      setAdminLoading(true);
+      const chunks = (arr: string[], size = 400) => {
+        const out: string[][] = [];
+        for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+        return out;
+      };
+      for (const chunk of chunks(toDelete)) {
+        const batch = writeBatch(db);
+        chunk.forEach((id) => batch.delete(doc(db, "colocProfiles", id)));
+        await batch.commit();
+      }
+      setAdminColocsSelected([]);
+      showToast("success", "Profils supprimés ✅");
+    } catch (e) {
+      console.error("[Admin][ColocsBulkDelete]", e);
+      showToast("error", "Erreur suppression des profils.");
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  // NOUVEAU: ouvrir la modale d’édition profil
+  const openColocModal = (p: any) => {
+    setEditColoc(p);
+    setColocNomEdit(p?.nom || "");
+    setColocVilleEdit(p?.ville || "");
+    setColocBudgetEdit(typeof p?.budget === "number" ? String(p.budget) : "");
+    setColocImageUrlEdit(p?.imageUrl || "");
+    setColocDescriptionEdit(p?.description || "");
+    setColocAgeEdit(typeof p?.age === "number" ? String(p.age) : "");
+    setColocProfessionEdit(p?.profession || "");
+    setColocTelephoneEdit(p?.telephone || "");
+    setColocDateDispoEdit(p?.dateDispo || "");
+    setColocModalOpen(true);
+  };
+
+  // NOUVEAU: enregistrer un profil (modale)
+  const saveColocEdit = async () => {
+    if (!editColoc) return;
+    try {
+      const payload: any = {
+        nom: colocNomEdit,
+        ville: colocVilleEdit,
+        budget: colocBudgetEdit ? Number(colocBudgetEdit) : null,
+        imageUrl: colocImageUrlEdit,
+        description: colocDescriptionEdit,
+        age: colocAgeEdit ? Number(colocAgeEdit) : null,
+        profession: colocProfessionEdit,
+        telephone: colocTelephoneEdit,
+        dateDispo: colocDateDispoEdit,
+        updatedAt: serverTimestamp(),
+      };
+      Object.keys(payload).forEach((k) => (payload[k] === "" || payload[k] === null) && delete payload[k]);
+      await setDoc(doc(db, "colocProfiles", editColoc.id), payload, { merge: true });
+      showToast("success", "Profil modifié ✅");
+      setColocModalOpen(false);
+      setEditColoc(null);
+    } catch (e) {
+      console.error("[Admin][SaveColoc]", e);
+      showToast("error", "Erreur lors de la mise à jour du profil.");
+    }
+  };
+
   if (loading || checkingAdmin) {
     return (
       <main className="min-h-screen bg-gray-100 p-8 flex items-center justify-center">
@@ -246,44 +408,49 @@ export default function AdminPage() {
 
   // Master checkbox (tout sélectionner/désélectionner)
   const allSelected = adminAnnonces.length > 0 && adminSelected.length === adminAnnonces.length;
+  const allColocsSelected = adminColocs.length > 0 && adminColocsSelected.length === adminColocs.length;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-white p-0 flex">
-      <aside className="w-64 min-h-screen bg-white shadow-lg flex flex-col gap-2 py-8 px-4 border-r border-slate-200">
+    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-white p-0 flex flex-col md:flex-row w-full overflow-x-hidden">
+      <aside className="w-full md:w-64 md:min-h-screen bg-white shadow-lg flex flex-col gap-2 py-8 px-4 border-b md:border-b-0 md:border-r border-slate-200">
         <h2 className="text-xl font-bold text-blue-700 mb-8 text-center tracking-wide">Admin Panel</h2>
         <button
-          className={`text-left px-4 py-3 rounded-lg transition ${
-            activeTab === "annonces" ? "bg-blue-600 text-white shadow" : "hover:bg-blue-50 text-slate-700"
-          }`}
+          className={`text-left px-4 py-3 rounded-lg transition ${activeTab === "annonces" ? "bg-blue-600 text-white shadow" : "hover:bg-blue-50 text-slate-700"}`}
           onClick={() => setActiveTab("annonces")}
         >
           📢 Gestion des annonces
         </button>
         <button
-          className={`text-left px-4 py-3 rounded-lg transition ${
-            activeTab === "users" ? "bg-blue-600 text-white shadow" : "hover:bg-blue-50 text-slate-700"
-          }`}
+          className={`text-left px-4 py-3 rounded-lg transition ${activeTab === "colocs" ? "bg-blue-600 text-white shadow" : "hover:bg-blue-50 text-slate-700"}`}
+          onClick={() => setActiveTab("colocs")}
+        >
+          👥 Profils colocataires
+        </button>
+        <button
+          className={`text-left px-4 py-3 rounded-lg transition ${activeTab === "users" ? "bg-blue-600 text-white shadow" : "hover:bg-blue-50 text-slate-700"}`}
           onClick={() => setActiveTab("users")}
         >
           👤 Gestion des utilisateurs
         </button>
       </aside>
-      <section className="flex-1 px-4 md:px-12 py-10">
+      <section className="flex-1 w-full px-4 md:px-12 py-10 overflow-x-hidden">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight">
             Administration
           </h1>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={seedExamples}
-              disabled={seeding}
-              className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-60"
-              title="Créer une annonce d’exemple pour chaque commune"
-            >
-              {seeding ? "Création..." : "Créer annonces d’exemple"}
-            </button>
-          </div>
+          {activeTab === "annonces" && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={seedExamples}
+                disabled={seeding}
+                className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-60"
+                title="Créer une annonce d’exemple pour chaque commune"
+              >
+                {seeding ? "Création..." : "Créer annonces d’exemple"}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-xl shadow-lg p-8">
@@ -472,6 +639,117 @@ export default function AdminPage() {
                       >
                         Confirmer
                       </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : activeTab === "colocs" ? (
+            <>
+              {/* Barre d’actions profils */}
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={allColocsSelected}
+                    onChange={() => (allColocsSelected ? colocsDeselectAll() : colocsSelectAll())}
+                  />
+                  <span className="text-sm text-slate-700">Tout ({adminColocs.length})</span>
+                </label>
+                <button type="button" onClick={colocsSelectAll} disabled={adminColocs.length === 0} className="border px-3 py-1.5 rounded hover:bg-slate-50 disabled:opacity-60">Tout sélectionner</button>
+                <button type="button" onClick={colocsDeselectAll} disabled={adminColocsSelected.length === 0} className="border px-3 py-1.5 rounded hover:bg-slate-50 disabled:opacity-60">Tout désélectionner</button>
+                <button
+                  type="button"
+                  onClick={() => colocsBulkDelete()}
+                  disabled={adminColocsSelected.length === 0 || adminLoading}
+                  className="bg-rose-600 text-white px-3 py-1.5 rounded hover:bg-rose-700 disabled:opacity-60"
+                >
+                  {adminLoading ? "Suppression..." : `Supprimer la sélection (${adminColocsSelected.length})`}
+                </button>
+                <button
+                  type="button"
+                  onClick={seedColocExamples}
+                  disabled={seedingColocs}
+                  className="bg-emerald-600 text-white px-3 py-1.5 rounded hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {seedingColocs ? "Création..." : "Créer profils d’exemple"}
+                </button>
+              </div>
+
+              {/* Liste profils */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-[15px]">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="py-2 px-3 w-10"></th>
+                      <th className="py-2 px-3 text-left">Nom</th>
+                      <th className="py-2 px-3 text-left">Ville</th>
+                      <th className="py-2 px-3 text-left">Budget</th>
+                      <th className="py-2 px-3 text-left">Description (court)</th>
+                      <th className="py-2 px-3 text-left">Email</th>
+                      <th className="py-2 px-3 text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50">
+                    {adminColocs.map((p) => {
+                      const shortDesc = (p.description || "").toString().slice(0, 160) + ((p.description || "").length > 160 ? "…" : "");
+                      return (
+                        <tr key={p.id} className="hover:bg-blue-50/50 transition">
+                          <td className="py-2 px-3">
+                            <input
+                              type="checkbox"
+                              checked={adminColocsSelected.includes(p.id)}
+                              onChange={() => toggleColocSelect(p.id)}
+                            />
+                          </td>
+                          <td className="py-2 px-3">{p.nom || "(sans nom)"}</td>
+                          <td className="py-2 px-3">{p.ville || "-"}</td>
+                          <td className="py-2 px-3">{typeof p.budget === "number" ? `${p.budget} €` : "-"}</td>
+                          <td className="py-2 px-3 max-w-[560px] whitespace-normal">{shortDesc}</td>
+                          <td className="py-2 px-3">{p.email || "-"}</td>
+                          <td className="py-2 px-3 flex gap-3">
+                            <button
+                              type="button"
+                              className="text-blue-600 hover:underline"
+                              onClick={() => openColocModal(p)}
+                            >
+                              Modifier
+                            </button>
+                            <button
+                              type="button"
+                              className="text-rose-600 hover:underline"
+                              onClick={() => colocsBulkDelete([p.id])}
+                              disabled={adminLoading}
+                            >
+                              Supprimer
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Modale édition profil colocataire */}
+              {colocModalOpen && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+                  <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg">
+                    <h3 className="text-lg font-semibold mb-3">Modifier le profil</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <input className="border rounded px-3 py-2" placeholder="Nom" value={colocNomEdit} onChange={(e) => setColocNomEdit(e.target.value)} />
+                      <input className="border rounded px-3 py-2" placeholder="Ville" value={colocVilleEdit} onChange={(e) => setColocVilleEdit(e.target.value)} />
+                      <input className="border rounded px-3 py-2" placeholder="Budget (€)" type="number" value={colocBudgetEdit} onChange={(e) => setColocBudgetEdit(e.target.value)} />
+                      <input className="border rounded px-3 py-2" placeholder="Âge" type="number" value={colocAgeEdit} onChange={(e) => setColocAgeEdit(e.target.value)} />
+                      <input className="border rounded px-3 py-2 sm:col-span-2" placeholder="Image (URL)" value={colocImageUrlEdit} onChange={(e) => setColocImageUrlEdit(e.target.value)} />
+                      <input className="border rounded px-3 py-2" placeholder="Profession" value={colocProfessionEdit} onChange={(e) => setColocProfessionEdit(e.target.value)} />
+                      <input className="border rounded px-3 py-2" placeholder="Téléphone" value={colocTelephoneEdit} onChange={(e) => setColocTelephoneEdit(e.target.value)} />
+                      <input className="border rounded px-3 py-2" placeholder="Disponibilité (YYYY-MM-DD)" value={colocDateDispoEdit} onChange={(e) => setColocDateDispoEdit(e.target.value)} />
+                      <textarea className="border rounded px-3 py-2 sm:col-span-2" placeholder="Description" value={colocDescriptionEdit} onChange={(e) => setColocDescriptionEdit(e.target.value)} rows={4} />
+                    </div>
+                    <div className="flex justify-end gap-2 mt-4">
+                      <button className="px-4 py-2 rounded bg-gray-200 text-gray-700" onClick={() => { setColocModalOpen(false); setEditColoc(null); }} disabled={adminLoading}>Annuler</button>
+                      <button className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60" onClick={saveColocEdit} disabled={adminLoading}>Enregistrer</button>
                     </div>
                   </div>
                 </div>

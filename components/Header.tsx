@@ -23,7 +23,7 @@ export default function Header() {
 
   return (
     <header className="bg-white shadow px-4 py-3 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto flex items-center justify-between">
+      <div className="w-[85%] max-w-full mx-auto flex items-center justify-between">
         <Link href="/" className="text-xl font-bold text-blue-600">
           Dalon974
         </Link>

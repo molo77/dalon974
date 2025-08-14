@@ -35,8 +35,8 @@ service cloud.firestore {
       // Lecture publique
       allow read: if true;
 
-      // Création: l'utilisateur pour lui-même, uid du payload cohérent
-      allow create: if isOwner(uid) && uidMatchesPath(uid);
+      // Création: admin ou propriétaire avec uid cohérent
+      allow create: if isAdmin() || (isOwner(uid) && uidMatchesPath(uid));
 
       // Mise à jour: propriétaire ou admin, uid du payload cohérent
       allow update: if (isOwner(uid) || isAdmin()) && uidMatchesPath(uid);

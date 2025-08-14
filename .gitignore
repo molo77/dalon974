@@ -1,42 +1,70 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# Env et secrets (ne jamais versionner)
+.env
+.env.local
+.env.*.local
+*.env
+*.env.local
+.npmrc
+.yarnrc
+.yarnrc.yml
 
-# testing
-/coverage
+# Artefacts Next.js / caches
+.next/
+.next.fixture/
+out/
+dist/
+.turbo/
+.swc/
+.vercel/
 
-# next.js
-/.next/
-/out/
+# Dépendances
+node_modules/
 
-# production
-/build
+# Firebase (caches locaux, logs, exports)
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+emulator-data/
+firestore-export*/
 
-# misc
+# IDE/OS divers
+.vscode/
+.idea/
+*.iml
 .DS_Store
-*.pem
+Thumbs.db
+*.swp
+*.swo
 
-# debug
+# Tests / couverture
+coverage/
+.nyc_output/
+jest-html-reporters-*.html
+*.lcov
+
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
+pnpm-debug.log*
+debug.log
 
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-# typescript
+# Caches divers
+.cache/
+.tmp/
+temp/
 *.tsbuildinfo
-next-env.d.ts
-dalon974-adminsdk.json
+
+# Admin SDK clés (si utilisées côté tools/scripts)
+functions/.env
+functions/.env.local
+functions/.secret*
+functions/serviceAccount*.json
+
+# Conserver les lockfiles (ne pas ignorer)
+!package-lock.json
+!yarn.lock
+!pnpm-lock.yaml

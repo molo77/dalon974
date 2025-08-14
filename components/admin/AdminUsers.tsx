@@ -158,14 +158,14 @@ export default function AdminUsers({
               showToast("error", translateFirebaseError(e?.code) || "Erreur lors de la création.");
             }
           }}
-          className="flex flex-col md:flex-row gap-3 w-full"
+          className="grid grid-cols-1 md:grid-cols-6 gap-3 w-full"
         >
           <input
             type="email"
             placeholder="Email"
             value={newUser.email}
             onChange={e => setNewUser({ ...newUser, email: e.target.value })}
-            className="border rounded px-3 py-2 flex-1"
+            className="border rounded px-3 py-2 md:col-span-2"
             required
           />
           <input
@@ -173,12 +173,12 @@ export default function AdminUsers({
             placeholder="Nom"
             value={newUser.displayName}
             onChange={e => setNewUser({ ...newUser, displayName: e.target.value })}
-            className="border rounded px-3 py-2 flex-1"
+            className="border rounded px-3 py-2"
           />
           <select
             value={newUser.role}
             onChange={e => setNewUser({ ...newUser, role: e.target.value })}
-            className="border rounded px-3 py-2 flex-1"
+            className="border rounded px-3 py-2"
             required
           >
             <option value="">Sélectionner un rôle</option>
@@ -190,18 +190,18 @@ export default function AdminUsers({
             placeholder="Ville"
             value={newUser.ville}
             onChange={e => setNewUser({ ...newUser, ville: e.target.value })}
-            className="border rounded px-3 py-2 flex-1"
+            className="border rounded px-3 py-2"
           />
           <input
             type="tel"
             placeholder="Téléphone"
             value={newUser.telephone}
             onChange={e => setNewUser({ ...newUser, telephone: e.target.value })}
-            className="border rounded px-3 py-2 flex-1"
+            className="border rounded px-3 py-2"
           />
           <button
             type="submit"
-            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 md:justify-self-end"
           >
             Créer
           </button>
@@ -220,8 +220,109 @@ export default function AdminUsers({
         </button>
       </div>
 
-      {/* Liste utilisateurs */}
-      <div className="overflow-x-auto bg-white rounded-2xl border border-slate-200 shadow-sm">
+      {/* Liste utilisateurs - Vue cartes (mobile) */}
+     <div className="md:hidden space-y-4">
+       {loading ? (
+         <div className="flex items-center justify-center h-32">
+           <span className="text-slate-500">Chargement...</span>
+         </div>
+       ) : users.length === 0 ? (
+         <p className="text-slate-500">Aucun utilisateur.</p>
+       ) : (
+         users.map((u) => {
+           const edited = editedUsers[u.id] || {
+             email: u.email,
+             displayName: u.displayName || "",
+             role: u.role || "user",
+             ville: u.ville || "",
+             telephone: u.telephone || "",
+           };
+           const isEdited =
+             !!editedUsers[u.id] &&
+             (edited.email !== u.email ||
+               (edited.displayName || "") !== (u.displayName || "") ||
+               edited.role !== (u.role || "user") ||
+               (edited.ville || "") !== (u.ville || "") ||
+               (edited.telephone || "") !== (u.telephone || ""));
+           let typeCompte = "Email";
+           if (u.providerId === "google.com" || (u.email && u.email.endsWith("@gmail.com") && !u.passwordHash)) {
+             typeCompte = "Google";
+           }
+           return (
+             <div key={u.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+               <div className="flex items-center justify-between mb-2">
+                 <h3 className="font-semibold text-slate-800">{edited.displayName || u.email}</h3>
+                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${typeCompte === "Google" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-700"}`}>
+                   {typeCompte}
+                 </span>
+               </div>
+               <div className="grid grid-cols-1 gap-2">
+                 <input
+                   type="email"
+                   value={edited.email}
+                   onChange={e => setEditedUsers(prev => ({ ...prev, [u.id]: { ...edited, email: e.target.value } }))}
+                   className="border rounded-md px-3 py-2 w-full"
+                   placeholder="Email"
+                 />
+                 <input
+                   type="text"
+                   value={edited.displayName}
+                   onChange={e => setEditedUsers(prev => ({ ...prev, [u.id]: { ...edited, displayName: e.target.value } }))}
+                   className="border rounded-md px-3 py-2 w-full"
+                   placeholder="Nom"
+                 />
+                 <select
+                   value={edited.role}
+                   onChange={e => setEditedUsers(prev => ({ ...prev, [u.id]: { ...edited, role: e.target.value } }))}
+                   className="border rounded-md px-3 py-2 w-full"
+                 >
+                   <option value="user">user</option>
+                   <option value="admin">admin</option>
+                 </select>
+                 <input
+                   type="text"
+                   value={edited.ville || ""}
+                   onChange={e => setEditedUsers(prev => ({ ...prev, [u.id]: { ...edited, ville: e.target.value } }))}
+                   className="border rounded-md px-3 py-2 w-full"
+                   placeholder="Ville"
+                 />
+                 <input
+                   type="tel"
+                   value={edited.telephone || ""}
+                   onChange={e => setEditedUsers(prev => ({ ...prev, [u.id]: { ...edited, telephone: e.target.value } }))}
+                   className="border rounded-md px-3 py-2 w-full"
+                   placeholder="Téléphone"
+                 />
+               </div>
+               <div className="flex gap-2 justify-end mt-3">
+                 <button
+                   className="bg-purple-600 text-white px-3 py-1.5 rounded-md hover:bg-purple-700 disabled:opacity-60"
+                   onClick={() => handleUserSave(u.id)}
+                   disabled={!isEdited}
+                 >
+                   Enregistrer
+                 </button>
+                 <button
+                   className="bg-amber-400 text-white px-3 py-1.5 rounded-md hover:bg-amber-500"
+                   onClick={() => handleAdminResetPassword(u.email)}
+                 >
+                   Réinit.
+                 </button>
+                 <button
+                   className="bg-rose-600 text-white px-3 py-1.5 rounded-md hover:bg-rose-700"
+                   onClick={() => handleDeleteUser(u.id)}
+                 >
+                   Supprimer
+                 </button>
+               </div>
+             </div>
+           );
+         })
+       )}
+     </div>
+
+      {/* Liste utilisateurs - Table (desktop) */}
+     <div className="hidden md:block overflow-x-auto bg-white rounded-2xl border border-slate-200 shadow-sm mt-4">
         {loading ? (
           <div className="flex items-center justify-center h-40">
             <span className="text-lg text-slate-500">Chargement...</span>

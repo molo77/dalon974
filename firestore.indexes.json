@@ -4,84 +4,56 @@
       "collectionGroup": "annonces",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "ville", "order": "ASCENDING" },
-        { "fieldPath": "prix", "order": "ASCENDING" }
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "prix",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "annonces",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "prix", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "annonces",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "ville", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "annonces",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "ville", "order": "ASCENDING" },
-        { "fieldPath": "prix", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-
-    {
-      "collectionGroup": "colocataires",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "ville", "order": "ASCENDING" },
-        { "fieldPath": "budget", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "colocataires",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "budget", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "colocataires",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "ville", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "colocataires",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "ville", "order": "ASCENDING" },
-        { "fieldPath": "budget", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-
-    {
-      "collectionGroup": "messages",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "annonceOwnerId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "ville",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "prix",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "messages",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "fromUserId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "annonceOwnerId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     }
   ],

@@ -10,6 +10,8 @@ import {
   where,
   limit,
   onSnapshot,
+  doc,
+  getDoc,
 } from "firebase/firestore";
 import type { Query, QuerySnapshot, DocumentData } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -45,6 +47,11 @@ export default function HomePage() {
   // NOUVEAU: communes sélectionnées (slugs)
   const [communesSelected, setCommunesSelected] = useState<string[]>([]);
   const [showCommuneMap, setShowCommuneMap] = useState(false);
+
+  // NOUVEAU: état et handlers pour le détail du profil colocataire
+  const [colocDetailOpen, setColocDetailOpen] = useState(false);
+  const [colocDetailLoading, setColocDetailLoading] = useState(false);
+  const [colocDetail, setColocDetail] = useState<any | null>(null);
 
   // Image d'annonce par défaut (16:9)
   const defaultAnnonceImg =
@@ -450,6 +457,33 @@ export default function HomePage() {
     return () => clearAllSubs();
   }, []);
 
+  // NOUVEAU: ouvrir le détail du profil colocataire
+  const openColocDetail = async (id: string) => {
+    try {
+      setColocDetailOpen(true);
+      setColocDetailLoading(true);
+      setColocDetail(null);
+      const ref = doc(db, "colocProfiles", id);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        setColocDetail({ id: snap.id, ...(snap.data() as any) });
+      } else {
+        setColocDetail(null);
+      }
+    } catch (e) {
+      console.error("[Accueil][ColocDetail] load error", e);
+      setColocDetail(null);
+    } finally {
+      setColocDetailLoading(false);
+    }
+  };
+  // NOUVEAU: fermer le détail du profil colocataire
+  const closeColocDetail = () => {
+    setColocDetailOpen(false);
+    setColocDetail(null);
+    setColocDetailLoading(false);
+  };
+
   return (
     <main className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
       {/* Ecran de CHOIX initial */}
@@ -648,18 +682,44 @@ export default function HomePage() {
           </form>
 
           <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {annonces.map((annonce) => (
-              <AnnonceCard
-                key={annonce.id}
-                id={annonce.id}
-                titre={annonce.titre}
-                ville={annonce.ville}
-                prix={annonce.prix}
-                surface={annonce.surface}
-                description={annonce.description}
-                imageUrl={annonce.imageUrl || defaultAnnonceImg}
-              />
-            ))}
+            {annonces.map((annonce) => {
+              const card = (
+                <AnnonceCard
+                  key={annonce.id}
+                  id={annonce.id}
+                  titre={annonce.titre}
+                  ville={annonce.ville}
+                  prix={annonce.prix}
+                  surface={annonce.surface}
+                  description={annonce.description}
+                  imageUrl={annonce.imageUrl || defaultAnnonceImg}
+                />
+              );
+              // En mode "Colocataires", la carte ouvre le détail
+              return activeHomeTab === "colocataires" ? (
+                <div
+                  key={annonce.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    // Intercepte un éventuel <a> à l’intérieur de la carte
+                    const target = e.target as HTMLElement;
+                    const link = target.closest && target.closest("a");
+                    if (link) e.preventDefault();
+                    openColocDetail(annonce.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") openColocDetail(annonce.id);
+                  }}
+                  // Désactive le clic des liens internes de la carte côté CSS (double sécurité)
+                  className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg select-none [&_a]:pointer-events-none"
+                >
+                  {card}
+                </div>
+              ) : (
+                card
+              );
+            })}
 
             {loadingMore && <p className="text-slate-500 text-center mt-4 col-span-full">Chargement...</p>}
 
@@ -667,6 +727,111 @@ export default function HomePage() {
               <p className="text-slate-400 text-center mt-4 col-span-full">Toutes les cartes sont affichées.</p>
             )}
           </div>
+
+          {/* Modal détail profil colocataire */}
+          {activeHomeTab === "colocataires" && colocDetailOpen && (
+            <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 relative">
+                <button
+                  onClick={closeColocDetail}
+                  className="absolute top-3 right-3 text-slate-600 hover:text-slate-900"
+                  aria-label="Fermer"
+                >
+                  ✖
+                </button>
+                <h3 className="text-xl font-semibold mb-4">Profil colocataire</h3>
+                {colocDetailLoading ? (
+                  <p className="text-slate-600">Chargement…</p>
+                ) : !colocDetail ? (
+                  <p className="text-slate-600">Profil introuvable.</p>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    <div className="flex gap-4 items-start">
+                      <img
+                        src={colocDetail.imageUrl || defaultAnnonceImg}
+                        alt={colocDetail.nom || "Profil"}
+                        className="w-40 h-28 object-cover rounded-lg border"
+                      />
+                      <div className="flex-1">
+                        <div className="text-2xl font-bold">
+                          {colocDetail.nom || "Recherche colocation"}
+                        </div>
+                        <div className="text-slate-700">
+                          {colocDetail.ville || "-"}
+                          {typeof colocDetail.budget === "number" && (
+                            <span className="ml-2 text-blue-700 font-semibold">
+                              • Budget {colocDetail.budget} €
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-slate-600 text-sm mt-1">
+                          {colocDetail.profession ? colocDetail.profession : ""}
+                          {typeof colocDetail.age === "number" ? ` • ${colocDetail.age} ans` : ""}
+                          {colocDetail.dateDispo ? ` • Dispo: ${colocDetail.dateDispo}` : ""}
+                        </div>
+                      </div>
+                    </div>
+
+                    {Array.isArray(colocDetail.zones) && colocDetail.zones.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Zones recherchées</div>
+                        <div className="flex flex-wrap gap-2">
+                          {colocDetail.zones.map((z: string) => (
+                            <span key={z} className="px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                              {z}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {Array.isArray(colocDetail.communesSlugs) && colocDetail.communesSlugs.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Communes ciblées</div>
+                        <div className="flex flex-wrap gap-2">
+                          {colocDetail.communesSlugs.map((s: string) => (
+                            <span key={s} className="px-2 py-1 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {colocDetail.telephone && (
+                      <div className="text-sm">
+                        <span className="font-medium text-slate-700">Téléphone:</span>{" "}
+                        <span className="text-slate-800">{colocDetail.telephone}</span>
+                      </div>
+                    )}
+
+                    {colocDetail.email && (
+                      <div className="text-sm">
+                        <span className="font-medium text-slate-700">Email:</span>{" "}
+                        <span className="text-slate-800">{colocDetail.email}</span>
+                      </div>
+                    )}
+
+                    {colocDetail.description && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">À propos</div>
+                        <p className="text-slate-800 whitespace-pre-line">{colocDetail.description}</p>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end">
+                      <button
+                        onClick={closeColocDetail}
+                        className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+                      >
+                        Fermer
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </>
       )}
     </main>
