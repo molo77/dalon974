@@ -240,9 +240,33 @@ export default function HomePage() {
             if (clientFilter) docsArr = docsArr.filter((d: any) => clientFilter(d.data()));
             const mapped = docsArr.map((doc: any) => {
               const d = doc.data() as Record<string, any>;
-              return isColoc
-                ? { id: doc.id, titre: d.nom || "Recherche colocation", ville: d.ville, prix: d.budget, surface: undefined, description: d.description, imageUrl: d.imageUrl || defaultAnnonceImg, createdAt: d.createdAt }
-                : { id: doc.id, titre: d.titre, ville: d.ville, prix: d.prix, surface: d.surface, description: d.description, imageUrl: d.imageUrl || defaultAnnonceImg, createdAt: d.createdAt };
+              // -- CHANGEMENT: mapping dédié profils coloc --
+              if (isColoc) {
+                const head = [d.profession, typeof d.age === "number" ? `${d.age} ans` : null].filter(Boolean).join(" • ");
+                const tail = (d.description || "").toString();
+                const short = head ? `${head}${tail ? " • " : ""}${tail}` : tail;
+                return {
+                  id: doc.id,
+                  titre: d.nom || "Recherche colocation",
+                  ville: d.ville,
+                  prix: d.budget, // AnnonceCard affiche “prix” -> budget ici
+                  surface: undefined,
+                  description: short.slice(0, 180), // extrait court
+                  imageUrl: d.imageUrl || defaultAnnonceImg,
+                  createdAt: d.createdAt,
+                };
+              }
+              // -- annonces (inchangé) --
+              return {
+                id: doc.id,
+                titre: d.titre,
+                ville: d.ville,
+                prix: d.prix,
+                surface: d.surface,
+                description: d.description,
+                imageUrl: d.imageUrl || defaultAnnonceImg,
+                createdAt: d.createdAt,
+              };
             });
             setAnnonces((prev) => {
               const byId = new Map(prev.map((x) => [x.id, x]));
@@ -278,14 +302,37 @@ export default function HomePage() {
                 qNoOrder as Query<DocumentData>,
                 (snap2: QuerySnapshot<DocumentData>) => {
                   let docsArr = snap2.docs;
-                  // Applique filtre client combiné (ET commun(es) + prix si besoin)
                   const combined = combineFilters(clientFilter, useNoPrice ? clientPriceFilter : undefined);
                   if (combined) docsArr = docsArr.filter((d: any) => combined(d.data()));
                   const mapped = docsArr.map((doc: any) => {
                     const d = doc.data() as any;
-                    return isColoc
-                      ? { id: doc.id, titre: d.nom || "Recherche colocation", ville: d.ville, prix: d.budget, surface: undefined, description: d.description, imageUrl: d.imageUrl || defaultAnnonceImg, createdAt: d.createdAt }
-                      : { id: doc.id, titre: d.titre, ville: d.ville, prix: d.prix, surface: d.surface, description: d.description, imageUrl: d.imageUrl || defaultAnnonceImg, createdAt: d.createdAt };
+                    // -- CHANGEMENT: mapping fallback pour profils coloc --
+                    if (isColoc) {
+                      const head = [d.profession, typeof d.age === "number" ? `${d.age} ans` : null].filter(Boolean).join(" • ");
+                      const tail = (d.description || "").toString();
+                      const short = head ? `${head}${tail ? " • " : ""}${tail}` : tail;
+                      return {
+                        id: doc.id,
+                        titre: d.nom || "Recherche colocation",
+                        ville: d.ville,
+                        prix: d.budget,
+                        surface: undefined,
+                        description: short.slice(0, 180),
+                        imageUrl: d.imageUrl || defaultAnnonceImg,
+                        createdAt: d.createdAt,
+                      };
+                    }
+                    // -- annonces (inchangé) --
+                    return {
+                      id: doc.id,
+                      titre: d.titre,
+                      ville: d.ville,
+                      prix: d.prix,
+                      surface: d.surface,
+                      description: d.description,
+                      imageUrl: d.imageUrl || defaultAnnonceImg,
+                      createdAt: d.createdAt,
+                    };
                   });
                   setAnnonces((prev) => {
                     const byId = new Map(prev.map((x) => [x.id, x]));
