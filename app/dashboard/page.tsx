@@ -40,6 +40,7 @@ export default function DashboardPage() {
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userDocLoaded, setUserDocLoaded] = useState(false);
+  const [activeTab, setActiveTab] = useState<"annonces" | "messages">("annonces");
 
   const loadUserDoc = async (u: any) => {
     try {
@@ -196,11 +197,11 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
-      {firestoreError && (
+      {/* {firestoreError && (
         <div className="w-full max-w-3xl mb-4 px-4 py-3 rounded-xl bg-rose-50 text-rose-700 border border-rose-200">
           {firestoreError}
         </div>
-      )}
+      )} */}
       <div className="w-full max-w-3xl flex flex-col items-center mb-6">
         <div className="flex items-center justify-center gap-4 w-full">
           <Image
@@ -216,137 +217,162 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <button
-        onClick={() => {
-          setEditAnnonce(null);
-          setModalOpen(true);
-        }}
-        className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 mb-6 shadow-sm"
-      >
-        <span>➕</span> Nouvelle annonce
-      </button>
+      {/* Onglets */}
+      <div className="w-full max-w-3xl flex gap-2 mb-6">
+        <button
+          className={`flex-1 px-4 py-2 rounded-t-lg font-semibold transition ${
+            activeTab === "annonces"
+              ? "bg-blue-600 text-white shadow"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+          }`}
+          onClick={() => setActiveTab("annonces")}
+        >
+          Mes annonces
+        </button>
+        <button
+          className={`flex-1 px-4 py-2 rounded-t-lg font-semibold transition ${
+            activeTab === "messages"
+              ? "bg-blue-600 text-white shadow"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+          }`}
+          onClick={() => setActiveTab("messages")}
+        >
+          Messages reçus
+        </button>
+      </div>
 
-      <div className="w-full max-w-3xl">
-        <h2 className="text-2xl font-semibold mb-4">Mes annonces</h2>
-
-        {loadingAnnonces ? (
-          <p className="text-gray-500">Chargement de vos annonces...</p>
-        ) : mesAnnonces.length === 0 ? (
-          <p className="text-gray-500">Aucune annonce pour le moment.</p>
-        ) : (
-          <div className="flex flex-col gap-4 w-full">
-            {/* Chaque AnnonceCard prend toute la largeur disponible et est centrée */}
-            {mesAnnonces.map((annonce) => (
-              <div key={annonce.id} className="w-full">
-                <AnnonceCard
-                  {...annonce}
-                  imageUrl={annonce.imageUrl || defaultAnnonceImg}
-                  onDelete={() => {
-                    setSelectedAnnonceToDelete(annonce);
-                    setConfirmModalOpen(true);
-                  }}
-                  onEdit={() => {
-                    setEditAnnonce(annonce);
-                    setModalOpen(true);
-                  }}
-                />
+      {/* Contenu des onglets */}
+      <div className="w-full max-w-3xl bg-white rounded-b-xl shadow p-6">
+        {activeTab === "annonces" && (
+          <>
+            <button
+              onClick={() => {
+                setEditAnnonce(null);
+                setModalOpen(true);
+              }}
+              className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 mb-6 shadow-sm"
+            >
+              <span>➕</span> Nouvelle annonce
+            </button>
+            <h2 className="text-2xl font-semibold mb-4">Mes annonces</h2>
+            {loadingAnnonces ? (
+              <p className="text-gray-500">Chargement de vos annonces...</p>
+            ) : mesAnnonces.length === 0 ? (
+              <p className="text-gray-500">Aucune annonce pour le moment.</p>
+            ) : (
+              <div className="flex flex-col gap-4 w-full">
+                {/* Chaque AnnonceCard prend toute la largeur disponible et est centrée */}
+                {mesAnnonces.map((annonce) => (
+                  <div key={annonce.id} className="w-full">
+                    <AnnonceCard
+                      {...annonce}
+                      imageUrl={annonce.imageUrl || defaultAnnonceImg}
+                      onDelete={() => {
+                        setSelectedAnnonceToDelete(annonce);
+                        setConfirmModalOpen(true);
+                      }}
+                      onEdit={() => {
+                        setEditAnnonce(annonce);
+                        setModalOpen(true);
+                      }}
+                    />
+                  </div>
+                ))}
+                {loadingMore && (
+                  <p className="text-center text-gray-500 mt-4">Chargement…</p>
+                )}
+                {!hasMore && (
+                  <p className="text-center text-gray-400 mt-4">Toutes les annonces sont chargées.</p>
+                )}
               </div>
-            ))}
-            {loadingMore && (
-              <p className="text-center text-gray-500 mt-4">Chargement…</p>
             )}
-            {!hasMore && (
-              <p className="text-center text-gray-400 mt-4">Toutes les annonces sont chargées.</p>
+            <AnnonceModal
+              isOpen={modalOpen}
+              onClose={() => {
+                setModalOpen(false);
+                setEditAnnonce(null);
+              }}
+              annonce={editAnnonce}
+              onSubmit={async ({ titre, ville, prix, imageUrl, surface, description, nbChambres, equipements }) => {
+                try {
+                  const annonceData: any = { titre, ville, prix: prix ? Number(prix) : null, imageUrl, surface: surface ? Number(surface) : null, description: description || "", nbChambres: nbChambres ? Number(nbChambres) : null, equipements: equipements || "" };
+                  Object.keys(annonceData).forEach(k => (annonceData[k] === null || annonceData[k] === "") && delete annonceData[k]);
+                  if (editAnnonce) {
+                    await updateAnnonce(editAnnonce.id, annonceData);
+                    showToast("success", "Annonce modifiée avec succès ✅");
+                  } else {
+                    await addAnnonce({ uid: user!.uid, email: user!.email }, annonceData);
+                    showToast("success", "Annonce créée avec succès ✅");
+                  }
+                } catch (err: any) {
+                  console.error("[Dashboard][AnnonceSubmit] Erreur Firestore brute :", err);
+                  showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de l'enregistrement ❌");
+                }
+              }}
+            />
+            <ConfirmModal
+              isOpen={confirmModalOpen}
+              onClose={() => setConfirmModalOpen(false)}
+              onConfirm={async () => {
+                if (!selectedAnnonceToDelete) return;
+                showToast("info", "Suppression en cours...");
+                try {
+                  await deleteAnnonceSvc(selectedAnnonceToDelete.id);
+                  showToast("success", "Annonce supprimée avec succès ✅");
+                } catch (err: any) {
+                  console.error("[Dashboard][DeleteAnnonce] Erreur brute :", err);
+                  showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de la suppression ❌");
+                } finally {
+                  setSelectedAnnonceToDelete(null);
+                }
+              }}
+            />
+          </>
+        )}
+
+        {activeTab === "messages" && (
+          <>
+            <h2 className="text-2xl font-bold mb-4">Messages reçus</h2>
+            {messages.length === 0 ? (
+              <p className="text-gray-500">Aucun message reçu.</p>
+            ) : (
+              <ul className="space-y-4">
+                {messages.map((msg) => (
+                  <li key={msg.id} className="bg-white rounded shadow p-4">
+                    <div className="mb-2 text-gray-700">
+                      <span className="font-semibold">De :</span> {msg.fromEmail}
+                    </div>
+                    <div className="mb-2 text-gray-700">
+                      <span className="font-semibold">Message :</span> {msg.content}
+                    </div>
+                    <div className="mb-2 text-gray-500 text-xs">
+                      {msg.createdAt?.seconds
+                        ? new Date(msg.createdAt.seconds * 1000).toLocaleString()
+                        : ""}
+                    </div>
+                    <button
+                      className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                      onClick={() => setReplyTo(msg)}
+                    >
+                      Répondre
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
-          </div>
+            {/* Modal pour répondre */}
+            {replyTo && (
+              <MessageModal
+                annonceId={replyTo.annonceId}
+                annonceOwnerId={replyTo.fromUserId}
+                isOpen={!!replyTo}
+                onClose={() => setReplyTo(null)}
+                onSent={() => setReplyTo(null)}
+              />
+            )}
+          </>
         )}
       </div>
-
-      <AnnonceModal
-        isOpen={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setEditAnnonce(null);
-        }}
-        annonce={editAnnonce}
-        onSubmit={async ({ titre, ville, prix, imageUrl, surface, description, nbChambres, equipements }) => {
-          try {
-            const annonceData: any = { titre, ville, prix: prix ? Number(prix) : null, imageUrl, surface: surface ? Number(surface) : null, description: description || "", nbChambres: nbChambres ? Number(nbChambres) : null, equipements: equipements || "" };
-            Object.keys(annonceData).forEach(k => (annonceData[k] === null || annonceData[k] === "") && delete annonceData[k]);
-            if (editAnnonce) {
-              await updateAnnonce(editAnnonce.id, annonceData);
-              showToast("success", "Annonce modifiée avec succès ✅");
-            } else {
-              await addAnnonce({ uid: user!.uid, email: user!.email }, annonceData);
-              showToast("success", "Annonce créée avec succès ✅");
-            }
-          } catch (err: any) {
-            console.error("[Dashboard][AnnonceSubmit] Erreur Firestore brute :", err);
-            showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de l'enregistrement ❌");
-          }
-        }}
-      />
-
-      <ConfirmModal
-        isOpen={confirmModalOpen}
-        onClose={() => setConfirmModalOpen(false)}
-        onConfirm={async () => {
-          if (!selectedAnnonceToDelete) return;
-          showToast("info", "Suppression en cours...");
-          try {
-            await deleteAnnonceSvc(selectedAnnonceToDelete.id);
-            showToast("success", "Annonce supprimée avec succès ✅");
-          } catch (err: any) {
-            console.error("[Dashboard][DeleteAnnonce] Erreur brute :", err);
-            showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de la suppression ❌");
-          } finally {
-            setSelectedAnnonceToDelete(null);
-          }
-        }}
-      />
-
-      {/* Section messagerie */}
-      <div className="w-full max-w-3xl mt-10">
-        <h2 className="text-2xl font-bold mb-4">Messages reçus</h2>
-        {messages.length === 0 ? (
-          <p className="text-gray-500">Aucun message reçu.</p>
-        ) : (
-          <ul className="space-y-4">
-            {messages.map((msg) => (
-              <li key={msg.id} className="bg-white rounded shadow p-4">
-                <div className="mb-2 text-gray-700">
-                  <span className="font-semibold">De :</span> {msg.fromEmail}
-                </div>
-                <div className="mb-2 text-gray-700">
-                  <span className="font-semibold">Message :</span> {msg.content}
-                </div>
-                <div className="mb-2 text-gray-500 text-xs">
-                  {msg.createdAt?.seconds
-                    ? new Date(msg.createdAt.seconds * 1000).toLocaleString()
-                    : ""}
-                </div>
-                <button
-                  className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
-                  onClick={() => setReplyTo(msg)}
-                >
-                  Répondre
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* Modal pour répondre */}
-      {replyTo && (
-        <MessageModal
-          annonceId={replyTo.annonceId}
-          annonceOwnerId={replyTo.fromUserId}
-          isOpen={!!replyTo}
-          onClose={() => setReplyTo(null)}
-          onSent={() => setReplyTo(null)}
-        />
-      )}
 
       <Toast
         toasts={toasts}

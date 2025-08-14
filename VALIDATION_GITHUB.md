@@ -1,0 +1,1 @@
+Modification validée : séparation de la page admin en composants, gestion des utilisateurs et annonces, notifications toast, et contrôle des doublons lors de la création d'utilisateur. Fonctionnalités testées et opérationnelles.
