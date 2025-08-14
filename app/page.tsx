@@ -23,6 +23,10 @@ export default function HomePage() {
   const [prixMax, setPrixMax] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<"date" | "prix">("date");
 
+  // NOUVEAU: onglets accueil
+  const [activeHomeTab, setActiveHomeTab] = useState<"annonces" | "colocataires" | null>(null);
+  const [firestoreError, setFirestoreError] = useState<string | null>(null);
+
   // Image d'annonce par défaut (16:9)
   const defaultAnnonceImg =
     "data:image/svg+xml;utf8," +
@@ -39,29 +43,30 @@ export default function HomePage() {
     );
 
   const loadAnnonces = async () => {
-    if (loadingMore || !hasMore) return;
+    // Ne rien charger si aucun choix n’a été fait
+    if (activeHomeTab === null) return;
+    if (loadingMore || !hasMore || firestoreError) return;
     setLoadingMore(true);
 
     try {
-      let baseQuery: any = query(
-        collection(db, "annonces")
-      );
+      // Choix collection et champs selon onglet
+      const isColoc = activeHomeTab === "colocataires";
+      const collectionName = isColoc ? "colocataires" : "annonces";
+      const priceField = isColoc ? "budget" : "prix";
+      const orderField = sortBy === "date" ? "createdAt" : priceField;
+
+      let baseQuery: any = query(collection(db, collectionName));
 
       if (prixMax !== null) {
-        baseQuery = query(baseQuery, where("prix", "<=", prixMax));
+        baseQuery = query(baseQuery, where(priceField, "<=", prixMax));
       }
-
       if (ville) {
-        baseQuery = query(
-          baseQuery,
-          where("ville", "==", ville)
-        );
+        baseQuery = query(baseQuery, where("ville", "==", ville));
       }
 
-      // Augmentez la limite pour charger plus d'annonces d'un coup
       baseQuery = query(
         baseQuery,
-        orderBy(sortBy === "date" ? "createdAt" : "prix", sortBy === "date" ? "desc" : "asc"),
+        orderBy(orderField, sortBy === "date" ? "desc" : "asc"),
         limit(10)
       );
 
@@ -71,10 +76,29 @@ export default function HomePage() {
 
       const snapshot = await getDocs(paginatedQuery);
 
-      const docs = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...(doc.data() as Record<string, any>),
-      }));
+      // Normalisation: map en forme AnnonceCard-friendly
+      const docs = snapshot.docs.map((doc) => {
+        const d = doc.data() as Record<string, any>;
+        return isColoc
+          ? {
+              id: doc.id,
+              titre: d.nom || "Recherche colocation",
+              ville: d.ville,
+              prix: d.budget,
+              surface: undefined,
+              description: d.description,
+              imageUrl: d.imageUrl || defaultAnnonceImg,
+            }
+          : {
+              id: doc.id,
+              titre: d.titre,
+              ville: d.ville,
+              prix: d.prix,
+              surface: d.surface,
+              description: d.description,
+              imageUrl: d.imageUrl || defaultAnnonceImg,
+            };
+      });
 
       setAnnonces((prev) => {
         const existingIds = new Set(prev.map((a) => a.id));
@@ -86,23 +110,45 @@ export default function HomePage() {
       } else {
         setHasMore(false);
       }
-    } catch (err) {
-      console.error("Erreur chargement annonces :", err);
+    } catch (err: any) {
+      console.error("Erreur chargement :", err);
+      if (err?.code === "permission-denied") {
+        const cible = activeHomeTab === "colocataires" ? "la liste des colocataires" : "les annonces";
+        setFirestoreError(
+          `Accès refusé pour ${cible}. Vérifie les règles Firestore (lecture publique de la collection "${activeHomeTab}").`
+        );
+        setHasMore(false);
+      }
     }
 
     setLoadingMore(false);
   };
 
+  // loadAnnonces n'est plus appelé au mount: on attend le choix de l'utilisateur
+
+  // Reset quand on change d’onglet: ne lance que si onglet sélectionné
   useEffect(() => {
+    if (activeHomeTab === null) return;
+    setFirestoreError(null);
+    setAnnonces([]);
+    setLastDoc(null);
+    setHasMore(true);
     loadAnnonces();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeHomeTab]);
 
   useEffect(() => {
     const handleScroll = () => {
       const bottom =
         window.innerHeight + window.scrollY >= document.body.offsetHeight - 100;
 
-      if (bottom && hasMore && !loadingMore) {
+      if (
+        activeHomeTab !== null && // bloquer si pas de choix
+        bottom &&
+        hasMore &&
+        !loadingMore &&
+        !firestoreError
+      ) {
         loadAnnonces();
       }
     };
@@ -113,92 +159,180 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
-      <h1 className="text-3xl font-bold mb-6 text-center">Annonces de colocation</h1>
+      {/* Ecran de CHOIX initial */}
+      {activeHomeTab === null ? (
+        <section className="w-full max-w-6xl flex flex-col items-center">
+          <h1 className="text-3xl font-bold mb-2 text-center">Que souhaitez-vous rechercher ?</h1>
+          <p className="text-slate-600 mb-8 text-center">Choisissez un type de recherche pour commencer.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full">
+            <button
+              className="group bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition text-left"
+              onClick={() => setActiveHomeTab("annonces")}
+            >
+              <div className="text-2xl mb-2">🏠</div>
+              <h2 className="text-xl font-semibold mb-1">Je cherche une colocation</h2>
+              <p className="text-slate-600">Voir les annonces de logements à partager.</p>
+              <div className="mt-4 inline-flex items-center gap-2 text-blue-600 group-hover:underline">
+                Commencer
+                <span>→</span>
+              </div>
+            </button>
+            <button
+              className="group bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition text-left"
+              onClick={() => setActiveHomeTab("colocataires")}
+            >
+              <div className="text-2xl mb-2">👥</div>
+              <h2 className="text-xl font-semibold mb-1">Je cherche colocataire(s) </h2>
+              <p className="text-slate-600">Voir les profils des personnes recherchant une colocation.</p>
+              <div className="mt-4 inline-flex items-center gap-2 text-blue-600 group-hover:underline">
+                Commencer
+                <span>→</span>
+              </div>
+            </button>
+          </div>
+        </section>
+      ) : (
+        <>
+          {/* Option: changer de type de recherche */}
+          <div className="w-full max-w-6xl flex justify-end mb-2">
+            <button
+              className="text-sm text-slate-600 underline hover:text-slate-800"
+              onClick={() => {
+                setActiveHomeTab(null);
+                setFirestoreError(null);
+                setAnnonces([]);
+                setLastDoc(null);
+                setHasMore(true);
+              }}
+            >
+              Changer de type de recherche
+            </button>
+          </div>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          setAnnonces([]);
-          setLastDoc(null);
-          setHasMore(true);
-          loadAnnonces();
-        }}
-        className="mb-6 w-full max-w-4xl bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-wrap gap-4 items-end justify-center"
-      >
-        <div>
-          <label className="block text-sm font-medium mb-1">Ville</label>
-          <input
-            type="text"
-            value={ville}
-            onChange={(e) => setVille(e.target.value)}
-            className="border border-gray-300 rounded px-3 py-2 w-full"
-            placeholder="Ex: Saint-Denis"
-          />
-        </div>
+          {/* Onglets Accueil (conservés, affichés après le choix) */}
+          <div className="w-full max-w-6xl flex gap-2 mb-4">
+            <button
+              className={`flex-1 px-4 py-2 rounded-lg font-semibold transition ${
+                activeHomeTab === "annonces"
+                  ? "bg-blue-600 text-white shadow"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+              onClick={() => setActiveHomeTab("annonces")}
+            >
+              Annonces
+            </button>
+            <button
+              className={`flex-1 px-4 py-2 rounded-lg font-semibold transition ${
+                activeHomeTab === "colocataires"
+                  ? "bg-blue-600 text-white shadow"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+              onClick={() => setActiveHomeTab("colocataires")}
+            >
+              Colocataires
+            </button>
+          </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Prix max (€)</label>
-          <input
-            type="number"
-            value={prixMax ?? ""}
-            onChange={(e) => setPrixMax(Number(e.target.value) || null)}
-            className="border border-gray-300 rounded px-3 py-2 w-full"
-            placeholder="Ex: 600"
-          />
-        </div>
+          {firestoreError && (
+            <div className="w-full max-w-6xl mb-4 px-4 py-3 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-sm">
+              {firestoreError}
+            </div>
+          )}
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Trier par</label>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as "date" | "prix")}
-            className="border border-gray-300 rounded px-3 py-2 w-full"
+          <h1 className="text-3xl font-bold mb-6 text-center">
+            {activeHomeTab === "annonces" ? "Annonces de colocation" : "Profils de colocataires"}
+          </h1>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setFirestoreError(null);
+              setAnnonces([]);
+              setLastDoc(null);
+              setHasMore(true);
+              loadAnnonces();
+            }}
+            className="mb-6 w-full max-w-4xl bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-wrap gap-4 items-end justify-center"
           >
-            <option value="date">Date récente</option>
-            <option value="prix">Prix croissant</option>
-          </select>
-        </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Ville</label>
+              <input
+                type="text"
+                value={ville}
+                onChange={(e) => setVille(e.target.value)}
+                className="border border-gray-300 rounded px-3 py-2 w-full"
+                placeholder="Ex: Saint-Denis"
+              />
+            </div>
 
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-          Filtrer
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setVille("");
-            setPrixMax(null);
-            setSortBy("date");
-            setAnnonces([]);
-            setLastDoc(null);
-            setHasMore(true);
-            loadAnnonces();
-          }}
-          className="border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50"
-        >
-          Réinitialiser
-        </button>
-      </form>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                {activeHomeTab === "annonces" ? "Prix max (€)" : "Budget max (€)"}
+              </label>
+              <input
+                type="number"
+                value={prixMax ?? ""}
+                onChange={(e) => setPrixMax(Number(e.target.value) || null)}
+                className="border border-gray-300 rounded px-3 py-2 w-full"
+                placeholder={activeHomeTab === "annonces" ? "Ex: 600" : "Ex: 600"}
+              />
+            </div>
 
-      <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {annonces.map((annonce) => (
-          <AnnonceCard
-            key={annonce.id}
-            id={annonce.id}
-            titre={annonce.titre}
-            ville={annonce.ville}
-            prix={annonce.prix}
-            surface={annonce.surface}
-            description={annonce.description}
-            imageUrl={annonce.imageUrl || defaultAnnonceImg}
-          />
-        ))}
+            <div>
+              <label className="block text-sm font-medium mb-1">Trier par</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as "date" | "prix")}
+                className="border border-gray-300 rounded px-3 py-2 w-full"
+              >
+                <option value="date">Date récente</option>
+                <option value="prix">{activeHomeTab === "annonces" ? "Prix croissant" : "Budget croissant"}</option>
+              </select>
+            </div>
 
-        {loadingMore && <p className="text-slate-500 text-center mt-4 col-span-full">Chargement...</p>}
+            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+              Filtrer
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFirestoreError(null);
+                setVille("");
+                setPrixMax(null);
+                setSortBy("date");
+                setAnnonces([]);
+                setLastDoc(null);
+                setHasMore(true);
+                loadAnnonces();
+              }}
+              className="border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50"
+            >
+              Réinitialiser
+            </button>
+          </form>
 
-        {!hasMore && annonces.length > 0 && (
-          <p className="text-slate-400 text-center mt-4 col-span-full">Toutes les annonces sont affichées.</p>
-        )}
-      </div>
+          <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {annonces.map((annonce) => (
+              <AnnonceCard
+                key={annonce.id}
+                id={annonce.id}
+                titre={annonce.titre}
+                ville={annonce.ville}
+                prix={annonce.prix}
+                surface={annonce.surface}
+                description={annonce.description}
+                imageUrl={annonce.imageUrl || defaultAnnonceImg}
+              />
+            ))}
+
+            {loadingMore && <p className="text-slate-500 text-center mt-4 col-span-full">Chargement...</p>}
+
+            {!hasMore && annonces.length > 0 && (
+              <p className="text-slate-400 text-center mt-4 col-span-full">Toutes les cartes sont affichées.</p>
+            )}
+          </div>
+        </>
+      )}
     </main>
   );
 }

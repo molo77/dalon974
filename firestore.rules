@@ -1,55 +1,55 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helpers
     function isSignedIn() {
       return request.auth != null;
     }
-
-    function userDoc(uid) {
-      return get(/databases/$(database)/documents/users/$(uid));
-    }
-
-    function roleOf(uid) {
-      return userDoc(uid).data.role;
-    }
-
     function isAdmin() {
-      return isSignedIn() && roleOf(request.auth.uid) == "admin";
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+    // Créateur du doc = champ uid sur le doc
+    function isOwner(resourceUid) {
+      return isSignedIn() && resourceUid == request.auth.uid;
     }
 
-    // Validation helpers
-    function isString(field) {
-      return field is string;
+    // Lecture publique des listes
+    match /annonces/{id} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isOwner(resource.data.uid) || isAdmin();
     }
 
-    function optionalString(field) {
-      return !(field in request.resource.data) || isString(request.resource.data[field]);
+    match /colocataires/{id} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isOwner(resource.data.uid) || isAdmin();
     }
 
-    // USERS COLLECTION
-    match /users/{userId} {
+    // Messagerie: visibilité stricte
+    match /messages/{id} {
+      allow read: if isSignedIn() &&
+        (
+          resource.data.annonceOwnerId == request.auth.uid ||
+          resource.data.fromUserId == request.auth.uid
+        );
+      allow create: if isSignedIn() &&
+        request.resource.data.fromUserId == request.auth.uid &&
+        // validations basiques
+        request.resource.data.annonceId is string &&
+        request.resource.data.annonceOwnerId is string &&
+        request.resource.data.fromEmail is string &&
+        request.resource.data.content is string &&
+        request.resource.data.createdAt != null;
+      allow update, delete: if false; // adapter si nécessaire
+    }
 
-      // Read:
-      // - Un utilisateur ne peut lire que son propre document
-      // - Un admin peut lire tous les documents
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      // Listing complet réservé aux admins
-      allow list: if isAdmin();
-
-      // Create: auto (Firebase Auth + Cloud Function souvent) – on autorise l'utilisateur à créer son propre doc si inexistant
-      allow create: if isSignedIn() && request.auth.uid == userId
-        && request.resource.data.role == "user" // On empêche l'auto‑attribution admin
-        && request.resource.data.email == request.auth.token.email;
-
-      // Update:
-      // - Un utilisateur peut modifier displayName uniquement (et éventuellement providerId neutre)
-      // - Un admin peut tout modifier (sauf se retirer lui-même totalement si vous souhaitez empêcher ça)
-      allow update: if isSignedIn() && (
-        // Self-limited
-        (request.auth.uid == userId &&
-          !('role' in request.resource.data.diff(resource.data)) && // pas de changement de rôle
+    // Users: lecture/écriture restreinte (admin uniquement)
+    match /users/{uid} {
+      allow read, write: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+    }
+  }
+}
           request.resource.data.email == resource.data.email // email immuable ici
         )
         ||
@@ -128,5 +128,4 @@ service cloud.firestore {
         && data.userId is string
         && data.userEmail is string;
     }
-  }
-}
+  

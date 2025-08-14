@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
-import { collection, getDocs, query, where, onSnapshot, orderBy, doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, onSnapshot, orderBy, doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import Image from "next/image";
 import AnnonceCard from "@/components/AnnonceCard";
 import AnnonceModal from "@/components/AnnonceModal";
@@ -41,7 +41,7 @@ export default function DashboardPage() {
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userDocLoaded, setUserDocLoaded] = useState(false);
-  const [activeTab, setActiveTab] = useState<"annonces" | "messages">("annonces");
+  const [activeTab, setActiveTab] = useState<"annonces" | "messages" | "coloc">("annonces");
   const [activeMsgTab, setActiveMsgTab] = useState<"received" | "sent">("received");
   const [sentMessages, setSentMessages] = useState<any[]>([]);
   // Nouveau: cache des titres d’annonces
@@ -331,6 +331,93 @@ export default function DashboardPage() {
     })();
   }, [messages, sentMessages, annonceTitles, db]);
 
+  // Profil colocataire
+  const [loadingColoc, setLoadingColoc] = useState(true);
+  const [savingColoc, setSavingColoc] = useState(false);
+  const [hasColocProfile, setHasColocProfile] = useState(false);
+  const [colocNom, setColocNom] = useState("");
+  const [colocVille, setColocVille] = useState("");
+  const [colocBudget, setColocBudget] = useState<number | "">("");
+  const [colocDescription, setColocDescription] = useState("");
+  const [colocImageUrl, setColocImageUrl] = useState("");
+
+  // Charger le profil colocataire (doc: colocataires/{uid})
+  useEffect(() => {
+    if (!user || !userDocLoaded) return;
+    (async () => {
+      setLoadingColoc(true);
+      try {
+        const ref = doc(db, "colocataires", user.uid);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          const d = snap.data() as any;
+          setColocNom(d.nom || user.displayName || user.email || "");
+          setColocVille(d.ville || "");
+          setColocBudget(typeof d.budget === "number" ? d.budget : "");
+          setColocDescription(d.description || "");
+          setColocImageUrl(d.imageUrl || "");
+          setHasColocProfile(true);
+        } else {
+          setColocNom(user.displayName || user.email || "");
+          setColocVille("");
+          setColocBudget("");
+          setColocDescription("");
+          setColocImageUrl("");
+          setHasColocProfile(false);
+        }
+      } catch (e) {
+        console.warn("[Dashboard][Coloc][load]", e);
+      }
+      setLoadingColoc(false);
+    })();
+  }, [user, userDocLoaded]);
+
+  const saveColocProfile = async () => {
+    if (!user) return;
+    setSavingColoc(true);
+    try {
+      const ref = doc(db, "colocataires", user.uid);
+      const payload: any = {
+        uid: user.uid,
+        nom: colocNom || user.displayName || user.email || "Profil",
+        ville: colocVille || null,
+        budget: typeof colocBudget === "number" ? colocBudget : null,
+        description: colocDescription || "",
+        imageUrl: colocImageUrl || "",
+        updatedAt: serverTimestamp(),
+      };
+      if (!hasColocProfile) payload.createdAt = serverTimestamp();
+
+      // Nettoyage des null pour rester propre
+      Object.keys(payload).forEach((k) => (payload[k] === null ? delete payload[k] : null));
+
+      await setDoc(ref, payload, { merge: true });
+      setHasColocProfile(true);
+      showToast("success", "Profil colocataire enregistré ✅");
+    } catch (e: any) {
+      console.error("[Dashboard][Coloc][save]", e);
+      showToast("error", translateFirebaseError(e?.code) || "Erreur sauvegarde du profil.");
+    } finally {
+      setSavingColoc(false);
+    }
+  };
+
+  const deleteColocProfile = async () => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, "colocataires", user.uid));
+      setHasColocProfile(false);
+      setColocVille("");
+      setColocBudget("");
+      setColocDescription("");
+      setColocImageUrl("");
+      showToast("success", "Profil colocataire supprimé ✅");
+    } catch (e: any) {
+      console.error("[Dashboard][Coloc][delete]", e);
+      showToast("error", translateFirebaseError(e?.code) || "Erreur suppression du profil.");
+    }
+  };
+
   return (
     <div className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
       {/* {firestoreError && (
@@ -373,7 +460,17 @@ export default function DashboardPage() {
           }`}
           onClick={() => setActiveTab("messages")}
         >
-          Messages reçus
+          Messages
+        </button>
+        <button
+          className={`flex-1 px-4 py-2 rounded-t-lg font-semibold transition ${
+            activeTab === "coloc"
+              ? "bg-blue-600 text-white shadow"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+          }`}
+          onClick={() => setActiveTab("coloc")}
+        >
+          Profil colocataire
         </button>
       </div>
 
@@ -576,6 +673,93 @@ export default function DashboardPage() {
                   </ul>
                 )}
               </>
+            )}
+          </>
+        )}
+
+        {activeTab === "coloc" && (
+          <>
+            <h2 className="text-2xl font-semibold mb-4">Mon profil colocataire</h2>
+            {loadingColoc ? (
+              <p className="text-gray-500">Chargement du profil…</p>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  saveColocProfile();
+                }}
+                className="flex flex-col gap-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium mb-1">Nom</label>
+                  <input
+                    type="text"
+                    value={colocNom}
+                    onChange={(e) => setColocNom(e.target.value)}
+                    className="border rounded px-3 py-2 w-full"
+                    placeholder="Votre nom"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Ville</label>
+                  <input
+                    type="text"
+                    value={colocVille}
+                    onChange={(e) => setColocVille(e.target.value)}
+                    className="border rounded px-3 py-2 w-full"
+                    placeholder="Ex: Saint-Denis"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Budget (€)</label>
+                  <input
+                    type="number"
+                    value={colocBudget}
+                    onChange={(e) => setColocBudget(e.target.value ? Number(e.target.value) : "")}
+                    className="border rounded px-3 py-2 w-full"
+                    placeholder="Ex: 600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Image (URL)</label>
+                  <input
+                    type="url"
+                    value={colocImageUrl}
+                    onChange={(e) => setColocImageUrl(e.target.value)}
+                    className="border rounded px-3 py-2 w-full"
+                    placeholder="https://…"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Description</label>
+                  <textarea
+                    value={colocDescription}
+                    onChange={(e) => setColocDescription(e.target.value)}
+                    className="border rounded px-3 py-2 w-full"
+                    rows={4}
+                    placeholder="Parlez de vous, vos critères, etc."
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    disabled={savingColoc}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    {savingColoc ? "Enregistrement..." : hasColocProfile ? "Mettre à jour" : "Créer mon profil"}
+                  </button>
+                  {hasColocProfile && (
+                    <button
+                      type="button"
+                      onClick={deleteColocProfile}
+                      className="bg-rose-600 text-white px-4 py-2 rounded-lg hover:bg-rose-700"
+                    >
+                      Supprimer
+                    </button>
+                  )}
+                </div>
+              </form>
             )}
           </>
         )}
