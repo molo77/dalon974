@@ -6,6 +6,7 @@ import Register from "@/components/Register";
 import { translateFirebaseError } from "@/lib/firebaseErrors";
 import { signInEmail, signInGoogle, resetPassword } from "@/lib/services/authService";
 import useAuthRedirect from "@/hooks/useAuthRedirect";
+import { toast as appToast } from "@/components/Toast";
 
 export default function LoginPage() {
   const [authMessage, setAuthMessage] = useState<string | null>(null);
@@ -25,6 +26,7 @@ export default function LoginPage() {
     try {
       await signInEmail(loginEmail, loginPassword);
       setAuthMessage("Connexion Email réussie !");
+      appToast.success("Connexion Email réussie !");
       setShowLogin(false);
       setLoginEmail("");
       setLoginPassword("");
@@ -33,11 +35,14 @@ export default function LoginPage() {
       if (error?.code) {
         if (["auth/invalid-login-credentials","auth/invalid-credential"].includes(error.code)) {
           setLoginErrorModal("Impossible de se connecter : identifiants invalides. Vérifiez votre email et votre mot de passe.");
+          appToast.error("Identifiants invalides. Vérifiez votre email et votre mot de passe.");
         } else {
           setAuthMessage(translateFirebaseError(error.code));
+          appToast.error(translateFirebaseError(error.code));
         }
       } else {
         setAuthMessage("Erreur Connexion Email.");
+        appToast.error("Erreur Connexion Email.");
       }
     }
   };
@@ -48,10 +53,13 @@ export default function LoginPage() {
     try {
       await signInGoogle();
       setAuthMessage("Connexion Google réussie !");
+      appToast.success("Connexion Google réussie !");
       // plus de création doc ici: géré dans le service
     } catch (error: any) {
       console.error("[Auth][Google] Erreur brute :", error);
-      setAuthMessage(error?.code ? translateFirebaseError(error.code) : "Erreur de connexion Google.");
+      const msg = error?.code ? translateFirebaseError(error.code) : "Erreur de connexion Google.";
+      setAuthMessage(msg);
+      appToast.error(msg);
     }
   };
 
@@ -59,16 +67,20 @@ export default function LoginPage() {
     if (e) e.preventDefault();
     if (!resetEmail) {
       setAuthMessage("Veuillez saisir votre email.");
+      appToast.error("Veuillez saisir votre email.");
       return;
     }
     try {
       await resetPassword(resetEmail);
       setAuthMessage("Un email de réinitialisation a été envoyé.");
+      appToast.info("Un email de réinitialisation a été envoyé.");
       setShowReset(false);
       setResetEmail("");
     } catch (error: any) {
       console.error("[Auth][ResetPassword] Erreur brute :", error);
-      setAuthMessage(error?.code ? translateFirebaseError(error.code) : "Erreur lors de la réinitialisation.");
+      const msg = error?.code ? translateFirebaseError(error.code) : "Erreur lors de la réinitialisation.";
+      setAuthMessage(msg);
+      appToast.error(msg);
     }
   };
 
@@ -115,7 +127,10 @@ export default function LoginPage() {
 
       {/* Modales */}
       {showSignup && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setShowSignup(false); }}
+        >
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
             <h2 className="text-xl font-bold mb-2 text-center">Inscription Email</h2>
             <Register onSuccess={() => setShowSignup(false)} />
@@ -130,7 +145,10 @@ export default function LoginPage() {
         </div>
       )}
       {showLogin && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setShowLogin(false); }}
+        >
           <form
             onSubmit={handleEmailLogin}
             className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm flex flex-col gap-4"
@@ -182,7 +200,10 @@ export default function LoginPage() {
         </div>
       )}
       {loginErrorModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setLoginErrorModal(null); }}
+        >
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
             <h2 className="text-xl font-bold text-red-700 mb-2 text-center">Erreur de connexion</h2>
             <p className="text-gray-700 text-center">{loginErrorModal}</p>
@@ -196,7 +217,10 @@ export default function LoginPage() {
         </div>
       )}
       {showReset && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setShowReset(false); }}
+        >
           <form
             onSubmit={handleResetPassword}
             className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm flex flex-col gap-4"

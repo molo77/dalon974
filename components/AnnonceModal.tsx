@@ -1,15 +1,15 @@
 "use client";
-
-import { Dialog, Transition } from "@headlessui/react";
 import { Fragment, useEffect, useState } from "react";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { toast as appToast } from "@/components/Toast";
 
 export default function AnnonceModal({
   isOpen,
   onClose,
   onSubmit,
   annonce,
-  villeDropdown, // compat (ancien)
-  villeDatalist, // NOUVEAU
+  villeDropdown, // compat
+  villeDatalist, // input + datalist
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -22,9 +22,9 @@ export default function AnnonceModal({
     nbChambres?: string;
     equipements?: string;
     description?: string;
+    photos?: string[];
   }) => void;
   annonce?: any | null;
-  // Compat: ancien select
   villeDropdown?: {
     value: string;
     onChange: (v: string) => void;
@@ -32,7 +32,6 @@ export default function AnnonceModal({
     sub: { name: string; cp: string }[];
     label?: string;
   };
-  // NOUVEAU: input + datalist comme la page d’accueil
   villeDatalist?: {
     value: string;
     onChange: (v: string) => void;
@@ -50,239 +49,130 @@ export default function AnnonceModal({
   const [nbChambres, setNbChambres] = useState("");
   const [equipements, setEquipements] = useState("");
   const [description, setDescription] = useState("");
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (annonce) {
       setTitre(annonce.titre || "");
       setVille(annonce.ville || "");
-      setPrix(annonce.prix?.toString() || "");
+      setPrix(annonce.prix?.toString?.() || "");
       setImageUrl(annonce.imageUrl || "");
-      setSurface(annonce.surface?.toString() || "");
-      setNbChambres(annonce.nbChambres?.toString() || "");
-      if (Array.isArray(annonce.equipements)) {
-        setEquipements(annonce.equipements.join(", "));
-      } else {
-        setEquipements(annonce.equipements || "");
-      }
+      setSurface(annonce.surface?.toString?.() || "");
+      setNbChambres(annonce.nbChambres?.toString?.() || "");
+      setEquipements(Array.isArray(annonce.equipements) ? annonce.equipements.join(", ") : (annonce.equipements || ""));
       setDescription(annonce.description || "");
+      setPhotos(Array.isArray(annonce.photos) ? annonce.photos : []);
     } else {
-      setTitre("");
-      setVille("");
-      setPrix("");
-      setImageUrl("");
-      setSurface("");
-      setNbChambres("");
-      setEquipements("");
-      setDescription("");
+      setTitre(""); setVille(""); setPrix(""); setImageUrl("");
+      setSurface(""); setNbChambres(""); setEquipements(""); setDescription("");
+      setPhotos([]);
     }
   }, [annonce]);
 
+  const uploadAnnoncePhotos = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const storage = getStorage();
+      const uploaded: string[] = [];
+      await Promise.all(
+        Array.from(files).map(async (file) => {
+          const r = ref(storage, `annonces/${annonce?.id || "new"}/${Date.now()}-${file.name}`);
+          await uploadBytes(r, file);
+          const url = await getDownloadURL(r);
+          uploaded.push(url);
+        })
+      );
+      setPhotos((prev) => [...prev, ...uploaded]);
+      if (!imageUrl && uploaded[0]) setImageUrl(uploaded[0]);
+      appToast.success(`${uploaded.length} photo(s) ajoutée(s)`);
+    } catch {
+      appToast.error("Échec de l’upload des photos.");
+    } finally {
+      setUploading(false);
+    }
+  };
+  const removePhoto = (url: string) => setPhotos((prev) => prev.filter((u) => u !== url));
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const villeValue = villeDatalist
-      ? villeDatalist.value
-      : villeDropdown
-      ? villeDropdown.value
-      : ville;
-    onSubmit({
-      titre,
-      ville: villeValue,
-      prix,
-      imageUrl,
-      surface,
-      nbChambres,
-      equipements,
-      description,
-    });
+    const villeValue = villeDatalist ? villeDatalist.value : villeDropdown ? villeDropdown.value : ville;
+    onSubmit({ titre, ville: villeValue, prix, imageUrl, surface, nbChambres, equipements, description, photos });
     onClose();
   };
 
+  if (!isOpen) return null;
   const dlId = villeDatalist?.datalistId || "communes-reu-modal";
 
   return (
-    <Transition show={isOpen} as={Fragment}>
-      <Dialog onClose={onClose} className="relative z-50">
-        <Transition.Child
-          as={Fragment}
-          enter="ease-out duration-300"
-          enterFrom="opacity-0"
-          enterTo="opacity-100"
-          leave="ease-in duration-200"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
-        >
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
-        </Transition.Child>
+    <Fragment>
+      <div
+        className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+        onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      >
+        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto space-y-3">
+          <h3 className="text-lg font-semibold">Modifier l’annonce</h3>
 
-        <div className="fixed inset-0 flex items-center justify-center p-4">
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="scale-95 opacity-0"
-            enterTo="scale-100 opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="scale-100 opacity-100"
-            leaveTo="scale-95 opacity-0"
-          >
-            <Dialog.Panel className="bg-white rounded-lg max-w-2xl w-full p-6 shadow-lg">
-              <Dialog.Title className="text-xl font-bold mb-4">
-                {annonce ? "✏️ Modifier l’annonce" : "➕ Nouvelle annonce"}
-              </Dialog.Title>
+          <input className="border rounded px-3 py-2 w-full" placeholder="Titre" value={titre} onChange={e=>setTitre(e.target.value)} />
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <input
-                  type="text"
-                  placeholder="Titre"
-                  value={titre}
-                  onChange={(e) => setTitre(e.target.value)}
-                  className="w-full p-2 border rounded"
-                  required
-                />
+          {villeDatalist ? (
+            <>
+              <input
+                className="border rounded px-3 py-2 w-full"
+                placeholder={villeDatalist.label || "Commune"}
+                value={villeDatalist.value}
+                onChange={(e)=>villeDatalist.onChange(e.target.value)}
+                list={dlId}
+              />
+              <datalist id={dlId}>
+                {villeDatalist.main.map((c) => (<option key={`m-${c.name}-${c.cp}`} value={c.name}>{`${c.name} (${c.cp})`}</option>))}
+                {villeDatalist.sub.map((c) => (<option key={`s-${c.name}-${c.cp}`} value={c.name}>{`${c.name} (${c.cp})`}</option>))}
+              </datalist>
+            </>
+          ) : (
+            <input className="border rounded px-3 py-2 w-full" placeholder="Commune" value={ville} onChange={e=>setVille(e.target.value)} />
+          )}
 
-                {/* NOUVEAU: Ville en input + datalist (prioritaire) */}
-                {villeDatalist ? (
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      {villeDatalist.label || "Commune"}
-                    </label>
-                    <input
-                      type="text"
-                      value={villeDatalist.value}
-                      onChange={(e) => {
-                        villeDatalist.onChange(e.target.value);
-                        setVille(e.target.value); // compat interne
-                      }}
-                      className="w-full p-2 border rounded"
-                      placeholder="Ex: Saint-Denis ou Saint-Gilles-les-Bains"
-                      list={dlId}
-                      required
-                    />
-                    <datalist id={dlId}>
-                      {villeDatalist.main.map((c) => (
-                        <option key={`c-${c.name}`} value={c.name}>{`${c.name} (${c.cp})`}</option>
-                      ))}
-                      {villeDatalist.sub.map((a) => (
-                        <option key={`a-${a.name}`} value={a.name}>{`${a.name} (${a.cp})`}</option>
-                      ))}
-                    </datalist>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <input className="border rounded px-3 py-2 w-full" placeholder="Prix (€)" type="number" value={prix} onChange={e=>setPrix(e.target.value)} />
+            <input className="border rounded px-3 py-2 w-full" placeholder="Surface (m²)" type="number" value={surface} onChange={e=>setSurface(e.target.value)} />
+            <input className="border rounded px-3 py-2 w-full" placeholder="Nb chambres" type="number" value={nbChambres} onChange={e=>setNbChambres(e.target.value)} />
+            <input className="border rounded px-3 py-2 w-full" placeholder="Équipements (CSV)" value={equipements} onChange={e=>setEquipements(e.target.value)} />
+          </div>
+
+          <textarea className="border rounded px-3 py-2 w-full" rows={4} placeholder="Description" value={description} onChange={e=>setDescription(e.target.value)} />
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Image principale (URL)</label>
+            <input className="border rounded px-3 py-2 w-full" placeholder="https://…" value={imageUrl} onChange={e=>setImageUrl(e.target.value)} />
+            <div className="mt-2 flex items-center gap-2">
+              <input type="file" accept="image/*" multiple onChange={(e)=>uploadAnnoncePhotos(e.target.files)} />
+              {imageUrl && <img src={imageUrl} alt="cover" className="w-16 h-12 object-cover rounded border" />}
+            </div>
+          </div>
+
+          {photos.length > 0 && (
+            <div>
+              <div className="text-sm font-medium mb-1">Galerie</div>
+              <div className="grid grid-cols-3 gap-2">
+                {photos.map((u) => (
+                  <div key={u} className="relative">
+                    <img src={u} alt="photo" className="w-full h-20 object-cover rounded border" />
+                    <button type="button" onClick={() => removePhoto(u)} className="absolute -top-2 -right-2 bg-black/60 text-white rounded-full w-6 h-6" aria-label="Supprimer">✖</button>
                   </div>
-                ) : villeDropdown ? (
-                  // Compat: ancien select si encore fourni
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      {villeDropdown.label || "Commune"}
-                    </label>
-                    <select
-                      value={villeDropdown.value}
-                      onChange={(e) => {
-                        villeDropdown.onChange(e.target.value);
-                        setVille(e.target.value);
-                      }}
-                      className="w-full p-2 border rounded"
-                      required
-                    >
-                      <option value="">— Sélectionner une commune —</option>
-                      <optgroup label="Communes">
-                        {villeDropdown.main.map((c) => (
-                          <option key={`c-${c.name}`} value={c.name}>
-                            {c.name} ({c.cp})
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Sous-communes">
-                        {villeDropdown.sub.map((a) => (
-                          <option key={`a-${a.name}`} value={a.name}>
-                            {a.name} ({a.cp})
-                          </option>
-                        ))}
-                      </optgroup>
-                    </select>
-                  </div>
-                ) : (
-                  // Fallback
-                  <input
-                    type="text"
-                    placeholder="Ville"
-                    value={ville}
-                    onChange={(e) => setVille(e.target.value)}
-                    className="w-full p-2 border rounded"
-                    required
-                  />
-                )}
+                ))}
+              </div>
+            </div>
+          )}
 
-                <input
-                  type="number"
-                  placeholder="Prix (€)"
-                  value={prix}
-                  onChange={(e) => setPrix(e.target.value)}
-                  className="w-full p-2 border rounded"
-                  required
-                />
-
-                <input
-                  type="text"
-                  placeholder="URL de l’image"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  className="w-full p-2 border rounded"
-                />
-
-                <input
-                  type="number"
-                  name="surface"
-                  placeholder="Surface (m²)"
-                  value={surface}
-                  onChange={(e) => setSurface(e.target.value)}
-                  className="w-full p-2 border rounded"
-                />
-
-                <input
-                  type="number"
-                  name="nbChambres"
-                  placeholder="Nombre de chambres"
-                  value={nbChambres}
-                  onChange={(e) => setNbChambres(e.target.value)}
-                  className="w-full p-2 border rounded"
-                />
-
-                <input
-                  type="text"
-                  name="equipements"
-                  placeholder="Équipements (séparés par des virgules)"
-                  value={equipements}
-                  onChange={(e) => setEquipements(e.target.value)}
-                  className="w-full p-2 border rounded"
-                />
-
-                <textarea
-                  name="description"
-                  placeholder="Description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full p-2 border rounded"
-                  style={{ minHeight: "9em" }}
-                />
-
-                <div className="flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="text-gray-600 hover:underline"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                  >
-                    Publier
-                  </button>
-                </div>
-              </form>
-            </Dialog.Panel>
-          </Transition.Child>
-        </div>
-      </Dialog>
-    </Transition>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm rounded bg-gray-200 text-gray-700">Annuler</button>
+            <button type="submit" className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700" disabled={uploading}>Enregistrer</button>
+          </div>
+        </form>
+      </div>
+    </Fragment>
   );
 }
+  

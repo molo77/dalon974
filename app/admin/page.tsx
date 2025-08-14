@@ -26,6 +26,8 @@ import {
 import AnnonceModal from "@/components/AnnonceModal";
 import { updateAnnonce } from "@/lib/services/annonceService";
 import Link from "next/link"; // + import
+import { toast as appToast } from "@/components/Toast";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 // Helper: slug
 const slugify = (s: string) =>
@@ -68,6 +70,25 @@ export default function AdminPage() {
   const [colocProfessionEdit, setColocProfessionEdit] = useState("");
   const [colocTelephoneEdit, setColocTelephoneEdit] = useState("");
   const [colocDateDispoEdit, setColocDateDispoEdit] = useState("");
+  // Nouveaux champs type "Tinder"
+  const [colocGenreEdit, setColocGenreEdit] = useState("");
+  const [colocOrientationEdit, setColocOrientationEdit] = useState("");
+  const [colocBioCourteEdit, setColocBioCourteEdit] = useState("");
+  const [colocLanguesEdit, setColocLanguesEdit] = useState(""); // CSV
+  const [colocInstagramEdit, setColocInstagramEdit] = useState("");
+  const [colocPhotosCsvEdit, setColocPhotosCsvEdit] = useState(""); // CSV
+  // Préférences & style de vie
+  const [prefGenreEdit, setPrefGenreEdit] = useState("");
+  const [prefAgeMinEdit, setPrefAgeMinEdit] = useState<string>("");
+  const [prefAgeMaxEdit, setPrefAgeMaxEdit] = useState<string>("");
+  const [accepteFumeursEdit, setAccepteFumeursEdit] = useState(false);
+  const [accepteAnimauxEdit, setAccepteAnimauxEdit] = useState(false);
+  const [rythmeEdit, setRythmeEdit] = useState(""); // matinal/noctambule/flexible
+  const [propreteEdit, setPropreteEdit] = useState(""); // relaxe/normal/maniaque
+  const [sportifEdit, setSportifEdit] = useState(false);
+  const [vegetarienEdit, setVegetarienEdit] = useState(false);
+  const [soireesEdit, setSoireesEdit] = useState(false);
+  const [musiqueEdit, setMusiqueEdit] = useState("");
 
   // NOUVEAU: modal “Changer propriétaire”
   const [bulkOwnerOpen, setBulkOwnerOpen] = useState(false);
@@ -76,12 +97,38 @@ export default function AdminPage() {
   // NOUVEAU: état pour la création de profils d’exemple
   const [seedingColocs, setSeedingColocs] = useState(false);
 
+  // NOUVEAU: état pour modal de détails profil coloc
+  const [colocDetailOpen, setColocDetailOpen] = useState(false);
+  const [colocDetailLoading, setColocDetailLoading] = useState(false);
+  const [colocDetail, setColocDetail] = useState<any | null>(null);
+
   const { isAdmin, checkingAdmin } = useAdminGate({ user, loading, router });
 
   const showToast = (type: "success" | "error", message: string) => {
+    // Toaster global
+    appToast[type](message);
+    // (optionnel) conservation de l’ancien état local si réutilisé ailleurs
     setToast({ type, message, id: Date.now().toString() });
     if (toastTimeout.current) clearTimeout(toastTimeout.current);
     toastTimeout.current = setTimeout(() => setToast(null), 3500);
+  };
+
+  // Utilitaire: formatage robuste d’un champ createdAt (Timestamp/Date/number/string)
+  const formatCreatedAt = (v: any) => {
+    if (!v) return "-";
+    try {
+      // Timestamp Firestore avec toDate()
+      if (v && typeof v.toDate === "function") return v.toDate().toLocaleString();
+      // Timestamp Firestore brut { seconds, nanoseconds }
+      if (v?.seconds) return new Date(v.seconds * 1000).toLocaleString();
+      // Nombre (ms)
+      if (typeof v === "number") return new Date(v).toLocaleString();
+      // String/Date
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? "-" : d.toLocaleString();
+    } catch {
+      return "-";
+    }
   };
 
   const seedExamples = async () => {
@@ -130,6 +177,9 @@ export default function AdminPage() {
         "Étudiant(e)", "Développeur(se)", "Infirmier(ère)", "Enseignant(e)",
         "Comptable", "Commercial(e)", "Designer", "Chef de projet"
       ];
+     const LANGS = ["fr", "en", "es", "de"];
+     const GENRES = ["femme","homme","non-binaire","autre"];
+     const ORIENTS = ["hetero","homo","bi","asexuel","autre"];
 
       // Utilise setDoc avec un ID connu et uid = ID (compat règles)
       const now = Date.now();
@@ -142,6 +192,22 @@ export default function AdminPage() {
           const age = 20 + (i % 15);
           const profession = PROFESSIONS[i % PROFESSIONS.length];
           const description = `Je cherche une colocation à ${ville}. ${profession}, calme et respectueux(se).`;
+         const bioCourte = `Coloc ${profession.toLowerCase()} • ${age} ans`;
+         const langues = [LANGS[i % LANGS.length]];
+         const instagram = `@${nom.toLowerCase()}_${i}`;
+         const photos = [placeholder];
+         const prefGenre = i % 4 === 0 ? "mixte" : i % 3 === 0 ? "homme" : i % 2 === 0 ? "femme" : "peu-importe";
+         const prefAgeMin = 18 + (i % 5);
+         const prefAgeMax = 30 + (i % 7);
+         const accepteFumeurs = i % 2 === 0;
+         const accepteAnimaux = i % 3 === 0;
+         const rythme = ["matinal","noctambule","flexible"][i % 3];
+         const proprete = ["relaxe","normal","maniaque"][i % 3];
+         const sportif = i % 2 === 0;
+         const vegetarien = i % 4 === 0;
+         const soirees = i % 3 === 0;
+         const musique = ["rock","pop","jazz","electro"][i % 4];
+
           return setDoc(doc(col, id), {
             uid: id, // important pour uidMatchesPath(uid)
             nom,
@@ -151,6 +217,24 @@ export default function AdminPage() {
             profession,
             description,
             imageUrl: placeholder,
+           // Nouveaux champs
+           genre: GENRES[i % GENRES.length],
+           orientation: ORIENTS[i % ORIENTS.length],
+           bioCourte,
+           langues,
+           instagram,
+           photos,
+           prefGenre,
+           prefAgeMin,
+           prefAgeMax,
+           accepteFumeurs,
+           accepteAnimaux,
+           rythme,
+           proprete,
+           sportif,
+           vegetarien,
+           soirees,
+           musique,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           }, { merge: true });
@@ -364,7 +448,51 @@ export default function AdminPage() {
     setColocProfessionEdit(p?.profession || "");
     setColocTelephoneEdit(p?.telephone || "");
     setColocDateDispoEdit(p?.dateDispo || "");
+    // Nouveaux champs
+    setColocGenreEdit(p?.genre || "");
+    setColocOrientationEdit(p?.orientation || "");
+    setColocBioCourteEdit(p?.bioCourte || "");
+    setColocLanguesEdit(Array.isArray(p?.langues) ? p.langues.join(", ") : (p?.langues || ""));
+    setColocInstagramEdit(p?.instagram || "");
+    setColocPhotosCsvEdit(Array.isArray(p?.photos) ? p.photos.join(", ") : (p?.photos || ""));
+    setPrefGenreEdit(p?.prefGenre || "");
+    setPrefAgeMinEdit(typeof p?.prefAgeMin === "number" ? String(p.prefAgeMin) : "");
+    setPrefAgeMaxEdit(typeof p?.prefAgeMax === "number" ? String(p.prefAgeMax) : "");
+    setAccepteFumeursEdit(!!p?.accepteFumeurs);
+    setAccepteAnimauxEdit(!!p?.accepteAnimaux);
+    setRythmeEdit(p?.rythme || "");
+    setPropreteEdit(p?.proprete || "");
+    setSportifEdit(!!p?.sportif);
+    setVegetarienEdit(!!p?.vegetarien);
+    setSoireesEdit(!!p?.soirees);
+    setMusiqueEdit(p?.musique || "");
     setColocModalOpen(true);
+  };
+
+  // NOUVEAU: ouvrir/fermer le détail d’un profil coloc
+  const openColocDetail = async (id: string) => {
+    try {
+      setColocDetailOpen(true);
+      setColocDetailLoading(true);
+      setColocDetail(null);
+      const ref = doc(db, "colocProfiles", id);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        setColocDetail({ id: snap.id, ...(snap.data() as any) });
+      } else {
+        setColocDetail(null);
+      }
+    } catch (e) {
+      console.error("[Admin][ColocDetail] load error", e);
+      setColocDetail(null);
+    } finally {
+      setColocDetailLoading(false);
+    }
+  };
+  const closeColocDetail = () => {
+    setColocDetailOpen(false);
+    setColocDetail(null);
+    setColocDetailLoading(false);
   };
 
   // NOUVEAU: enregistrer un profil (modale)
@@ -381,6 +509,28 @@ export default function AdminPage() {
         profession: colocProfessionEdit,
         telephone: colocTelephoneEdit,
         dateDispo: colocDateDispoEdit,
+        // Nouveaux champs
+        genre: colocGenreEdit || undefined,
+        orientation: colocOrientationEdit || undefined,
+        bioCourte: colocBioCourteEdit || undefined,
+        langues: colocLanguesEdit
+          ? colocLanguesEdit.split(",").map(s => s.trim()).filter(Boolean)
+          : undefined,
+        instagram: colocInstagramEdit || undefined,
+        photos: colocPhotosCsvEdit
+          ? colocPhotosCsvEdit.split(",").map(s => s.trim()).filter(Boolean)
+          : undefined,
+        prefGenre: prefGenreEdit || undefined,
+        prefAgeMin: prefAgeMinEdit ? Number(prefAgeMinEdit) : undefined,
+        prefAgeMax: prefAgeMaxEdit ? Number(prefAgeMaxEdit) : undefined,
+        accepteFumeurs: !!accepteFumeursEdit,
+        accepteAnimaux: !!accepteAnimauxEdit,
+        rythme: rythmeEdit || undefined,
+        proprete: propreteEdit || undefined,
+        sportif: !!sportifEdit,
+        vegetarien: !!vegetarienEdit,
+        soirees: !!soireesEdit,
+        musique: musiqueEdit || undefined,
         updatedAt: serverTimestamp(),
       };
       Object.keys(payload).forEach((k) => (payload[k] === "" || payload[k] === null) && delete payload[k]);
@@ -391,6 +541,133 @@ export default function AdminPage() {
     } catch (e) {
       console.error("[Admin][SaveColoc]", e);
       showToast("error", "Erreur lors de la mise à jour du profil.");
+    }
+  };
+
+  // Migration "colocataires" -> "colocProfiles"
+  const adminMigrateColocatairesToProfiles = async () => {
+    try {
+      setAdminLoading(true);
+      // Tente d'abord une lecture en liste (peut être interdite par les règles)
+      let legacyDocs: { id: string; data: any }[] = [];
+      try {
+        const snap = await getDocs(collection(db, "colocataires"));
+        legacyDocs = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+      } catch (e: any) {
+        if (e?.code === "permission-denied") {
+          // Fallback: pas de "list" autorisé. On essaie getDoc ciblé par uid à partir de la liste des users.
+          const usersSnap = await getDocs(collection(db, "users"));
+          const uids = usersSnap.docs.map((d) => d.id);
+          for (const uid of uids) {
+            try {
+              const s = await getDoc(doc(db, "colocataires", uid));
+              if (s.exists()) legacyDocs.push({ id: s.id, data: s.data() });
+            } catch {
+              // ignore si non lisible
+            }
+          }
+        } else {
+          throw e;
+        }
+      }
+
+      if (legacyDocs.length === 0) {
+        showToast("success", "Aucun document à migrer depuis 'colocataires'.");
+        return;
+      }
+
+      // Enrichissement: map des users pour récupérer email/displayName si manquants
+      const usersMap: Record<string, { email?: string; displayName?: string }> = {};
+      try {
+        const usersSnap = await getDocs(collection(db, "users"));
+        usersSnap.docs.forEach((d) => {
+          const ud: any = d.data();
+          usersMap[d.id] = { email: ud?.email, displayName: ud?.displayName };
+        });
+      } catch {
+        // ignore si non lisible
+      }
+
+      const chunks = <T,>(arr: T[], size = 400) => {
+        const out: T[][] = [];
+        for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+        return out;
+      };
+
+      const mapLegacyToNew = (d: any, id: string) => {
+        const userHint = usersMap[id] || {};
+        const email = d?.email || userHint.email || null;
+        const displayName = userHint.displayName || "";
+        const interets = Array.isArray(d?.interets) ? d.interets : [];
+       // Normalisations CSV -> tableaux
+       const toArray = (v: any) =>
+         Array.isArray(v) ? v
+         : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean)
+         : [];
+        return {
+          uid: d?.uid || id,
+          email,
+          nom: d?.nom || d?.name || displayName || "",
+          ville: d?.ville || "",
+          budget: typeof d?.budget === "number" ? d.budget : null,
+          imageUrl: d?.imageUrl || d?.photoUrl || d?.photo || "",
+          description: d?.description || d?.bio || "",
+          age: typeof d?.age === "number" ? d.age : null,
+          profession: d?.profession || d?.job || "",
+          telephone: d?.telephone || d?.phone || "",
+          dateDispo: d?.dateDispo || d?.disponibilite || "",
+          codePostal: d?.codePostal || d?.cp || undefined,
+          // Champs existants
+          fumeur: typeof d?.fumeur === "boolean" ? d.fumeur : (d?.fumeur ? true : false),
+          animaux: typeof d?.animaux === "boolean" ? d.animaux : (d?.animaux ? true : false),
+          quartiers: d?.quartiers || "",
+          interets,
+          zones: Array.isArray(d?.zones) ? d.zones : [],
+          communesSlugs: Array.isArray(d?.communesSlugs) ? d.communesSlugs : [],
+         // Nouveaux champs "type Tinder" (si présents dans legacy)
+         genre: d?.genre || undefined,
+         orientation: d?.orientation || undefined,
+         bioCourte: d?.bioCourte || undefined,
+         langues: toArray(d?.langues),
+         instagram: d?.instagram || undefined,
+         photos: toArray(d?.photos),
+         prefGenre: d?.prefGenre || undefined,
+         prefAgeMin: typeof d?.prefAgeMin === "number" ? d.prefAgeMin : undefined,
+         prefAgeMax: typeof d?.prefAgeMax === "number" ? d.prefAgeMax : undefined,
+         accepteFumeurs: typeof d?.accepteFumeurs === "boolean" ? d.accepteFumeurs : undefined,
+         accepteAnimaux: typeof d?.accepteAnimaux === "boolean" ? d.accepteAnimaux : undefined,
+         rythme: d?.rythme || undefined,
+         proprete: d?.proprete || undefined,
+         sportif: typeof d?.sportif === "boolean" ? d.sportif : undefined,
+         vegetarien: typeof d?.vegetarien === "boolean" ? d.vegetarien : undefined,
+         soirees: typeof d?.soirees === "boolean" ? d.soirees : undefined,
+         musique: d?.musique || undefined,
+          ...(d?.createdAt ? { createdAt: d.createdAt } : { createdAt: serverTimestamp() }),
+          updatedAt: serverTimestamp(),
+        };
+      };
+
+      let migrated = 0;
+      for (const group of chunks(legacyDocs)) {
+        const batch = writeBatch(db);
+        for (const s of group) {
+          const data: any = s.data ?? s.data;
+          const docData: any = typeof data === "function" ? data() : data;
+          const targetId = docData?.uid || s.id;
+          const ref = doc(db, "colocProfiles", targetId);
+          const payload = mapLegacyToNew(docData, targetId);
+          batch.set(ref, payload, { merge: true });
+          migrated++;
+        }
+        await batch.commit();
+      }
+
+      showToast("success", `Migration terminée: ${migrated} profil(s) migré(s) ✅`);
+    } catch (e) {
+      console.error("[Admin][MigrateColocataires]", e);
+      showToast("error", "Erreur lors de la migration des profils.");
+    } finally {
+      setAdminLoading(false);
     }
   };
 
@@ -409,6 +686,714 @@ export default function AdminPage() {
   // Master checkbox (tout sélectionner/désélectionner)
   const allSelected = adminAnnonces.length > 0 && adminSelected.length === adminAnnonces.length;
   const allColocsSelected = adminColocs.length > 0 && adminColocsSelected.length === adminColocs.length;
+
+  const renderTab = () => {
+    if (activeTab === "annonces") {
+      return (
+        <>
+          {/* Barre d’actions + table annonces */}
+          <div className="flex items-center justify-between mb-8">
+            <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight">
+              Administration
+            </h1>
+            {activeTab === "annonces" && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={seedExamples}
+                  disabled={seeding}
+                  className="bg-emerald-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-emerald-700 disabled:opacity-60"
+                  title="Créer une annonce d’exemple pour chaque commune"
+                >
+                  {seeding ? "Création..." : "Créer annonces d’exemple"}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl shadow-lg p-8">
+            {/* Barre d’actions */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {/* ...existing master checkbox + select/deselect all... */}
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={() => (allSelected ? adminDeselectAll() : adminSelectAll())}
+                  className="w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem] transition-colors"
+                />
+                <span className="text-sm text-slate-700">Tout ({adminAnnonces.length})</span>
+              </label>
+              <button type="button" onClick={adminSelectAll} disabled={adminAnnonces.length === 0} className="border px-3 py-1.5 text-sm rounded hover:bg-slate-50 disabled:opacity-60">Tout sélectionner</button>
+              <button type="button" onClick={adminDeselectAll} disabled={adminSelected.length === 0} className="border px-3 py-1.5 text-sm rounded hover:bg-slate-50 disabled:opacity-60">Tout désélectionner</button>
+              <button type="button" onClick={() => adminBulkDelete()} disabled={adminSelected.length === 0 || adminLoading} className="bg-rose-600 text-white px-3 py-1.5 text-sm rounded hover:bg-rose-700 disabled:opacity-60">
+                {adminLoading ? "Suppression..." : `Supprimer la sélection (${adminSelected.length})`}
+              </button>
+              {/* NOUVEAU: bouton changer propriétaire */}
+              <button
+                type="button"
+                onClick={() => setBulkOwnerOpen(true)}
+                disabled={adminSelected.length === 0 || adminLoading}
+                className="bg-amber-600 text-white px-3 py-1.5 text-sm rounded hover:bg-amber-700 disabled:opacity-60"
+              >
+                Changer propriétaire ({adminSelected.length})
+              </button>
+            </div>
+
+            {/* Liste en temps réel avec colonne Propriétaire */}
+            {adminAnnonces.length === 0 ? (
+              <p className="text-slate-500">Aucune annonce à afficher.</p>
+            ) : (
+              <div className="overflow-x-auto bg-white rounded-2xl border border-slate-200 shadow-sm mt-4">
+                <table className="w-full text-[15px]">
+                  <thead className="bg-slate-50 sticky top-0">
+                    <tr>
+                      <th className="py-2 px-3 w-12 text-center select-none cursor-default" aria-label="Sélection"></th>
+                      <th className="py-2 px-3 text-left">Titre</th>
+                      <th className="py-2 px-3 text-left">Ville</th>
+                      <th className="py-2 px-3 text-left">Prix</th>
+                      <th className="py-2 px-3 text-left">Description (court)</th>
+                      <th className="py-2 px-3 text-left">Propriétaire</th>
+                      <th className="py-2 px-3 text-left">Créé le</th>
+                      <th className="py-2 px-3 text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50">
+                    {adminAnnonces.map((a) => {
+                      const uid = a.ownerId || a.uid;
+                      const owner = ownersById[uid || ""] || {};
+                      const ownerLabel = owner.displayName || owner.email || uid || "-";
+                      const shortDesc =
+                        (a.description || "").toString().slice(0, 160) +
+                        ((a.description || "").length > 160 ? "…" : "");
+                      return (
+                        <tr
+                          key={a.id}
+                          className="hover:bg-blue-50/50 transition cursor-pointer"
+                          onClick={() => { setEditAnnonce(a); setModalOpen(true); }}
+                        >
+                          <td
+                            className="py-2 px-3 w-12 text-center select-none cursor-default"
+                            onClick={(e) => { e.stopPropagation(); }}
+                            onMouseDown={(e) => { e.stopPropagation(); }}
+                            onDoubleClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                            onKeyDown={(e) => { e.stopPropagation(); }}
+                          >
+                            <div className="inline-flex items-center justify-center p-2">
+                              <input
+                                type="checkbox"
+                                checked={adminSelected.includes(a.id)}
+                                onChange={() => toggleAdminSelect(a.id)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem] transition-colors"
+                              />
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <Link
+                              href={`/annonce/${a.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                              title="Ouvrir la fiche annonce dans un nouvel onglet"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {a.titre || "(sans titre)"}
+                            </Link>
+                          </td>
+                          <td className="py-2 px-3">{a.ville || "-"}</td>
+                          <td className="py-2 px-3">{typeof a.prix === "number" ? `${a.prix} €` : "-"}</td>
+                          <td className="py-2 px-3 max-w-[560px] whitespace-normal">
+                            {shortDesc}
+                          </td>
+                          <td className="py-2 px-3">{ownerLabel}</td>
+                          <td className="py-2 px-3">{formatCreatedAt(a.createdAt)}</td>
+                          <td className="py-2 px-3 flex items-center gap-2">
+                            <button
+                              type="button"
+                              title="Modifier"
+                              aria-label="Modifier"
+                              onClick={(e) => { e.stopPropagation(); setEditAnnonce(a); setModalOpen(true); }}
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-600 text-white hover:bg-slate-700"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              type="button"
+                              title="Supprimer"
+                              aria-label="Supprimer"
+                              onClick={(e) => { e.stopPropagation(); adminBulkDelete([a.id]); }}
+                              disabled={adminLoading}
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                            >
+                              🗑️
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* NOUVEAU: Modal d’édition */}
+            <AnnonceModal
+              isOpen={modalOpen}
+              onClose={() => { setModalOpen(false); setEditAnnonce(null); }}
+              annonce={editAnnonce}
+              onSubmit={async ({ titre, ville, prix, imageUrl, surface, nbChambres, equipements, description, photos }) => {
+                if (!editAnnonce) return;
+                try {
+                  const payload: any = {
+                    titre,
+                    ville,
+                    prix: prix ? Number(prix) : null,
+                    imageUrl,
+                    surface: surface ? Number(surface) : null,
+                    nbChambres: nbChambres ? Number(nbChambres) : null,
+                    equipements,
+                    description,
+                    ...(Array.isArray(photos) && photos.length ? { photos } : {}),
+                  };
+                  Object.keys(payload).forEach((k) => (payload[k] === "" || payload[k] === null) && delete payload[k]);
+                  await updateAnnonce(editAnnonce.id, payload);
+                  showToast("success", "Annonce mise à jour ✅");
+                } catch (e: any) {
+                  console.error("[Admin][UpdateAnnonce]", e);
+                  showToast("error", "Erreur lors de la mise à jour.");
+                } finally {
+                  setModalOpen(false);
+                  setEditAnnonce(null);
+                }
+              }}
+            />
+
+            {/* NOUVEAU: Modal “Changer propriétaire” */}
+            {bulkOwnerOpen && (
+              <div
+                className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+                onMouseDown={(e) => { if (e.target === e.currentTarget) { setBulkOwnerOpen(false); setBulkOwnerInput(""); } }}
+              >
+                <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
+                  <h3 className="text-lg font-semibold mb-3">Changer le propriétaire</h3>
+                  <p className="text-sm text-slate-600 mb-3">
+                    Saisissez l’email OU l’identifiant (userId) du nouveau propriétaire
+                    et utilisez la liste de suggestions.
+                  </p>
+                  <input
+                    type="text"
+                    placeholder="ex: user@example.com ou UID"
+                    value={bulkOwnerInput}
+                    onChange={(e) => setBulkOwnerInput(e.target.value)}
+                    className="border rounded px-3 py-2 w-full mb-2"
+                    list="owners-suggestions"
+                    autoFocus
+                  />
+                  {/* Suggestions d’utilisateurs existants (email/displayName) */}
+                  <datalist id="owners-suggestions">
+                    {Object.entries(ownersById).map(([id, o]) => {
+                      const label = o?.displayName
+                        ? `${o.displayName} <${o.email || id}>`
+                        : (o?.email || id);
+                      // La valeur utilisable reste l’email s’il existe, sinon l’UID
+                      const value = (o?.email || id) as string;
+                      return <option key={id} value={value}>{label}</option>;
+                    })}
+                  </datalist>
+
+                  <div className="flex justify-end gap-2 mt-4">
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 text-sm rounded bg-gray-200 text-gray-700"
+                      onClick={() => { setBulkOwnerOpen(false); setBulkOwnerInput(""); }}
+                      disabled={adminLoading}
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                      onClick={performBulkOwnerChange}
+                      disabled={!bulkOwnerInput.trim() || adminLoading}
+                    >
+                      Confirmer
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      );
+    }
+    if (activeTab === "colocs") {
+      return (
+        <>
+          {/* Barre d’actions profils + table */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={allColocsSelected}
+                onChange={() => (allColocsSelected ? colocsDeselectAll() : colocsSelectAll())}
+                className="w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem] transition-colors"
+              />
+              <span className="text-sm text-slate-700">Tout ({adminColocs.length})</span>
+            </label>
+            <button type="button" onClick={colocsSelectAll} disabled={adminColocs.length === 0} className="border px-3 py-1.5 text-sm rounded hover:bg-slate-50 disabled:opacity-60">Tout sélectionner</button>
+            <button type="button" onClick={colocsDeselectAll} disabled={adminColocsSelected.length === 0} className="border px-3 py-1.5 text-sm rounded hover:bg-slate-50 disabled:opacity-60">Tout désélectionner</button>
+            <button
+              type="button"
+              onClick={() => colocsBulkDelete()}
+              disabled={adminColocsSelected.length === 0 || adminLoading}
+              className="bg-rose-600 text-white px-3 py-1.5 text-sm rounded hover:bg-rose-700 disabled:opacity-60"
+            >
+              {adminLoading ? "Suppression..." : `Supprimer la sélection (${adminColocsSelected.length})`}
+            </button>
+            <button
+              type="button"
+              onClick={seedColocExamples}
+              disabled={seedingColocs}
+              className="bg-emerald-600 text-white px-3 py-1.5 text-sm rounded hover:bg-emerald-700 disabled:opacity-60"
+            >
+              {seedingColocs ? "Création..." : "Créer profils d’exemple"}
+            </button>
+          </div>
+
+          {/* Liste profils */}
+          <div className="overflow-x-auto bg-white rounded-2xl border border-slate-200 shadow-sm mt-4">
+            <table className="w-full text-[15px]">
+              <thead className="bg-slate-50 sticky top-0">
+                <tr>
+                  <th className="py-2 px-3 w-12 text-center select-none cursor-default" aria-label="Sélection"></th>
+                  <th className="py-2 px-3 text-left">Nom</th>
+                  <th className="py-2 px-3 text-left">Ville</th>
+                  <th className="py-2 px-3 text-left">Budget</th>
+                  <th className="py-2 px-3 text-left">Description (court)</th>
+                  <th className="py-2 px-3 text-left">Email</th>
+                  <th className="py-2 px-3 text-left">Créé le</th>
+                  <th className="py-2 px-3 text-left">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50">
+                {adminColocs.map((p) => {
+                  const shortDesc = (p.description || "").toString().slice(0, 160) + ((p.description || "").length > 160 ? "…" : "");
+                  return (
+                    <tr
+                      key={p.id}
+                      className="hover:bg-blue-50/50 transition cursor-pointer"
+                      onClick={() => openColocDetail(p.id)}
+                    >
+                      <td
+                        className="py-2 px-3 w-12 text-center select-none cursor-default"
+                        onClick={(e) => { e.stopPropagation(); }}
+                        onMouseDown={(e) => { e.stopPropagation(); }}
+                        onDoubleClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                        onKeyDown={(e) => { e.stopPropagation(); }}
+                      >
+                        <div className="inline-flex items-center justify-center p-2">
+                          <input
+                            type="checkbox"
+                            checked={adminColocsSelected.includes(p.id)}
+                            onChange={() => toggleColocSelect(p.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem] transition-colors"
+                          />
+                        </div>
+                      </td>
+                      <td className="py-2 px-3">{p.nom || "(sans nom)"}</td>
+                      <td className="py-2 px-3">{p.ville || "-"}</td>
+                      <td className="py-2 px-3">{typeof p.budget === "number" ? `${p.budget} €` : "-"}</td>
+                      <td className="py-2 px-3 max-w-[560px] whitespace-normal">{shortDesc}</td>
+                      <td className="py-2 px-3">{p.email || "-"}</td>
+                      <td className="py-2 px-3">{formatCreatedAt(p.createdAt)}</td>
+                      <td className="py-2 px-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          title="Modifier"
+                          aria-label="Modifier"
+                          onClick={(e) => { e.stopPropagation(); openColocModal(p); }}
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-600 text-white hover:bg-slate-700"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          type="button"
+                          title="Supprimer"
+                          aria-label="Supprimer"
+                          onClick={(e) => { e.stopPropagation(); colocsBulkDelete([p.id]); }}
+                          disabled={adminLoading}
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                        >
+                          🗑️
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Modale édition profil colocataire */}
+          {colocModalOpen && (
+            <div
+              className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 overflow-y-auto"
+              onMouseDown={(e) => { if (e.target === e.currentTarget) { setColocModalOpen(false); setEditColoc(null); } }}
+            >
+              <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto">
+                <h3 className="text-lg font-semibold mb-3">Modifier le profil</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input className="border rounded px-3 py-2" placeholder="Nom" value={colocNomEdit} onChange={(e) => setColocNomEdit(e.target.value)} />
+                  <input className="border rounded px-3 py-2" placeholder="Ville" value={colocVilleEdit} onChange={(e) => setColocVilleEdit(e.target.value)} />
+                  <input className="border rounded px-3 py-2" placeholder="Budget (€)" type="number" value={colocBudgetEdit} onChange={(e) => setColocBudgetEdit(e.target.value)} />
+                  <input className="border rounded px-3 py-2" placeholder="Âge" type="number" value={colocAgeEdit} onChange={(e) => setColocAgeEdit(e.target.value)} />
+                  <div className="sm:col-span-2">
+                    <input
+                      className="border rounded px-3 py-2 w-full"
+                      placeholder="Image (URL)"
+                      value={colocImageUrlEdit}
+                      onChange={(e) => setColocImageUrlEdit(e.target.value)}
+                    />
+                    <div className="mt-2 flex items-center gap-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (!f || !editColoc?.id) return;
+                          try {
+                            const storage = getStorage();
+                            const r = ref(storage, `colocProfiles/${editColoc.id}/${Date.now()}-${f.name}`);
+                            await uploadBytes(r, f);
+                            const url = await getDownloadURL(r);
+                            setColocImageUrlEdit(url);
+                            appToast.success("Photo de profil mise à jour");
+                          } catch {
+                            appToast.error("Échec de l’upload de la photo");
+                          }
+                        }}
+                      />
+                      {colocImageUrlEdit && (
+                        <img
+                          src={colocImageUrlEdit}
+                          alt="profil"
+                          className="w-16 h-12 object-cover rounded border"
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <input className="border rounded px-3 py-2" placeholder="Profession" value={colocProfessionEdit} onChange={(e) => setColocProfessionEdit(e.target.value)} />
+                  <input className="border rounded px-3 py-2" placeholder="Téléphone" value={colocTelephoneEdit} onChange={(e) => setColocTelephoneEdit(e.target.value)} />
+                  <input className="border rounded px-3 py-2" placeholder="Disponibilité (YYYY-MM-DD)" value={colocDateDispoEdit} onChange={(e) => setColocDateDispoEdit(e.target.value)} />
+                  <select className="border rounded px-3 py-2" value={colocGenreEdit} onChange={e=>setColocGenreEdit(e.target.value)}>
+                    <option value="">Genre</option>
+                    <option value="femme">Femme</option>
+                    <option value="homme">Homme</option>
+                    <option value="non-binaire">Non-binaire</option>
+                    <option value="autre">Autre</option>
+                  </select>
+                  <select className="border rounded px-3 py-2" value={colocOrientationEdit} onChange={e=>setColocOrientationEdit(e.target.value)}>
+                    <option value="">Orientation</option>
+                    <option value="hetero">Hétéro</option>
+                    <option value="homo">Homo</option>
+                    <option value="bi">Bi</option>
+                    <option value="asexuel">Asexuel</option>
+                    <option value="autre">Autre</option>
+                  </select>
+                  <input className="border rounded px-3 py-2 sm:col-span-2" placeholder="Bio courte" value={colocBioCourteEdit} onChange={e=>setColocBioCourteEdit(e.target.value)} />
+                  <input className="border rounded px-3 py-2 sm:col-span-2" placeholder="Langues (CSV, ex: fr,en,es)" value={colocLanguesEdit} onChange={e=>setColocLanguesEdit(e.target.value)} />
+                  <input className="border rounded px-3 py-2" placeholder="Instagram (@handle)" value={colocInstagramEdit} onChange={e=>setColocInstagramEdit(e.target.value)} />
+                  <div>
+                    <input
+                      className="border rounded px-3 py-2 w-full"
+                      placeholder="Photos (URLs, CSV)"
+                      value={colocPhotosCsvEdit}
+                      onChange={e => setColocPhotosCsvEdit(e.target.value)}
+                    />
+                    <div className="mt-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={async (e) => {
+                          const fl = e.target.files;
+                          if (!fl || !editColoc?.id) return;
+                          try {
+                            const storage = getStorage();
+                            const urls = await Promise.all(
+                              Array.from(fl).map(async (f) => {
+                                const r = ref(storage, `colocProfiles/${editColoc.id}/${Date.now()}-${f.name}`);
+                                await uploadBytes(r, f);
+                                return await getDownloadURL(r);
+                              })
+                            );
+                            const current = colocPhotosCsvEdit ? colocPhotosCsvEdit.split(",").map(s=>s.trim()).filter(Boolean) : [];
+                            const merged = [...current, ...urls];
+                            setColocPhotosCsvEdit(merged.join(", "));
+                            appToast.success(`${urls.length} photo(s) ajoutée(s)`);
+                          } catch {
+                            appToast.error("Échec de l’upload des photos");
+                          }
+                        }}
+                      />
+                      {(() => {
+                        const arr = colocPhotosCsvEdit ? colocPhotosCsvEdit.split(",").map(s=>s.trim()).filter(Boolean) : [];
+                        return arr.length ? (
+                          <div className="mt-2 grid grid-cols-3 gap-2">
+                            {arr.map((u) => (
+                              <div key={u} className="relative">
+                                <img src={u} alt="photo" className="w-full h-20 object-cover rounded border" />
+                                <button
+                                  type="button"
+                                  onClick={() => setColocPhotosCsvEdit(arr.filter(x=>x!==u).join(", "))}
+                                  className="absolute -top-2 -right-2 bg-black/60 text-white rounded-full w-6 h-6"
+                                  aria-label="Supprimer"
+                                >
+                                  ✖
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+                  </div>
+                  <select className="border rounded px-3 py-2" value={prefGenreEdit} onChange={e=>setPrefGenreEdit(e.target.value)}>
+                    <option value="">Préférence colloc (genre)</option>
+                    <option value="femme">Femme</option>
+                    <option value="homme">Homme</option>
+                    <option value="mixte">Mixte</option>
+                    <option value="peu-importe">Peu importe</option>
+                  </select>
+                  <input className="border rounded px-3 py-2" placeholder="Âge min" type="number" value={prefAgeMinEdit} onChange={e=>setPrefAgeMinEdit(e.target.value)} />
+                  <input className="border rounded px-3 py-2" placeholder="Âge max" type="number" value={prefAgeMaxEdit} onChange={e=>setPrefAgeMaxEdit(e.target.value)} />
+                  <label className="inline-flex items-center gap-2"><input type="checkbox" className="w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem] transition-colors" checked={accepteFumeursEdit} onChange={e=>setAccepteFumeursEdit(e.target.checked)} />Accepte fumeurs</label>
+                  <label className="inline-flex items-center gap-2"><input type="checkbox" className="w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem] transition-colors" checked={accepteAnimauxEdit} onChange={e=>setAccepteAnimauxEdit(e.target.checked)} />Accepte animaux</label>
+                  <label className="inline-flex items-center gap-2"><input type="checkbox" className="w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem] transition-colors" checked={sportifEdit} onChange={e=>setSportifEdit(e.target.checked)} />Sportif</label>
+                  <label className="inline-flex items-center gap-2"><input type="checkbox" className="w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem] transition-colors" checked={vegetarienEdit} onChange={e=>setVegetarienEdit(e.target.checked)} />Végétarien</label>
+                  <label className="inline-flex items-center gap-2"><input type="checkbox" className="w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem] transition-colors" checked={soireesEdit} onChange={e=>setSoireesEdit(e.target.checked)} />Aime les soirées</label>
+                  <input className="border rounded px-3 py-2 sm:col-span-2" placeholder="Musique (artistes, genres…)" value={musiqueEdit} onChange={e=>setMusiqueEdit(e.target.value)} />
+                </div>
+                <div className="flex justify-end gap-2 mt-4">
+                  <button className="px-3 py-1.5 text-sm rounded bg-gray-200 text-gray-700" onClick={() => { setColocModalOpen(false); setEditColoc(null); }} disabled={adminLoading}>Annuler</button>
+                  <button className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60" onClick={saveColocEdit} disabled={adminLoading}>Enregistrer</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* NOUVEAU: Modal détail profil colocataire (même rendu que la Home) */}
+          {colocDetailOpen && (
+            <div
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+              onMouseDown={(e) => { if (e.target === e.currentTarget) closeColocDetail(); }}
+            >
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+                <button
+                  onClick={closeColocDetail}
+                  className="absolute top-3 right-3 text-slate-600 hover:text-slate-900"
+                  aria-label="Fermer"
+                >
+                  ✖
+                </button>
+                <h3 className="text-xl font-semibold mb-4">Profil colocataire</h3>
+                {colocDetailLoading ? (
+                  <p className="text-slate-600">Chargement…</p>
+                ) : !colocDetail ? (
+                  <p className="text-slate-600">Profil introuvable.</p>
+                ) : (
+                  <div className="flex flex-col gap-5">
+                    {/* En-tête avec image et infos principales */}
+                    <div className="flex gap-4 items-start">
+                      <img
+                        src={colocDetail.imageUrl || "/images/annonce-placeholder.jpg"}
+                        alt={colocDetail.nom || "Profil"}
+                        className="w-40 h-28 object-cover rounded-lg border"
+                      />
+                      <div className="flex-1">
+                        <div className="text-2xl font-bold">{colocDetail.nom || "Recherche colocation"}</div>
+                        <div className="text-slate-700">
+                          {colocDetail.ville || "-"}
+                          {typeof colocDetail.budget === "number" && (
+                            <span className="ml-2 text-blue-700 font-semibold">• Budget {colocDetail.budget} €</span>
+                          )}
+                        </div>
+                        <div className="text-slate-600 text-sm mt-1">
+                          {colocDetail.profession ? colocDetail.profession : ""}
+                          {typeof colocDetail.age === "number" ? ` • ${colocDetail.age} ans` : ""}
+                          {colocDetail.dateDispo ? ` • Dispo: ${colocDetail.dateDispo}` : ""}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">
+                          {colocDetail.createdAt ? `Créé le ${formatCreatedAt(colocDetail.createdAt)}` : ""}
+                          {colocDetail.updatedAt ? ` • Maj: ${formatCreatedAt(colocDetail.updatedAt)}` : ""}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bio courte */}
+                    {colocDetail.bioCourte && (
+                      <div className="text-slate-700">{colocDetail.bioCourte}</div>
+                    )}
+
+                    {/* Genre / Orientation */}
+                    {(colocDetail.genre || colocDetail.orientation) && (
+                      <div className="text-sm text-slate-600">
+                        {colocDetail.genre ? `Genre: ${colocDetail.genre}` : ""}{" "}
+                        {colocDetail.orientation ? `• Orientation: ${colocDetail.orientation}` : ""}
+                      </div>
+                    )}
+
+                    {/* Langues */}
+                    {Array.isArray(colocDetail.langues) && colocDetail.langues.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Langues</div>
+                        <div className="flex flex-wrap gap-2">
+                          {colocDetail.langues.map((l: string) => (
+                            <span key={l} className="px-2 py-1 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
+                              {l}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Préférences */}
+                    {(colocDetail.prefGenre || colocDetail.prefAgeMin || colocDetail.prefAgeMax) && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Préférences</div>
+                        <div className="text-sm text-slate-600">
+                          {colocDetail.prefGenre ? `Colocs: ${colocDetail.prefGenre}` : ""}
+                          {(colocDetail.prefAgeMin || colocDetail.prefAgeMax) ? ` • Âge: ${colocDetail.prefAgeMin || "?"} - ${colocDetail.prefAgeMax || "?"}` : ""}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Style de vie */}
+                    {(typeof colocDetail.accepteFumeurs === "boolean" || typeof colocDetail.accepteAnimaux === "boolean" || colocDetail.rythme || colocDetail.proprete || colocDetail.sportif || colocDetail.vegetarien || colocDetail.soirees || colocDetail.musique) && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Style de vie</div>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          {typeof colocDetail.accepteFumeurs === "boolean" && (
+                            <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
+                              {colocDetail.accepteFumeurs ? "Accepte fumeurs" : "Non fumeur de préférence"}
+                            </span>
+                                                           )}
+                          {typeof colocDetail.accepteAnimaux === "boolean" && (
+                            <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
+                              {colocDetail.accepteAnimaux ? "Accepte animaux" : "Sans animaux"}
+                            </span>
+                          )}
+                          {colocDetail.rythme && <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">Rythme: {colocDetail.rythme}</span>}
+                          {colocDetail.proprete && <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">Propreté: {colocDetail.proprete}</span>}
+                          {colocDetail.sportif && <span className="px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">Sportif</span>}
+                          {colocDetail.vegetarien && <span className="px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">Végétarien</span>}
+                          {colocDetail.soirees && <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Aime les soirées</span>}
+                          {colocDetail.musique && <span className="px-2 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200">Musique: {colocDetail.musique}</span>}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Réseaux */}
+                    {colocDetail.instagram && (
+                      <div className="text-sm">
+                        <span className="font-medium text-slate-700">Instagram:</span>{" "}
+                        <a
+                          href={`https://instagram.com/${String(colocDetail.instagram).replace(/^@/,"")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 underline"
+                        >
+                          {colocDetail.instagram}
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Zones recherchées */}
+                    {Array.isArray(colocDetail.zones) && colocDetail.zones.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Zones recherchées</div>
+                        <div className="flex flex-wrap gap-2">
+                          {colocDetail.zones.map((z: string) => (
+                            <span key={z} className="px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                              {z}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Communes ciblées */}
+                    {Array.isArray(colocDetail.communesSlugs) && colocDetail.communesSlugs.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Communes ciblées</div>
+                        <div className="flex flex-wrap gap-2">
+                          {colocDetail.communesSlugs.map((s: string) => (
+                            <span key={s} className="px-2 py-1 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Centres d'intérêt */}
+                    {Array.isArray(colocDetail.interets) && colocDetail.interets.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Centres d'intérêt</div>
+                        <div className="flex flex-wrap gap-2">
+                          {colocDetail.interets.map((i: string) => (
+                            <span key={i} className="px-2 py-1 rounded-full text-xs bg-green-50 text-green-700 border border-green-200">
+                              {i}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Contact */}
+                    {(colocDetail.telephone || colocDetail.email) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                        {colocDetail.telephone && (
+                          <div><span className="font-medium text-slate-700">Téléphone:</span> <span className="text-slate-800">{colocDetail.telephone}</span></div>
+                        )}
+                        {colocDetail.email && (
+                          <div><span className="font-medium text-slate-700">Email:</span> <span className="text-slate-800">{colocDetail.email}</span></div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Description longue */}
+                    {colocDetail.description && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">À propos</div>
+                        <p className="text-slate-800 whitespace-pre-line">{colocDetail.description}</p>
+                      </div>
+                    )}
+
+                    {/* Photos supplémentaires */}
+                    {Array.isArray(colocDetail.photos) && colocDetail.photos.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Photos</div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {colocDetail.photos.map((u: string, idx: number) => (
+                            <img key={`${u}-${idx}`} src={u} alt={`photo-${idx}`} className="w-full h-28 object-cover rounded-md border" />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                </div>
+              </div>
+            )}
+        
+        </>
+      );
+    }
+    return <AdminUsers showToast={showToast} />;
+  };
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 to-white p-0 flex flex-col md:flex-row w-full overflow-x-hidden">
@@ -434,344 +1419,11 @@ export default function AdminPage() {
         </button>
       </aside>
       <section className="flex-1 w-full px-4 md:px-12 py-10 overflow-x-hidden">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight">
-            Administration
-          </h1>
-          {activeTab === "annonces" && (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={seedExamples}
-                disabled={seeding}
-                className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-60"
-                title="Créer une annonce d’exemple pour chaque commune"
-              >
-                {seeding ? "Création..." : "Créer annonces d’exemple"}
-              </button>
-            </div>
-          )}
-        </div>
-
+        {/* ...existing code header... */}
         <div className="bg-white rounded-xl shadow-lg p-8">
-          {activeTab === "annonces" ? (
-            <>
-              {/* Barre d’actions */}
-              <div className="flex flex-wrap items-center gap-2 mb-4">
-                {/* ...existing master checkbox + select/deselect all... */}
-                <label className="inline-flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={() => (allSelected ? adminDeselectAll() : adminSelectAll())}
-                  />
-                  <span className="text-sm text-slate-700">Tout ({adminAnnonces.length})</span>
-                </label>
-                <button type="button" onClick={adminSelectAll} disabled={adminAnnonces.length === 0} className="border px-3 py-1.5 rounded hover:bg-slate-50 disabled:opacity-60">Tout sélectionner</button>
-                <button type="button" onClick={adminDeselectAll} disabled={adminSelected.length === 0} className="border px-3 py-1.5 rounded hover:bg-slate-50 disabled:opacity-60">Tout désélectionner</button>
-                <button type="button" onClick={() => adminBulkDelete()} disabled={adminSelected.length === 0 || adminLoading} className="bg-rose-600 text-white px-3 py-1.5 rounded hover:bg-rose-700 disabled:opacity-60">
-                  {adminLoading ? "Suppression..." : `Supprimer la sélection (${adminSelected.length})`}
-                </button>
-                {/* NOUVEAU: bouton changer propriétaire */}
-                <button
-                  type="button"
-                  onClick={() => setBulkOwnerOpen(true)}
-                  disabled={adminSelected.length === 0 || adminLoading}
-                  className="bg-amber-600 text-white px-3 py-1.5 rounded hover:bg-amber-700 disabled:opacity-60"
-                >
-                  Changer propriétaire ({adminSelected.length})
-                </button>
-              </div>
-
-              {/* Liste en temps réel avec colonne Propriétaire */}
-              {adminAnnonces.length === 0 ? (
-                <p className="text-slate-500">Aucune annonce à afficher.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-[15px]">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="py-2 px-3 w-10"></th>
-                        <th className="py-2 px-3 text-left">Titre</th>
-                        <th className="py-2 px-3 text-left">Ville</th>
-                        <th className="py-2 px-3 text-left">Prix</th>
-                        <th className="py-2 px-3 text-left">Description (court)</th>
-                        <th className="py-2 px-3 text-left">Propriétaire</th>
-                        <th className="py-2 px-3 text-left">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50">
-                      {adminAnnonces.map((a) => {
-                        const uid = a.ownerId || a.uid;
-                        const owner = ownersById[uid || ""] || {};
-                        const ownerLabel = owner.displayName || owner.email || uid || "-";
-                        const shortDesc =
-                          (a.description || "").toString().slice(0, 160) +
-                          ((a.description || "").length > 160 ? "…" : "");
-                        return (
-                          <tr key={a.id} className="hover:bg-blue-50/50 transition">
-                            <td className="py-2 px-3">
-                              <input
-                                type="checkbox"
-                                checked={adminSelected.includes(a.id)}
-                                onChange={() => toggleAdminSelect(a.id)}
-                              />
-                            </td>
-                            <td className="py-2 px-3">
-                              <Link
-                                href={`/annonce/${a.id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:underline"
-                                title="Ouvrir la fiche annonce dans un nouvel onglet"
-                              >
-                                {a.titre || "(sans titre)"}
-                              </Link>
-                            </td>
-                            <td className="py-2 px-3">{a.ville || "-"}</td>
-                            <td className="py-2 px-3">{typeof a.prix === "number" ? `${a.prix} €` : "-"}</td>
-                            {/* Colonne description élargie et non tronquée en une seule ligne */}
-                            <td className="py-2 px-3 max-w-[560px] whitespace-normal">
-                              {shortDesc}
-                            </td>
-                            <td className="py-2 px-3">{ownerLabel}</td>
-                            <td className="py-2 px-3 flex gap-3">
-                              {/* NOUVEAU: bouton Modifier */}
-                              <button
-                                type="button"
-                                className="text-blue-600 hover:underline"
-                                onClick={() => { setEditAnnonce(a); setModalOpen(true); }}
-                              >
-                                Modifier
-                              </button>
-                              <button
-                                type="button"
-                                className="text-rose-600 hover:underline"
-                                onClick={() => adminBulkDelete([a.id])}
-                                disabled={adminLoading}
-                              >
-                                Supprimer
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* NOUVEAU: Modal d’édition */}
-              <AnnonceModal
-                isOpen={modalOpen}
-                onClose={() => { setModalOpen(false); setEditAnnonce(null); }}
-                annonce={editAnnonce}
-                onSubmit={async ({ titre, ville, prix, imageUrl, surface, nbChambres, equipements, description }) => {
-                  if (!editAnnonce) return;
-                  try {
-                    const payload: any = {
-                      titre,
-                      ville,
-                      prix: prix ? Number(prix) : null,
-                      imageUrl,
-                      surface: surface ? Number(surface) : null,
-                      nbChambres: nbChambres ? Number(nbChambres) : null,
-                      equipements,
-                      description,
-                    };
-                    Object.keys(payload).forEach((k) => (payload[k] === "" || payload[k] === null) && delete payload[k]);
-                    await updateAnnonce(editAnnonce.id, payload);
-                    showToast("success", "Annonce mise à jour ✅");
-                  } catch (e: any) {
-                    console.error("[Admin][UpdateAnnonce]", e);
-                    showToast("error", "Erreur lors de la mise à jour.");
-                  } finally {
-                    setModalOpen(false);
-                    setEditAnnonce(null);
-                  }
-                }}
-              />
-
-              {/* NOUVEAU: Modal “Changer propriétaire” */}
-              {bulkOwnerOpen && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-                  <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
-                    <h3 className="text-lg font-semibold mb-3">Changer le propriétaire</h3>
-                    <p className="text-sm text-slate-600 mb-3">
-                      Saisissez l’email OU l’identifiant (userId) du nouveau propriétaire
-                      et utilisez la liste de suggestions.
-                    </p>
-                    <input
-                      type="text"
-                      placeholder="ex: user@example.com ou UID"
-                      value={bulkOwnerInput}
-                      onChange={(e) => setBulkOwnerInput(e.target.value)}
-                      className="border rounded px-3 py-2 w-full mb-2"
-                      list="owners-suggestions"
-                      autoFocus
-                    />
-                    {/* Suggestions d’utilisateurs existants (email/displayName) */}
-                    <datalist id="owners-suggestions">
-                      {Object.entries(ownersById).map(([id, o]) => {
-                        const label = o?.displayName
-                          ? `${o.displayName} <${o.email || id}>`
-                          : (o?.email || id);
-                        // La valeur utilisable reste l’email s’il existe, sinon l’UID
-                        const value = (o?.email || id) as string;
-                        return <option key={id} value={value}>{label}</option>;
-                      })}
-                    </datalist>
-
-                    <div className="flex justify-end gap-2 mt-4">
-                      <button
-                        type="button"
-                        className="px-4 py-2 rounded bg-gray-200 text-gray-700"
-                        onClick={() => { setBulkOwnerOpen(false); setBulkOwnerInput(""); }}
-                        disabled={adminLoading}
-                      >
-                        Annuler
-                      </button>
-                      <button
-                        type="button"
-                        className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-                        onClick={performBulkOwnerChange}
-                        disabled={!bulkOwnerInput.trim() || adminLoading}
-                      >
-                        Confirmer
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          ) : activeTab === "colocs" ? (
-            <>
-              {/* Barre d’actions profils */}
-              <div className="flex flex-wrap items-center gap-2 mb-4">
-                <label className="inline-flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={allColocsSelected}
-                    onChange={() => (allColocsSelected ? colocsDeselectAll() : colocsSelectAll())}
-                  />
-                  <span className="text-sm text-slate-700">Tout ({adminColocs.length})</span>
-                </label>
-                <button type="button" onClick={colocsSelectAll} disabled={adminColocs.length === 0} className="border px-3 py-1.5 rounded hover:bg-slate-50 disabled:opacity-60">Tout sélectionner</button>
-                <button type="button" onClick={colocsDeselectAll} disabled={adminColocsSelected.length === 0} className="border px-3 py-1.5 rounded hover:bg-slate-50 disabled:opacity-60">Tout désélectionner</button>
-                <button
-                  type="button"
-                  onClick={() => colocsBulkDelete()}
-                  disabled={adminColocsSelected.length === 0 || adminLoading}
-                  className="bg-rose-600 text-white px-3 py-1.5 rounded hover:bg-rose-700 disabled:opacity-60"
-                >
-                  {adminLoading ? "Suppression..." : `Supprimer la sélection (${adminColocsSelected.length})`}
-                </button>
-                <button
-                  type="button"
-                  onClick={seedColocExamples}
-                  disabled={seedingColocs}
-                  className="bg-emerald-600 text-white px-3 py-1.5 rounded hover:bg-emerald-700 disabled:opacity-60"
-                >
-                  {seedingColocs ? "Création..." : "Créer profils d’exemple"}
-                </button>
-              </div>
-
-              {/* Liste profils */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-[15px]">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="py-2 px-3 w-10"></th>
-                      <th className="py-2 px-3 text-left">Nom</th>
-                      <th className="py-2 px-3 text-left">Ville</th>
-                      <th className="py-2 px-3 text-left">Budget</th>
-                      <th className="py-2 px-3 text-left">Description (court)</th>
-                      <th className="py-2 px-3 text-left">Email</th>
-                      <th className="py-2 px-3 text-left">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50">
-                    {adminColocs.map((p) => {
-                      const shortDesc = (p.description || "").toString().slice(0, 160) + ((p.description || "").length > 160 ? "…" : "");
-                      return (
-                        <tr key={p.id} className="hover:bg-blue-50/50 transition">
-                          <td className="py-2 px-3">
-                            <input
-                              type="checkbox"
-                              checked={adminColocsSelected.includes(p.id)}
-                              onChange={() => toggleColocSelect(p.id)}
-                            />
-                          </td>
-                          <td className="py-2 px-3">{p.nom || "(sans nom)"}</td>
-                          <td className="py-2 px-3">{p.ville || "-"}</td>
-                          <td className="py-2 px-3">{typeof p.budget === "number" ? `${p.budget} €` : "-"}</td>
-                          <td className="py-2 px-3 max-w-[560px] whitespace-normal">{shortDesc}</td>
-                          <td className="py-2 px-3">{p.email || "-"}</td>
-                          <td className="py-2 px-3 flex gap-3">
-                            <button
-                              type="button"
-                              className="text-blue-600 hover:underline"
-                              onClick={() => openColocModal(p)}
-                            >
-                              Modifier
-                            </button>
-                            <button
-                              type="button"
-                              className="text-rose-600 hover:underline"
-                              onClick={() => colocsBulkDelete([p.id])}
-                              disabled={adminLoading}
-                            >
-                              Supprimer
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Modale édition profil colocataire */}
-              {colocModalOpen && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-                  <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg">
-                    <h3 className="text-lg font-semibold mb-3">Modifier le profil</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <input className="border rounded px-3 py-2" placeholder="Nom" value={colocNomEdit} onChange={(e) => setColocNomEdit(e.target.value)} />
-                      <input className="border rounded px-3 py-2" placeholder="Ville" value={colocVilleEdit} onChange={(e) => setColocVilleEdit(e.target.value)} />
-                      <input className="border rounded px-3 py-2" placeholder="Budget (€)" type="number" value={colocBudgetEdit} onChange={(e) => setColocBudgetEdit(e.target.value)} />
-                      <input className="border rounded px-3 py-2" placeholder="Âge" type="number" value={colocAgeEdit} onChange={(e) => setColocAgeEdit(e.target.value)} />
-                      <input className="border rounded px-3 py-2 sm:col-span-2" placeholder="Image (URL)" value={colocImageUrlEdit} onChange={(e) => setColocImageUrlEdit(e.target.value)} />
-                      <input className="border rounded px-3 py-2" placeholder="Profession" value={colocProfessionEdit} onChange={(e) => setColocProfessionEdit(e.target.value)} />
-                      <input className="border rounded px-3 py-2" placeholder="Téléphone" value={colocTelephoneEdit} onChange={(e) => setColocTelephoneEdit(e.target.value)} />
-                      <input className="border rounded px-3 py-2" placeholder="Disponibilité (YYYY-MM-DD)" value={colocDateDispoEdit} onChange={(e) => setColocDateDispoEdit(e.target.value)} />
-                      <textarea className="border rounded px-3 py-2 sm:col-span-2" placeholder="Description" value={colocDescriptionEdit} onChange={(e) => setColocDescriptionEdit(e.target.value)} rows={4} />
-                    </div>
-                    <div className="flex justify-end gap-2 mt-4">
-                      <button className="px-4 py-2 rounded bg-gray-200 text-gray-700" onClick={() => { setColocModalOpen(false); setEditColoc(null); }} disabled={adminLoading}>Annuler</button>
-                      <button className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60" onClick={saveColocEdit} disabled={adminLoading}>Enregistrer</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <AdminUsers showToast={showToast} />
-          )}
+          {renderTab()}
         </div>
-
-        {/* Toast notification en bas à droite */}
-        {toast && (
-          <div
-            className={`fixed bottom-6 right-6 z-50 px-6 py-3 rounded shadow-lg text-white transition-all
-              ${toast.type === "success" ? "bg-green-600" : "bg-red-600"}`}
-            style={{ minWidth: 220 }}
-          >
-            {toast.message}
-          </div>
-        )}
       </section>
     </main>
   );
 }
-

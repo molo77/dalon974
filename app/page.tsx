@@ -47,11 +47,14 @@ export default function HomePage() {
   // NOUVEAU: communes sélectionnées (slugs)
   const [communesSelected, setCommunesSelected] = useState<string[]>([]);
   const [showCommuneMap, setShowCommuneMap] = useState(false);
+  const [zonesSelected, setZonesSelected] = useState<string[]>([]); // zones calculées depuis les slugs
+  const [zoneFilters, setZoneFilters] = useState<string[]>([]); // zones choisies via boutons rapides
 
   // NOUVEAU: état et handlers pour le détail du profil colocataire
   const [colocDetailOpen, setColocDetailOpen] = useState(false);
   const [colocDetailLoading, setColocDetailLoading] = useState(false);
   const [colocDetail, setColocDetail] = useState<any | null>(null);
+  const [filtering, setFiltering] = useState(false);
 
   // Image d'annonce par défaut (16:9)
   const defaultAnnonceImg =
@@ -83,6 +86,15 @@ export default function HomePage() {
     communeData?.communesSorted ??
     [...COMMUNES_CP].sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
 
+  // NOUVEAU: groupes de communes (zones)
+  const GROUPES: Record<string, string[]> = {
+    Nord: ["Saint-Denis", "Sainte-Marie", "Sainte-Suzanne"],
+    Est: ["Saint-André", "Bras-Panon", "Salazie", "Saint-Benoît", "La Plaine-des-Palmistes", "Sainte-Rose", "Saint-Philippe"],
+    Ouest: ["Le Port", "La Possession", "Saint-Paul", "Trois-Bassins", "Saint-Leu", "Les Avirons", "L'Étang-Salé"],
+    Sud: ["Saint-Louis", "Saint-Pierre", "Le Tampon", "Entre-Deux", "Petite-Île", "Saint-Joseph", "Cilaos"],
+    Intérieur: ["Cilaos", "Salazie", "La Plaine-des-Palmistes"],
+  };
+
   // NOUVEAU: map “nom (commune/sous-commune) -> slug parent de la commune”
   const nameToParentSlug = useMemo(() => {
     const m: Record<string, string> = {};
@@ -94,6 +106,59 @@ export default function HomePage() {
       });
     });
     return m;
+  }, [COMMUNES_CP_SORTED]);
+
+  // NOUVEAU: map “slug parent -> Nom de la commune” (pour fallback sur 'ville')
+  const parentSlugToName = useMemo(() => {
+    const m: Record<string, string> = {};
+    (COMMUNES_CP_SORTED as any[]).forEach((c) => {
+      m[slugify(c.name)] = c.name;
+    });
+    return m;
+  }, [COMMUNES_CP_SORTED]);
+
+  // NOUVEAU: map “slug -> Nom officiel” (pour calculer les zones depuis les slugs sélectionnés)
+  const SLUG_TO_NAME = useMemo(() => {
+    const m: Record<string, string> = {};
+    (COMMUNES_CP_SORTED as any[]).forEach((c) => {
+      m[slugify(c.name)] = c.name;
+    });
+    return m;
+  }, [COMMUNES_CP_SORTED]);
+
+  // Zones -> slugs de communes
+  const ZONE_TO_SLUGS = useMemo(() => {
+    const m: Record<string, string[]> = {};
+    Object.entries(GROUPES).forEach(([zone, names]) => {
+      m[zone] = names.map((n) => slugify(n));
+    });
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // NOUVEAU: déduire les zones depuis les slugs sélectionnés
+  const computeZonesFromSlugs = (slugs: string[]): string[] => {
+    const names = (slugs || []).map((s) => SLUG_TO_NAME[s]).filter(Boolean);
+    const zones: string[] = [];
+    Object.entries(GROUPES).forEach(([zone, list]) => {
+      if (names.some((n) => list.includes(n))) zones.push(zone);
+    });
+    return zones;
+  };
+
+  // NOUVEAU: altSlug -> slug canonique (gère les articles l-/le-/la-/les-)
+  const altSlugToCanonical = useMemo(() => {
+    const map: Record<string, string> = {};
+    (COMMUNES_CP_SORTED as any[]).forEach((c) => {
+      const canonical = slugify(c.name); // ex: "l-etang-sale"
+      map[canonical] = canonical;
+      const noArticle = canonical.replace(/^(l|le|la|les)-/, ""); // ex: "etang-sale"
+      if (noArticle && !map[noArticle]) map[noArticle] = canonical;
+      // variantes simples sans tirets répétés
+      const compact = noArticle.replace(/-+/g, "-");
+      if (compact && !map[compact]) map[compact] = canonical;
+    });
+    return map;
   }, [COMMUNES_CP_SORTED]);
 
   const findByCp = (cp: string) =>
@@ -144,15 +209,20 @@ export default function HomePage() {
   };
 
   const subsRef = useRef<(() => void)[]>([]); // abonnements actifs
+  const pendingStreamsRef = useRef(0);
+  const filtersDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const resetOnFirstSnapshotRef = useRef(false);
 
   const clearAllSubs = () => {
     subsRef.current.forEach((u) => { try { u(); } catch {} });
     subsRef.current = [];
     // IMPORTANT: libérer le blocage de loadAnnonces
     setLoadingMore(false);
+    // Stopper l’indicateur si on nettoie au milieu d’un filtrage
+    setFiltering(false);
   };
 
-  // Helper: déduire le slug parent de l'annonce depuis communeSlug ou ville
+  // Helper: déduire le slug parent de l’annonce depuis communeSlug ou ville
   const getDocParentSlug = (d: any) => {
     const raw = d?.communeSlug || d?.ville || "";
     const s = slugify(raw);
@@ -165,6 +235,8 @@ export default function HomePage() {
     if (loadingMore || !hasMore || firestoreError) return;
 
     setLoadingMore(true);
+    setFiltering(true);
+    pendingStreamsRef.current = 0;
 
     try {
       const isColoc = activeHomeTab === "colocataires";
@@ -172,7 +244,15 @@ export default function HomePage() {
       const priceField = isColoc ? "budget" : "prix";
       const orderField = sortBy === "date" ? "createdAt" : priceField;
 
-      const hasCommuneFilter = communesSelected.length > 0;
+      // Normalise les slugs sélectionnés (ex: "etang-sale" -> "l-etang-sale")
+      const normalizedSlugs = Array.from(
+        new Set(
+          communesSelected
+            .map((s) => altSlugToCanonical[s] || s)
+            .filter(Boolean)
+        )
+      );
+      const hasCommuneFilter = normalizedSlugs.length > 0;
 
       // Prépare séparément le where prix et les filtres "base" (sans prix)
       const baseColRef = collection(db, collectionName);
@@ -209,7 +289,7 @@ export default function HomePage() {
       // Filtre client pour annonces: slug parent ∈ communesSelected
       const annoncesClientFilter =
         !isColoc && hasCommuneFilter
-          ? (d: any) => communesSelected.includes(getDocParentSlug(d))
+          ? (d: any) => normalizedSlugs.includes(getDocParentSlug(d))
           : undefined;
 
       // Filtre prix client (utilisé si l’index composite manque)
@@ -240,13 +320,22 @@ export default function HomePage() {
           fallbackNoPrice: Query<DocumentData>;
         }
       ) => {
+        // Compter cette écoute comme “en attente” jusqu’à son 1er snapshot (ou erreur)
+        pendingStreamsRef.current += 1;
+        let resolvedOnce = false;
+
         const unsub = onSnapshot(
           qOrdered,
           (snap: QuerySnapshot<DocumentData>) => {
+            if (!resolvedOnce) {
+              resolvedOnce = true;
+              pendingStreamsRef.current -= 1;
+              if (pendingStreamsRef.current <= 0) setFiltering(false);
+            }
             let docsArr = snap.docs;
             if (clientFilter) docsArr = docsArr.filter((d: any) => clientFilter(d.data()));
             const mapped = docsArr.map((doc: any) => {
-              const d = doc.data() as Record<string, any>;
+              const d = doc.data() as any;
               // -- CHANGEMENT: mapping dédié profils coloc --
               if (isColoc) {
                 const head = [d.profession, typeof d.age === "number" ? `${d.age} ans` : null].filter(Boolean).join(" • ");
@@ -276,41 +365,44 @@ export default function HomePage() {
               };
             });
             setAnnonces((prev) => {
-              const byId = new Map(prev.map((x) => [x.id, x]));
-              mapped.forEach((m) => byId.set(m.id, { ...(byId.get(m.id) || {}), ...m }));
-              const arr = Array.from(byId.values());
-              const toMs = (x: any) => {
-                const v = x?.createdAt;
-                if (!v) return 0;
-                if (typeof v === "number") return v;
-                if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
-                const p = Date.parse(v);
-                return isNaN(p) ? 0 : p;
-              };
-              if (sortBy === "date") arr.sort((a, b) => toMs(b) - toMs(a));
-              else arr.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
-              return arr;
-            });
+              // Premier snapshot après changement de filtres: remplacer entièrement
+              let arr = resetOnFirstSnapshotRef.current ? [...mapped] : (() => {
+                const byId = new Map(prev.map((x) => [x.id, x]));
+                mapped.forEach((m) => byId.set(m.id, { ...(byId.get(m.id) || {}), ...m }));
+                return Array.from(byId.values());
+              })();
+               const toMs = (x: any) => {
+                 const v = x?.createdAt;
+                 if (!v) return 0;
+                 if (typeof v === "number") return v;
+                 if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+                 const p = Date.parse(v);
+                 return isNaN(p) ? 0 : p;
+               };
+               if (sortBy === "date") arr.sort((a, b) => toMs(b) - toMs(a));
+               else arr.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
+               if (resetOnFirstSnapshotRef.current) resetOnFirstSnapshotRef.current = false;
+               return arr;
+             });
             if (docsArr.length > 0) setLastDoc(docsArr[docsArr.length - 1]); else setHasMore(false);
             setLoadingMore(false);
           },
           (err: any) => {
             if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
-              // Fallback sans orderBy. Si le where prix pose problème (index composite manquant),
-              // basculer sur une requête SANS prix et filtrer le prix côté client.
-              const useNoPrice = !!priceWhere;
-              const qNoOrder = lastDoc
-                ? query(useNoPrice ? fallbackNoPrice : fallback, startAfter(lastDoc))
-                : useNoPrice
-                ? fallbackNoPrice
-                : fallback;
+              // Fallback sans orderBy, mais on garde TOUS les where (dont le prix) côté Firestore
+              const qNoOrder = lastDoc ? query(fallback, startAfter(lastDoc)) : fallback;
 
               const unsub2 = onSnapshot(
                 qNoOrder as Query<DocumentData>,
                 (snap2: QuerySnapshot<DocumentData>) => {
+                  if (!resolvedOnce) {
+                    resolvedOnce = true;
+                    pendingStreamsRef.current -= 1;
+                    if (pendingStreamsRef.current <= 0) setFiltering(false);
+                  }
                   let docsArr = snap2.docs;
-                  const combined = combineFilters(clientFilter, useNoPrice ? clientPriceFilter : undefined);
-                  if (combined) docsArr = docsArr.filter((d: any) => combined(d.data()));
+                  // Pas de filtrage client prix: tout est fait via Firestore
+                  if (clientFilter) docsArr = docsArr.filter((d: any) => clientFilter(d.data()));
                   const mapped = docsArr.map((doc: any) => {
                     const d = doc.data() as any;
                     // -- CHANGEMENT: mapping fallback pour profils coloc --
@@ -342,32 +434,45 @@ export default function HomePage() {
                     };
                   });
                   setAnnonces((prev) => {
-                    const byId = new Map(prev.map((x) => [x.id, x]));
-                    mapped.forEach((m) => byId.set(m.id, { ...(byId.get(m.id) || {}), ...m }));
-                    const arr = Array.from(byId.values());
-                    const toMs = (x: any) => {
-                      const v = x?.createdAt;
-                      if (!v) return 0;
-                      if (typeof v === "number") return v;
-                      if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
-                      const p = Date.parse(v);
-                      return isNaN(p) ? 0 : p;
-                    };
-                    if (sortBy === "date") arr.sort((a, b) => toMs(b) - toMs(a));
-                    else arr.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
-                    return arr;
-                  });
+                    let arr = resetOnFirstSnapshotRef.current ? [...mapped] : (() => {
+                      const byId = new Map(prev.map((x) => [x.id, x]));
+                      mapped.forEach((m) => byId.set(m.id, { ...(byId.get(m.id) || {}), ...m }));
+                      return Array.from(byId.values());
+                    })();
+                     const toMs = (x: any) => {
+                       const v = x?.createdAt;
+                       if (!v) return 0;
+                       if (typeof v === "number") return v;
+                       if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+                       const p = Date.parse(v);
+                       return isNaN(p) ? 0 : p;
+                     };
+                     if (sortBy === "date") arr.sort((a, b) => toMs(b) - toMs(a));
+                     else arr.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
+                      if (resetOnFirstSnapshotRef.current) resetOnFirstSnapshotRef.current = false;
+                     return arr;
+                   });
                   if (docsArr.length > 0) setLastDoc(docsArr[docsArr.length - 1]); else setHasMore(false);
                   setLoadingMore(false);
                 },
                 (err2: any) => {
                   console.error("[Accueil][onSnapshot][fallback-noOrder][" + label + "]", err2);
+                  if (!resolvedOnce) {
+                    resolvedOnce = true;
+                    pendingStreamsRef.current -= 1;
+                    if (pendingStreamsRef.current <= 0) setFiltering(false);
+                  }
                   setLoadingMore(false);
                 }
               );
               subsRef.current.push(unsub2);
             } else {
               console.error("[Accueil][onSnapshot][" + label + "]", err);
+              if (!resolvedOnce) {
+                resolvedOnce = true;
+                pendingStreamsRef.current -= 1;
+                if (pendingStreamsRef.current <= 0) setFiltering(false);
+              }
               setLoadingMore(false);
             }
           }
@@ -380,8 +485,12 @@ export default function HomePage() {
           // Coloc: on garde le filtrage Firestore par communesSlugs + clientFilter "ET" si besoin
           const field = "communesSlugs";
           const op = "array-contains-any";
-          const clientFilterCombined = combineFilters(requireAllSelected, undefined);
-          for (const c of chunks(communesSelected, 10)) {
+          //          const clientFilterCombined = combineFilters(requireAllSelected, undefined);
+          //          for (const c of chunks(communesSelected, 10)) {
+          // Logique OU: on ne combine pas avec un filtre client “toutes les communes”
+          const clientFilterCombined = undefined;
+          // Normalise aussi les slugs côté coloc
+          for (const c of chunks(normalizedSlugs, 10)) {
             const chunkWhere = where(field as any, op as any, c);
             const qFilterOnly = query(baseColRef, ...commonFiltersWithPrice, chunkWhere);
             const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase, chunkWhere);
@@ -395,17 +504,38 @@ export default function HomePage() {
             });
           }
         } else {
-          // Annonces: pas de where("communeSlug","in",...), filtrage communes côté client
-          const qFilterOnly = query(baseColRef, ...commonFiltersWithPrice);
-          const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase);
-          const qOrdered = qWithOrder(qFilterOnly);
-          const qPaged = lastDoc ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
-          attachListener(qPaged as Query<DocumentData>, {
-            label: "annonces-communes-client",
-            clientFilter: annoncesClientFilter,
-            fallback: qFilterOnly as Query<DocumentData>,
-            fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
-          });
+          // Annonces: utiliser des requêtes Firestore fiables
+          // 1) communeSlug IN [slugs...] (docs récents)
+          for (const c of chunks(normalizedSlugs, 10)) {
+            const w = where("communeSlug", "in", c);
+            const qFilterOnly = query(baseColRef, ...commonFiltersWithPrice, w);
+            const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase, w);
+            const qOrdered = qWithOrder(qFilterOnly);
+            const qPaged = lastDoc ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
+            attachListener(qPaged as Query<DocumentData>, {
+              label: "annonces-communeSlug-in",
+              // pas de clientFilter nécessaire: le IN filtre déjà
+              fallback: qFilterOnly as Query<DocumentData>,
+              fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
+            });
+          }
+          // 2) ville IN [Noms…] (fallback pour anciennes annonces sans communeSlug)
+          const selectedNames = normalizedSlugs
+            .map((s) => parentSlugToName[s])
+            .filter(Boolean) as string[];
+          for (const namesChunk of chunks(selectedNames, 10)) {
+            const w = where("ville", "in", namesChunk);
+            const qFilterOnly = query(baseColRef, ...commonFiltersWithPrice, w);
+            const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase, w);
+            const qOrdered = qWithOrder(qFilterOnly);
+            const qPaged = lastDoc ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
+            attachListener(qPaged as Query<DocumentData>, {
+              label: "annonces-ville-in",
+              fallback: qFilterOnly as Query<DocumentData>,
+              fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
+            });
+          }
+          // 3) Fallback client: pas de filtre Firestore, on filtre côté client par slugs normalisés
         }
       } else {
         // Pas de filtre communes: comportement standard
@@ -421,11 +551,12 @@ export default function HomePage() {
       }
     } catch (err: any) {
       console.error("Erreur chargement temps réel :", err);
+      setFiltering(false);
       setLoadingMore(false);
     }
   };
 
-  // Reset quand on change d’onglet: nettoie + reset filtres (ne dépend que de activeHomeTab)
+  // Reset quand on change d’onglet
   useEffect(() => {
     if (activeHomeTab === null) return;
     clearAllSubs();
@@ -433,7 +564,7 @@ export default function HomePage() {
     setAnnonces([]);
     setLastDoc(null);
     setHasMore(true);
-    // reset filtres ici (ok car l’effet ne dépend pas de ces états)
+    // reset filtres ici
     setCommunesSelected([]);
     setVille("");
     setCodePostal("");
@@ -441,20 +572,27 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeHomeTab]);
 
-  // Rechargement quand les filtres changent (sans réinitialiser les filtres eux‑mêmes)
+  // Rechargement quand les filtres changent (sans vider la liste immédiatement)
   useEffect(() => {
     if (activeHomeTab === null) return;
     clearAllSubs();
-    setAnnonces([]);
     setLastDoc(null);
     setHasMore(true);
-    loadAnnonces();
+    setFiltering(true);
+    resetOnFirstSnapshotRef.current = true; // remplacera les cartes au premier snapshot
+    if (filtersDebounceRef.current) clearTimeout(filtersDebounceRef.current);
+    filtersDebounceRef.current = setTimeout(() => {
+      loadAnnonces();
+    }, 250);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortBy, prixMax, ville, codePostal, communesSelected]);
 
   // Nettoyage global à l’unmount
   useEffect(() => {
-    return () => clearAllSubs();
+    return () => {
+      clearAllSubs();
+     if (filtersDebounceRef.current) clearTimeout(filtersDebounceRef.current);
+    };
   }, []);
 
   // NOUVEAU: ouvrir le détail du profil colocataire
@@ -482,6 +620,23 @@ export default function HomePage() {
     setColocDetailOpen(false);
     setColocDetail(null);
     setColocDetailLoading(false);
+  };
+
+  // Toggle d'un filtre zone (OU)
+  const toggleZoneFilter = (zone: string) => {
+    setZoneFilters((prev) => {
+      const next = prev.includes(zone) ? prev.filter((z) => z !== zone) : [...prev, zone];
+      // Union des slugs pour les zones choisies
+      const zoneSlugs = Array.from(new Set(next.flatMap((z) => ZONE_TO_SLUGS[z] || [])));
+      // Tri stable par nom officiel pour éviter les variations d’ordre
+      zoneSlugs.sort((a, b) =>
+        (SLUG_TO_NAME[a] || a).localeCompare(SLUG_TO_NAME[b] || b, "fr", { sensitivity: "base" })
+      );
+      // MAJ groupée pour cohérence UI + requêtes
+      setCommunesSelected((prevSlugs) => (sameIds(prevSlugs, zoneSlugs) ? prevSlugs : zoneSlugs));
+      setZonesSelected((prevZones) => (sameIds(prevZones, next) ? prevZones : next));
+      return next;
+    });
   };
 
   return (
@@ -643,6 +798,7 @@ export default function HomePage() {
                   setAnnonces([]);
                   setLastDoc(null);
                   setHasMore(true);
+                  setZoneFilters([]);
                   // pas d’appel direct à loadAnnonces: l’effet "filtres" va relancer proprement
                 }}
                 className="border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50"
@@ -660,13 +816,32 @@ export default function HomePage() {
               >
                 {showCommuneMap ? "Masquer" : "Filtrer par communes (carte)"}
               </button>
+              {/* Zones rapides (OU) */}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {Object.keys(GROUPES).map((z) => (
+                  <button
+                    key={z}
+                    type="button"
+                    onClick={() => toggleZoneFilter(z)}
+                    className={`px-3 py-1.5 rounded-full text-sm border transition ${
+                      zoneFilters.includes(z)
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    {z}
+                  </button>
+                ))}
+              </div>
               {showCommuneMap && (
                 <div className="mt-3 rounded-2xl border border-slate-200 p-3">
                   <CommuneZoneSelector
                     value={communesSelected}
-                    onChange={(slugs) =>
-                      setCommunesSelected((prev) => (sameIds(prev, slugs as string[]) ? prev : (slugs as string[])))
-                    }
+                    computeZonesFromSlugs={computeZonesFromSlugs}
+                    onChange={(slugs, zones = []) => {
+                      setCommunesSelected((prev) => (sameIds(prev, slugs as string[]) ? prev : (slugs as string[])));
+                      setZonesSelected((prev) => (sameIds(prev, zones as string[]) ? prev : (zones as string[])));
+                    }}
                     height={420}
                     className="w-full"
                     alwaysMultiSelect
@@ -678,8 +853,20 @@ export default function HomePage() {
                   Communes sélectionnées: {communesSelected.join(", ")}
                 </p>
               )}
+              {zonesSelected.length > 0 && (
+                <p className="mt-1 text-xs text-slate-600">
+                  Zones sélectionnées: {zonesSelected.join(", ")}
+                </p>
+              )}
             </div>
           </form>
+
+          {/* Indicateur de filtrage en cours */}
+          {filtering && (
+            <div className="w-full max-w-6xl mb-3 text-center text-slate-600 text-sm">
+              Filtrage en cours…
+            </div>
+          )}
 
           <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {annonces.map((annonce) => {
@@ -730,7 +917,10 @@ export default function HomePage() {
 
           {/* Modal détail profil colocataire */}
           {activeHomeTab === "colocataires" && colocDetailOpen && (
-            <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <div
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+              onMouseDown={(e) => { if (e.target === e.currentTarget) closeColocDetail(); }}
+            >
               <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 relative">
                 <button
                   onClick={closeColocDetail}
@@ -771,6 +961,65 @@ export default function HomePage() {
                         </div>
                       </div>
                     </div>
+
+                    {colocDetail.bioCourte && (
+                      <div className="text-slate-700">{colocDetail.bioCourte}</div>
+                    )}
+                    {(colocDetail.genre || colocDetail.orientation) && (
+                      <div className="text-sm text-slate-600">
+                        {colocDetail.genre ? `Genre: ${colocDetail.genre}` : ""} {colocDetail.orientation ? `• Orientation: ${colocDetail.orientation}` : ""}
+                      </div>
+                    )}
+                    {Array.isArray(colocDetail.langues) && colocDetail.langues.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Langues</div>
+                        <div className="flex flex-wrap gap-2">
+                          {colocDetail.langues.map((l: string) => (
+                            <span key={l} className="px-2 py-1 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">{l}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(colocDetail.prefGenre || colocDetail.prefAgeMin || colocDetail.prefAgeMax) && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Préférences</div>
+                        <div className="text-sm text-slate-600">
+                          {colocDetail.prefGenre ? `Colocs: ${colocDetail.prefGenre}` : ""}
+                          {(colocDetail.prefAgeMin || colocDetail.prefAgeMax) ? ` • Âge: ${colocDetail.prefAgeMin || "?"} - ${colocDetail.prefAgeMax || "?"}` : ""}
+                        </div>
+                      </div>
+                    )}
+                    {(typeof colocDetail.accepteFumeurs === "boolean" || typeof colocDetail.accepteAnimaux === "boolean" || colocDetail.rythme || colocDetail.proprete) && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Style de vie</div>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          {typeof colocDetail.accepteFumeurs === "boolean" && (
+                            <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
+                              {colocDetail.accepteFumeurs ? "Accepte fumeurs" : "Non fumeur de préférence"}
+                            </span>
+                          )}
+                          {typeof colocDetail.accepteAnimaux === "boolean" && (
+                            <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
+                              {colocDetail.accepteAnimaux ? "Accepte animaux" : "Sans animaux"}
+                            </span>
+                          )}
+                          {colocDetail.rythme && <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">Rythme: {colocDetail.rythme}</span>}
+                          {colocDetail.proprete && <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">Propreté: {colocDetail.proprete}</span>}
+                          {colocDetail.sportif && <span className="px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">Sportif</span>}
+                          {colocDetail.vegetarien && <span className="px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">Végétarien</span>}
+                          {colocDetail.soirees && <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Aime les soirées</span>}
+                          {colocDetail.musique && <span className="px-2 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200">Musique: {colocDetail.musique}</span>}
+                        </div>
+                      </div>
+                    )}
+                    {colocDetail.instagram && (
+                      <div className="text-sm">
+                        <span className="font-medium text-slate-700">Instagram:</span>{" "}
+                        <a href={`https://instagram.com/${String(colocDetail.instagram).replace(/^@/,"")}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                          {colocDetail.instagram}
+                        </a>
+                      </div>
+                    )}
 
                     {Array.isArray(colocDetail.zones) && colocDetail.zones.length > 0 && (
                       <div>
@@ -837,3 +1086,4 @@ export default function HomePage() {
     </main>
   );
 }
+

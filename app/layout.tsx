@@ -4,6 +4,7 @@ import "./globals.css";
 import "leaflet/dist/leaflet.css"; // + Leaflet CSS
 import Header from "@/components/Header"; 
 import { AuthProvider } from "@/components/AuthProvider";
+import { GlobalToast } from "@/components/Toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,6 +36,8 @@ export default function RootLayout({
           <main className="mx-auto w-[85%] max-w-full px-4 sm:px-6 lg:px-8 py-6">
             {children}
           </main>
+          {/* Toaster global pour toute l’application */}
+          <GlobalToast />
         </AuthProvider>
       </body>
     </html>

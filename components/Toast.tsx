@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type ToastType = "success" | "error" | "info";
 
@@ -78,4 +78,36 @@ export default function Toast({
       })}
     </div>
   );
+}
+
+// --- NOUVEAU: GlobalToast + helpers ---
+
+// Déclenche un CustomEvent lisible globalement
+function emitToast(type: ToastType, message: string) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("app:toast", { detail: { type, message } }));
+}
+
+// Helpers à utiliser partout
+export const toast = {
+  success: (message: string) => emitToast("success", message),
+  error: (message: string) => emitToast("error", message),
+  info: (message: string) => emitToast("info", message),
+};
+
+// Conteneur global unique, à monter dans le layout
+export function GlobalToast() {
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  useEffect(() => {
+    const onEvt = (e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
+      const id = Math.random().toString(36).slice(2);
+      setToasts((prev) => [...prev, { id, type: detail.type, message: detail.message }]);
+    };
+    window.addEventListener("app:toast", onEvt as EventListener);
+    return () => window.removeEventListener("app:toast", onEvt as EventListener);
+  }, []);
+
+  return <Toast toasts={toasts} onRemove={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />;
 }
