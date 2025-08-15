@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, GeoJSON, CircleMarker, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
 import type { FeatureGroup, Map as LeafletMap } from 'leaflet';
 import L from 'leaflet';
 
@@ -20,8 +20,6 @@ type Props = {
   alwaysMultiSelect?: boolean;
   className?: string;
   height?: number;
-  // Marqueurs à afficher (ex: colocs qui recherchent), positionnés par slug de commune
-  markers?: { id: string; slug?: string; label?: string }[];
 };
 
 const RAW_URL = 'https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/communes-avec-outre-mer.geojson';
@@ -40,7 +38,6 @@ export default function MapReunionLeaflet({
   alwaysMultiSelect = true,
   className,
   height = 520,
-  markers = [],
 }: Props) {
   const [features, setFeatures] = useState<CommuneFeature[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set(defaultSelected));
@@ -48,23 +45,6 @@ export default function MapReunionLeaflet({
   const groupRef = useRef<FeatureGroup | null>(null);
   const layerById = useRef<Record<string, L.Path>>({});
   const centerById = useRef<Record<string, L.LatLng>>({});
-  // Centres calculés à partir des features (robuste pour le rendu des marqueurs)
-  const centersById = useMemo(() => {
-    const map: Record<string, L.LatLng> = {};
-    try {
-      for (const f of features) {
-        const name = String((f.properties as any)?.nom || (f.properties as any)?.NOM || '');
-        const id = slugify(name);
-        try {
-          const layer = L.geoJSON(f as any);
-          const b = (layer as any).getBounds?.();
-          const c = b?.getCenter?.();
-          if (c) map[id] = c;
-        } catch {}
-      }
-    } catch {}
-    return map;
-  }, [features]);
   const onChangeRef = useRef(onSelectionChange);
   useEffect(() => { onChangeRef.current = onSelectionChange; }, [onSelectionChange]);
 
@@ -219,27 +199,6 @@ export default function MapReunionLeaflet({
           onEachFeature={onEachFeature as any}
         />
 
-        {/* Marqueurs des profils (si fournis) */}
-        {Array.isArray(markers) && markers.map((m) => {
-          const slug = (m.slug || '').toString();
-          if (!slug) return null;
-          const center = centersById[slug] || centerById.current[slug];
-          if (!center) return null;
-          return (
-            <CircleMarker
-              key={`mk-${m.id}`}
-              center={center as any}
-              radius={5}
-              pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.9, weight: 1 }}
-            >
-              {m.label ? (
-                <Tooltip direction="top" offset={[0, -6]} opacity={0.9} permanent={false} className="leaflet-tooltip-own">
-                  {m.label}
-                </Tooltip>
-              ) : null}
-            </CircleMarker>
-          );
-        })}
       </MapContainer>
 
       <style jsx global>{`

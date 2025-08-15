@@ -425,17 +425,18 @@ export default function HomePage() {
                 const zonesArr: string[] = Array.isArray((d as any).zones) && (d as any).zones.length
                   ? ((d as any).zones as string[])
                   : zonesFromSlugs;
-                const zonesLabel = zonesArr && zonesArr.length ? zonesArr.join(", ") : (d.ville || "-");
+                  const zonesLabel = zonesArr && zonesArr.length ? zonesArr.join(", ") : (d.ville || "-");
                 return {
                   id: doc.id,
                   titre: d.nom || "Recherche colocation",
-                  ville: zonesLabel, // Affiche les zones recherchées à la place de la commune
+                    ville: zonesLabel, // Affiche les zones recherchées à la place de la commune
                   prix: Number.isFinite(budgetNum) ? budgetNum : undefined, // AnnonceCard affiche “prix” -> budget ici
                   surface: undefined,
                   description: short.slice(0, 180), // extrait court
                   imageUrl: d.imageUrl || defaultAnnonceImg,
                   createdAt: d.createdAt,
-                  parentSlug,
+                    parentSlug,
+                    zonesLabel,
                 };
               }
               // -- annonces (inchangé) --
@@ -535,6 +536,7 @@ export default function HomePage() {
                         imageUrl: d.imageUrl || defaultAnnonceImg,
                         createdAt: d.createdAt,
                         parentSlug,
+                        zonesLabel,
                       };
                     }
                     // -- annonces (inchangé) --
@@ -863,36 +865,43 @@ export default function HomePage() {
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {(Array.isArray(annonces) ? annonces : [])
-                  .filter((a: any) => {
-                    // Si communes sélectionnées, impose l'appartenance au set normalisé
-                    if (selectedParentSlugs.length === 0) return true;
-                    const p = a?.parentSlug;
-                    return p ? selectedParentSlugs.includes(p) : false;
-                  })
-                  .filter((a: any) => {
-                    if (prixMax === null) return true;
-                    if (typeof a?.prix !== "number") return false;
-                    return a.prix <= prixMax;
-                  })
-                  .sort((a: any, b: any) => {
-                    if (sortBy === "prix" || sortBy === "prix-desc") {
-                      const pa = typeof a?.prix === "number" ? a.prix : Number.POSITIVE_INFINITY;
-                      const pb = typeof b?.prix === "number" ? b.prix : Number.POSITIVE_INFINITY;
-                      return sortBy === "prix-desc" ? pb - pa : pa - pb;
-                    } else {
-                      const toMs = (x: any) => {
-                        const v = x?.createdAt;
-                        if (!v) return 0;
-                        if (typeof v === "number") return v;
-                        if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
-                        const p = Date.parse(v);
-                        return isNaN(p) ? 0 : p;
-                      };
-                      return toMs(b) - toMs(a); // date récente d'abord
-                    }
-                  })
-                  .map((annonce) => {
+                {(() => {
+                  const list = (Array.isArray(annonces) ? annonces : [])
+                    .filter((a: any) => {
+                      if (selectedParentSlugs.length === 0) return true;
+                      const p = a?.parentSlug;
+                      return p ? selectedParentSlugs.includes(p) : false;
+                    })
+                    .filter((a: any) => {
+                      if (prixMax === null) return true;
+                      if (typeof a?.prix !== "number") return false;
+                      return a.prix <= prixMax;
+                    })
+                    .sort((a: any, b: any) => {
+                      if (sortBy === "prix" || sortBy === "prix-desc") {
+                        const pa = typeof a?.prix === "number" ? a.prix : Number.POSITIVE_INFINITY;
+                        const pb = typeof b?.prix === "number" ? b.prix : Number.POSITIVE_INFINITY;
+                        return sortBy === "prix-desc" ? pb - pa : pa - pb;
+                      } else {
+                        const toMs = (x: any) => {
+                          const v = x?.createdAt;
+                          if (!v) return 0;
+                          if (typeof v === "number") return v;
+                          if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+                          const p = Date.parse(v);
+                          return isNaN(p) ? 0 : p;
+                        };
+                        return toMs(b) - toMs(a);
+                      }
+                    });
+
+                  if (!filtering && list.length === 0) {
+                    return (
+                      <p className="text-slate-500 text-center mt-4 col-span-full">Aucune annonce trouvée.</p>
+                    );
+                  }
+
+                  return list.map((annonce: any) => {
                     const card = (
                       <AnnonceCard
                         key={annonce.id}
@@ -904,16 +913,15 @@ export default function HomePage() {
                         description={annonce.description}
                         createdAt={annonce.createdAt}
                         imageUrl={annonce.imageUrl || defaultAnnonceImg}
+                        zonesLabel={activeHomeTab === "colocataires" ? annonce.zonesLabel : undefined}
                       />
                     );
-                    // En mode "Colocataires", la carte ouvre le détail
                     return activeHomeTab === "colocataires" ? (
                       <div
                         key={annonce.id}
                         role="button"
                         tabIndex={0}
                         onClick={(e) => {
-                          // Intercepte un éventuel <a> à l’intérieur de la carte
                           const target = e.target as HTMLElement;
                           const link = target.closest && target.closest("a");
                           if (link) e.preventDefault();
@@ -922,7 +930,6 @@ export default function HomePage() {
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") openColocDetail(annonce.id);
                         }}
-                        // Désactive le clic des liens internes de la carte côté CSS (double sécurité)
                         className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg select-none [&_a]:pointer-events-none"
                       >
                         {card}
@@ -930,15 +937,14 @@ export default function HomePage() {
                     ) : (
                       card
                     );
-                  })}
+                  });
+                })()}
 
                 {loadingMore && (
                   <p className="text-slate-500 text-center mt-4 col-span-full">Chargement...</p>
                 )}
 
-                {!hasMore && annonces.length > 0 && (
-                  <p className="text-slate-400 text-center mt-4 col-span-full">Toutes les cartes sont affichées.</p>
-                )}
+                {/* Message de fin de liste retiré à la demande */}
               </div>
             </div>
 
@@ -1141,7 +1147,7 @@ export default function HomePage() {
                     height={420}
                     className="w-full"
                     alwaysMultiSelect
-                    markers={activeHomeTab === "colocataires" ? (annonces || []).map((a) => ({ id: a.id, slug: a.parentSlug, label: a.titre ? `${a.titre}${typeof a.prix === 'number' ? ` • ${a.prix}€` : ''}` : undefined })) : []}
+                    // Plus de repères sur la carte (markers retirés à la demande)
                   />
                 </div>
               )}
@@ -1193,7 +1199,16 @@ export default function HomePage() {
                           {colocDetail.nom || "Recherche colocation"}
                         </div>
                         <div className="text-slate-700">
-                          {colocDetail.ville || "-"}
+                          {(() => {
+                            const zonesFromData = Array.isArray(colocDetail.zones) && colocDetail.zones.length
+                              ? colocDetail.zones as string[]
+                              : [];
+                            const zonesFromSlugs = Array.isArray(colocDetail.communesSlugs) && colocDetail.communesSlugs.length
+                              ? computeZonesFromSlugs((colocDetail.communesSlugs as string[]).map((s: string) => (altSlugToCanonical[s] || s)))
+                              : [];
+                            const zonesToShow = (zonesFromData.length ? zonesFromData : zonesFromSlugs);
+                            return zonesToShow.length ? zonesToShow.join(", ") : (colocDetail.ville || "-");
+                          })()}
                           {typeof colocDetail.budget === "number" && (
                             <span className="ml-2 text-blue-700 font-semibold">
                               • Budget {colocDetail.budget} €

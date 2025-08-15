@@ -230,7 +230,6 @@ export default function DashboardPage() {
   const [loadingColoc, setLoadingColoc] = useState(true);
   const [savingColoc, setSavingColoc] = useState(false);
   const [colocNom, setColocNom] = useState("");
-  const [colocVille, setColocVille] = useState("");
   const [colocBudget, setColocBudget] = useState<number | "">("");
   const [colocImageUrl, setColocImageUrl] = useState("");
   const [colocDescription, setColocDescription] = useState("");
@@ -389,7 +388,7 @@ export default function DashboardPage() {
         const d: any = snap.data();
         setHasColocDoc(true);
         setColocNom(d.nom || "");
-        setColocVille(d.ville || "");
+  // ville supprimée du profil coloc
         setColocBudget(typeof d.budget === "number" ? d.budget : "");
         setColocImageUrl(d.imageUrl || "");
         setColocDescription(d.description || "");
@@ -424,7 +423,7 @@ export default function DashboardPage() {
         setHasColocDoc(false);
         // valeurs par défaut (profil non créé)
         setColocNom("");
-        setColocVille("");
+  // ville supprimée du profil coloc
         setColocBudget("");
         setColocImageUrl("");
         setColocDescription("");
@@ -460,7 +459,7 @@ export default function DashboardPage() {
           const d: any = snap.data();
           setHasColocDoc(true);
           setColocNom(d.nom || "");
-          setColocVille(d.ville || "");
+          // ville supprimée du profil coloc
           setColocBudget(typeof d.budget === "number" ? d.budget : "");
           setColocImageUrl(d.imageUrl || "");
           setColocDescription(d.description || "");
@@ -494,7 +493,7 @@ export default function DashboardPage() {
           setHasColocDoc(false);
           // valeurs par défaut (profil non créé)
           setColocNom("");
-          setColocVille("");
+          // ville supprimée du profil coloc
           setColocBudget("");
           setColocImageUrl("");
           setColocDescription("");
@@ -534,7 +533,7 @@ export default function DashboardPage() {
     return () => clearTimeout(t);
   }, [
     colocNom,
-    colocVille,
+  // ville supprimée du profil coloc
     colocBudget,
     colocImageUrl,
     colocDescription,
@@ -578,7 +577,7 @@ export default function DashboardPage() {
         uid: user.uid,
         email: user.email || null,
         nom: colocNom,
-        ville: colocVille,
+  // ville supprimée du profil coloc
         budget: typeof colocBudget === "number" ? colocBudget : null,
         imageUrl: colocImageUrl,
         description: colocDescription,
@@ -614,7 +613,14 @@ export default function DashboardPage() {
       };
       Object.keys(payload).forEach((k) => {
         const v = (payload as any)[k];
-        if (v === "" || v === null || (Array.isArray(v) && v.length === 0)) delete (payload as any)[k];
+        if (
+          v === undefined ||
+          v === "" ||
+          v === null ||
+          (Array.isArray(v) && v.length === 0)
+        ) {
+          delete (payload as any)[k];
+        }
       });
       await setDoc(ref, payload, { merge: true });
     } catch {
@@ -631,7 +637,7 @@ export default function DashboardPage() {
         uid: user.uid,
         email: user.email || null,
         nom: colocNom,
-        ville: colocVille,
+  // ville supprimée du profil coloc
         budget: typeof colocBudget === "number" ? colocBudget : null,
         imageUrl: colocImageUrl,
         description: colocDescription,
@@ -665,10 +671,17 @@ export default function DashboardPage() {
         musique: musique || undefined,
         // ...existing cleanup & setDoc
       };
-      // Nettoyage des champs vides/null (sauf booléens et tableaux)
+      // Nettoyage des champs vides/null/undefined (sauf booléens) et tableaux vides
       Object.keys(payload).forEach((k) => {
         const v = payload[k];
-        if (v === "" || v === null || (Array.isArray(v) && v.length === 0)) delete payload[k];
+        if (
+          v === undefined ||
+          v === "" ||
+          v === null ||
+          (Array.isArray(v) && v.length === 0)
+        ) {
+          delete payload[k];
+        }
       });
       await setDoc(ref, payload, { merge: true });
       showToast("success", "Profil colocataire enregistré ✅");
@@ -686,7 +699,7 @@ export default function DashboardPage() {
       await deleteDoc(doc(db, "colocProfiles", user.uid));
       // Reset des états
       setColocNom("");
-      setColocVille("");
+  // ville supprimée du profil coloc
       setColocBudget("");
       setColocImageUrl("");
       setColocDescription("");
@@ -1071,7 +1084,7 @@ export default function DashboardPage() {
                   </div>
                 ))}
                 {loadingMore && <p className="text-center text-gray-500 mt-4">Chargement…</p>}
-                {!hasMore && <p className="text-center text-gray-400 mt-4">Toutes les annonces sont chargées.</p>}
+                {/* Message de fin de liste retiré */}
               </div>
             )}
 
@@ -1401,16 +1414,7 @@ export default function DashboardPage() {
                     placeholder="Votre nom"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Ville</label>
-                  <input
-                    type="text"
-                    value={colocVille}
-                    onChange={(e) => setColocVille(e.target.value)}
-                    className="border rounded px-3 py-2 w-full"
-                    placeholder="Ex: Saint-Denis"
-                  />
-                </div>
+                {/* Champ Ville supprimé: on utilise désormais les Zones/Communes via la carte */}
                 <div>
                   <label className="block text-sm font-medium mb-1">Budget (€)</label>
                   <input

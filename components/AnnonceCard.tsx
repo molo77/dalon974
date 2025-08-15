@@ -13,6 +13,8 @@ type AnnonceProps = {
   onDelete?: () => void;
   onEdit?: () => void;
   imageUrl: string;
+  // Optionnel: pour les profils colocataires, affiche un badge Zones
+  zonesLabel?: string;
 };
 
 export default function AnnonceCard({
@@ -26,6 +28,7 @@ export default function AnnonceCard({
   userEmail,
   onDelete,
   onEdit,
+  zonesLabel,
 }: AnnonceProps) {
   // Détermine l'origine pour le retour (accueil ou dashboard)
   const handleClick = () => {
@@ -69,7 +72,15 @@ export default function AnnonceCard({
     >
   <div className="relative border rounded-xl shadow p-4 w-full bg-white hover:bg-gray-50 transition">
         <h2 className="text-lg font-bold">{titre}</h2>
-        <p className="text-sm text-gray-600">📍 {ville}</p>
+        {zonesLabel ? (
+          <div className="mt-1">
+            <span className="inline-block px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 border border-slate-200">
+              Zones: {zonesLabel}
+            </span>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-600">📍 {ville}</p>
+        )}
         <p className="text-blue-600 font-semibold">
           {prix ? `${prix} € / mois` : "Prix non renseigné"}
         </p>

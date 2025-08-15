@@ -533,7 +533,17 @@ export default function AdminPage() {
         musique: musiqueEdit || undefined,
         updatedAt: serverTimestamp(),
       };
-      Object.keys(payload).forEach((k) => (payload[k] === "" || payload[k] === null) && delete payload[k]);
+      Object.keys(payload).forEach((k) => {
+        const v = payload[k];
+        if (
+          v === undefined ||
+          v === "" ||
+          v === null ||
+          (Array.isArray(v) && v.length === 0)
+        ) {
+          delete payload[k];
+        }
+      });
       await setDoc(doc(db, "colocProfiles", editColoc.id), payload, { merge: true });
       showToast("success", "Profil modifié ✅");
       setColocModalOpen(false);
