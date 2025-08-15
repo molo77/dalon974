@@ -13,6 +13,8 @@ type Props = {
   height?: number;
   className?: string;
   alwaysMultiSelect?: boolean;
+  // Nouveau: marqueurs (par exemple, colocs qui recherchent) à afficher sur la carte
+  markers?: { id: string; slug?: string; label?: string }[];
 };
 
 // Compare deux listes (ordre ignoré)
@@ -34,6 +36,7 @@ export default function CommuneZoneSelector({
   height = 420,
   className,
   alwaysMultiSelect = true,
+  markers,
 }: Props) {
   const handleSelection = useCallback(
     (ids: string[]) => {
@@ -55,6 +58,7 @@ export default function CommuneZoneSelector({
         height={height}
         className="w-full"
         alwaysMultiSelect={alwaysMultiSelect}
+  markers={markers}
       />
     </div>
   );

@@ -408,15 +408,34 @@ export default function HomePage() {
                 const head = [d.profession, typeof d.age === "number" ? `${d.age} ans` : null].filter(Boolean).join(" • ");
                 const tail = (d.description || "").toString();
                 const short = head ? `${head}${tail ? " • " : ""}${tail}` : tail;
+                // Déduire un slug parent pour la localisation (marqueur carte)
+                let parentSlug: string | undefined;
+                const slugsArr = Array.isArray((d as any).communesSlugs) ? (d as any).communesSlugs as string[] : [];
+                if (slugsArr.length > 0) {
+                  const s0 = altSlugToCanonical[slugsArr[0]] || slugsArr[0];
+                  parentSlug = s0;
+                } else if (d.ville) {
+                  const s = slugify(String(d.ville));
+                  parentSlug = nameToParentSlug[s] || s;
+                }
+                // Zones recherchées (priorité au champ zones, sinon déduction depuis communesSlugs)
+                const zonesFromSlugs = slugsArr.length
+                  ? computeZonesFromSlugs(slugsArr.map((s) => altSlugToCanonical[s] || s))
+                  : [];
+                const zonesArr: string[] = Array.isArray((d as any).zones) && (d as any).zones.length
+                  ? ((d as any).zones as string[])
+                  : zonesFromSlugs;
+                const zonesLabel = zonesArr && zonesArr.length ? zonesArr.join(", ") : (d.ville || "-");
                 return {
                   id: doc.id,
                   titre: d.nom || "Recherche colocation",
-                  ville: d.ville,
+                  ville: zonesLabel, // Affiche les zones recherchées à la place de la commune
                   prix: Number.isFinite(budgetNum) ? budgetNum : undefined, // AnnonceCard affiche “prix” -> budget ici
                   surface: undefined,
                   description: short.slice(0, 180), // extrait court
                   imageUrl: d.imageUrl || defaultAnnonceImg,
                   createdAt: d.createdAt,
+                  parentSlug,
                 };
               }
               // -- annonces (inchangé) --
@@ -490,15 +509,32 @@ export default function HomePage() {
                       const head = [d.profession, typeof d.age === "number" ? `${d.age} ans` : null].filter(Boolean).join(" • ");
                       const tail = (d.description || "").toString();
                       const short = head ? `${head}${tail ? " • " : ""}${tail}` : tail;
+                      let parentSlug: string | undefined;
+                      const slugsArr = Array.isArray((d as any).communesSlugs) ? (d as any).communesSlugs as string[] : [];
+                      if (slugsArr.length > 0) {
+                        const s0 = altSlugToCanonical[slugsArr[0]] || slugsArr[0];
+                        parentSlug = s0;
+                      } else if (d.ville) {
+                        const s = slugify(String(d.ville));
+                        parentSlug = nameToParentSlug[s] || s;
+                      }
+                      const zonesFromSlugs = slugsArr.length
+                        ? computeZonesFromSlugs(slugsArr.map((s) => altSlugToCanonical[s] || s))
+                        : [];
+                      const zonesArr: string[] = Array.isArray((d as any).zones) && (d as any).zones.length
+                        ? ((d as any).zones as string[])
+                        : zonesFromSlugs;
+                      const zonesLabel = zonesArr && zonesArr.length ? zonesArr.join(", ") : (d.ville || "-");
                       return {
                         id: doc.id,
                         titre: d.nom || "Recherche colocation",
-                        ville: d.ville,
+                        ville: zonesLabel,
                         prix: Number.isFinite(budgetNum) ? budgetNum : undefined,
                         surface: undefined,
                         description: short.slice(0, 180),
                         imageUrl: d.imageUrl || defaultAnnonceImg,
                         createdAt: d.createdAt,
+                        parentSlug,
                       };
                     }
                     // -- annonces (inchangé) --
@@ -650,6 +686,10 @@ export default function HomePage() {
     setAnnonces([]);
     setLastDoc(null);
     setHasMore(true);
+    // Désactiver le tri par date pour l’onglet colocataires: par défaut trier par budget croissant
+    if (activeHomeTab === "colocataires" && sortBy === "date") {
+      setSortBy("prix");
+    }
     // reset filtres ici
     setCommunesSelected([]);
     setVille("");
@@ -1037,7 +1077,7 @@ export default function HomePage() {
                   onChange={(e) => setSortBy(e.target.value as "date" | "prix" | "prix-desc")}
                   className="border border-gray-300 rounded px-3 py-2 w-full"
                 >
-                  <option value="date">Date récente</option>
+                  {activeHomeTab === "annonces" && <option value="date">Date récente</option>}
                   <option value="prix">{activeHomeTab === "annonces" ? "Prix croissant" : "Budget croissant"}</option>
                   <option value="prix-desc">{activeHomeTab === "annonces" ? "Prix décroissant" : "Budget décroissant"}</option>
                 </select>
@@ -1101,6 +1141,7 @@ export default function HomePage() {
                     height={420}
                     className="w-full"
                     alwaysMultiSelect
+                    markers={activeHomeTab === "colocataires" ? (annonces || []).map((a) => ({ id: a.id, slug: a.parentSlug, label: a.titre ? `${a.titre}${typeof a.prix === 'number' ? ` • ${a.prix}€` : ''}` : undefined })) : []}
                   />
                 </div>
               )}
