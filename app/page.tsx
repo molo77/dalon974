@@ -803,21 +803,7 @@ export default function HomePage() {
         </section>
       ) : (
         <>
-          {/* Option: changer de type de recherche */}
-          <div className="w-full max-w-7xl flex justify-end mb-2">
-            <button
-              className="text-sm text-slate-600 underline hover:text-slate-800"
-              onClick={() => {
-                setActiveHomeTab(null);
-                setFirestoreError(null);
-                setAnnonces([]);
-                setLastDoc(null);
-                setHasMore(true);
-              }}
-            >
-              Changer de type de recherche
-            </button>
-          </div>
+          {/* Bouton “Changer de type de recherche” retiré */}
 
           {/* Onglets Accueil (conservés, affichés après le choix) */}
           <div className="w-full max-w-7xl flex gap-2 mb-4">
