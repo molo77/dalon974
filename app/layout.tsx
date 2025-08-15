@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "leaflet/dist/leaflet.css"; // + Leaflet CSS
@@ -29,8 +30,19 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body
+        suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gradient-to-b from-slate-50 to-white text-slate-800`}
       >
+        {/* Mitigation hydratation: retire un attribut ajouté par certaines extensions avant que React n'hydrate */}
+        <Script id="cleanup-ext-attrs" strategy="beforeInteractive">
+          {`
+            try {
+              if (typeof document !== 'undefined' && document.body) {
+                document.body.removeAttribute('inmaintabuse');
+              }
+            } catch (_) {}
+          `}
+        </Script>
         <AuthProvider>
           <Header />
           <main className="mx-auto w-[85%] max-w-full px-4 sm:px-6 lg:px-8 py-6">

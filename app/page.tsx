@@ -39,14 +39,14 @@ export default function HomePage() {
   const [ville, setVille] = useState("");
   const [codePostal, setCodePostal] = useState("");
   const [prixMax, setPrixMax] = useState<number | null>(null);
-  const [sortBy, setSortBy] = useState<"date" | "prix">("date");
+  const [sortBy, setSortBy] = useState<"date" | "prix" | "prix-desc">("date");
 
   // NOUVEAU: onglets accueil
   const [activeHomeTab, setActiveHomeTab] = useState<"annonces" | "colocataires" | null>(null);
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
   // NOUVEAU: communes sélectionnées (slugs)
   const [communesSelected, setCommunesSelected] = useState<string[]>([]);
-  const [showCommuneMap, setShowCommuneMap] = useState(false);
+  const [showCommuneMap, setShowCommuneMap] = useState(true);
   const [zonesSelected, setZonesSelected] = useState<string[]>([]); // zones calculées depuis les slugs
   const [zoneFilters, setZoneFilters] = useState<string[]>([]); // zones choisies via boutons rapides
 
@@ -178,15 +178,8 @@ export default function HomePage() {
 
   // Handlers synchronisés (mise en cohérence avec la carte)
   const onVilleChange = (val: string) => {
+    // Le champ commune sert d'entrée libre; la sélection validée se fait via Enter/virgule/bouton +
     setVille(val);
-    const norm = slugify(val || "");
-    if (!val) {
-      setCommunesSelected((prev) => (sameIds(prev, []) ? prev : []));
-    } else if (nameToParentSlug[norm]) {
-      const next = [nameToParentSlug[norm]];
-      setCommunesSelected((prev) => (sameIds(prev, next) ? prev : next));
-    }
-
     if (/^\d{5}$/.test(val)) {
       const name = findByCp(val);
       if (name) {
@@ -208,6 +201,57 @@ export default function HomePage() {
     }
   };
 
+  // Ajoute la commune saisie (si reconnue) à la sélection multiple
+  const addTypedCommune = () => {
+    const val = (ville || "").trim();
+    if (!val) return;
+    const norm = slugify(val);
+    const parent = nameToParentSlug[norm];
+    if (!parent) return; // non reconnue
+    setCommunesSelected((prev) => {
+      const next = Array.from(new Set([...(prev || []), parent]));
+      // recalcul zones sur la même base "next"
+      setZonesSelected((pz) => {
+        const zones = computeZonesFromSlugs(next);
+        return sameIds(pz || [], zones) ? pz : zones;
+      });
+      return sameIds(prev || [], next) ? prev : next;
+    });
+    // Réinitialise le champ libre et le CP
+    setVille("");
+    setCodePostal("");
+  };
+
+  // Ajoute plusieurs communes d’un coup (tokens: noms séparés par virgules/retours ligne)
+  const addCommunesFromTokens = (raw: string) => {
+    if (!raw) return 0;
+    const tokens = raw
+      .split(/[\n,;]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (tokens.length === 0) return 0;
+    let added = 0;
+    setCommunesSelected((prev) => {
+      const set = new Set(prev || []);
+      for (const t of tokens) {
+        const norm = slugify(t);
+        const parent = nameToParentSlug[norm];
+        if (parent) set.add(parent);
+      }
+      const next = Array.from(set);
+      if (!sameIds(prev || [], next)) added = next.length - (prev?.length || 0);
+      setZonesSelected((pz) => {
+        const zones = computeZonesFromSlugs(next);
+        return sameIds(pz || [], zones) ? pz : zones;
+      });
+      return sameIds(prev || [], next) ? prev : next;
+    });
+    // on nettoie le champ
+    setVille("");
+    setCodePostal("");
+    return added;
+  };
+
   const subsRef = useRef<(() => void)[]>([]); // abonnements actifs
   const pendingStreamsRef = useRef(0);
   const filtersDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -224,10 +268,22 @@ export default function HomePage() {
 
   // Helper: déduire le slug parent de l’annonce depuis communeSlug ou ville
   const getDocParentSlug = (d: any) => {
-    const raw = d?.communeSlug || d?.ville || "";
+  // Priorité au communeSlug (plus fiable), fallback sur la ville
+  const raw = d?.communeSlug || d?.ville || "";
     const s = slugify(raw);
     return nameToParentSlug[s] || s;
   };
+
+  // Liste normalisée des slugs sélectionnés (disponible au rendu)
+  const selectedParentSlugs = useMemo(() => {
+    return Array.from(
+      new Set(
+        (communesSelected || [])
+          .map((s) => altSlugToCanonical[s] || s)
+          .filter(Boolean)
+      )
+    );
+  }, [communesSelected, altSlugToCanonical]);
 
   const loadAnnonces = async () => {
     // Ne rien charger si aucun choix n’a été fait
@@ -242,7 +298,7 @@ export default function HomePage() {
       const isColoc = activeHomeTab === "colocataires";
       const collectionName = isColoc ? "colocProfiles" : "annonces";
       const priceField = isColoc ? "budget" : "prix";
-      const orderField = sortBy === "date" ? "createdAt" : priceField;
+  const orderField = sortBy === "date" ? "createdAt" : priceField;
 
       // Normalise les slugs sélectionnés (ex: "etang-sale" -> "l-etang-sale")
       const normalizedSlugs = Array.from(
@@ -272,8 +328,18 @@ export default function HomePage() {
         return out;
       };
 
-      const qWithOrder = (qBase: Query<DocumentData>) =>
-        query(qBase, orderBy(orderField, sortBy === "date" ? "desc" : "asc"), limit(10));
+      const qWithOrder = (qBase: Query<DocumentData>) => {
+        const direction = sortBy === "date" ? "desc" : sortBy === "prix-desc" ? "desc" : "asc";
+        return query(qBase, orderBy(orderField, direction as any), limit(10));
+      };
+
+      // Helper: vérifier que le curseur possède bien le champ d’ordre
+      const aDocHasOrderField = (d: any): boolean => {
+        try {
+          const v = typeof d.get === 'function' ? d.get(orderField) : (d?.data?.() || {})[orderField];
+          return typeof v !== 'undefined';
+        } catch { return false; }
+      };
 
       // Filtre client "ET" pour coloc (toutes les communes sélectionnées)
       const requireAllSelected =
@@ -338,6 +404,7 @@ export default function HomePage() {
               const d = doc.data() as any;
               // -- CHANGEMENT: mapping dédié profils coloc --
               if (isColoc) {
+                const budgetNum = Number(d.budget);
                 const head = [d.profession, typeof d.age === "number" ? `${d.age} ans` : null].filter(Boolean).join(" • ");
                 const tail = (d.description || "").toString();
                 const short = head ? `${head}${tail ? " • " : ""}${tail}` : tail;
@@ -345,7 +412,7 @@ export default function HomePage() {
                   id: doc.id,
                   titre: d.nom || "Recherche colocation",
                   ville: d.ville,
-                  prix: d.budget, // AnnonceCard affiche “prix” -> budget ici
+                  prix: Number.isFinite(budgetNum) ? budgetNum : undefined, // AnnonceCard affiche “prix” -> budget ici
                   surface: undefined,
                   description: short.slice(0, 180), // extrait court
                   imageUrl: d.imageUrl || defaultAnnonceImg,
@@ -353,15 +420,17 @@ export default function HomePage() {
                 };
               }
               // -- annonces (inchangé) --
+              const prixNum = Number(d.prix);
               return {
                 id: doc.id,
                 titre: d.titre,
                 ville: d.ville,
-                prix: d.prix,
+                prix: Number.isFinite(prixNum) ? prixNum : undefined,
                 surface: d.surface,
                 description: d.description,
                 imageUrl: d.imageUrl || defaultAnnonceImg,
                 createdAt: d.createdAt,
+                parentSlug: getDocParentSlug(d),
               };
             });
             setAnnonces((prev) => {
@@ -380,17 +449,27 @@ export default function HomePage() {
                  return isNaN(p) ? 0 : p;
                };
                if (sortBy === "date") arr.sort((a, b) => toMs(b) - toMs(a));
+               else if (sortBy === "prix-desc") arr.sort((a, b) => (b.prix ?? 0) - (a.prix ?? 0));
                else arr.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
                if (resetOnFirstSnapshotRef.current) resetOnFirstSnapshotRef.current = false;
                return arr;
              });
-            if (docsArr.length > 0) setLastDoc(docsArr[docsArr.length - 1]); else setHasMore(false);
+            // Mémorise un curseur uniquement si le doc possède bien le champ d’ordre
+            const hasOrderField = (snap: any) => {
+              try {
+                const v = typeof snap.get === 'function' ? snap.get(orderField) : (snap.data?.() || {})[orderField];
+                return typeof v !== 'undefined';
+              } catch { return false; }
+            };
+            const docsWithField = docsArr.filter(hasOrderField);
+            if (docsWithField.length > 0) setLastDoc(docsWithField[docsWithField.length - 1]);
+            else if (docsArr.length === 0) setHasMore(false);
             setLoadingMore(false);
           },
           (err: any) => {
             if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
-              // Fallback sans orderBy, mais on garde TOUS les where (dont le prix) côté Firestore
-              const qNoOrder = lastDoc ? query(fallback, startAfter(lastDoc)) : fallback;
+              // Fallback sans orderBy: PAS de startAfter (sinon erreur). On recharge juste le bloc courant.
+              const qNoOrder = fallback;
 
               const unsub2 = onSnapshot(
                 qNoOrder as Query<DocumentData>,
@@ -407,6 +486,7 @@ export default function HomePage() {
                     const d = doc.data() as any;
                     // -- CHANGEMENT: mapping fallback pour profils coloc --
                     if (isColoc) {
+                      const budgetNum = Number(d.budget);
                       const head = [d.profession, typeof d.age === "number" ? `${d.age} ans` : null].filter(Boolean).join(" • ");
                       const tail = (d.description || "").toString();
                       const short = head ? `${head}${tail ? " • " : ""}${tail}` : tail;
@@ -414,7 +494,7 @@ export default function HomePage() {
                         id: doc.id,
                         titre: d.nom || "Recherche colocation",
                         ville: d.ville,
-                        prix: d.budget,
+                        prix: Number.isFinite(budgetNum) ? budgetNum : undefined,
                         surface: undefined,
                         description: short.slice(0, 180),
                         imageUrl: d.imageUrl || defaultAnnonceImg,
@@ -422,15 +502,17 @@ export default function HomePage() {
                       };
                     }
                     // -- annonces (inchangé) --
+                    const prixNum = Number(d.prix);
                     return {
                       id: doc.id,
                       titre: d.titre,
                       ville: d.ville,
-                      prix: d.prix,
+                      prix: Number.isFinite(prixNum) ? prixNum : undefined,
                       surface: d.surface,
                       description: d.description,
                       imageUrl: d.imageUrl || defaultAnnonceImg,
                       createdAt: d.createdAt,
+                      parentSlug: getDocParentSlug(d),
                     };
                   });
                   setAnnonces((prev) => {
@@ -448,11 +530,13 @@ export default function HomePage() {
                        return isNaN(p) ? 0 : p;
                      };
                      if (sortBy === "date") arr.sort((a, b) => toMs(b) - toMs(a));
+                     else if (sortBy === "prix-desc") arr.sort((a, b) => (b.prix ?? 0) - (a.prix ?? 0));
                      else arr.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
                       if (resetOnFirstSnapshotRef.current) resetOnFirstSnapshotRef.current = false;
                      return arr;
                    });
-                  if (docsArr.length > 0) setLastDoc(docsArr[docsArr.length - 1]); else setHasMore(false);
+                  // Pas d’orderBy en fallback: ne met pas à jour lastDoc pour éviter des curseurs invalides
+                  if (docsArr.length === 0) setHasMore(false);
                   setLoadingMore(false);
                 },
                 (err2: any) => {
@@ -495,7 +579,7 @@ export default function HomePage() {
             const qFilterOnly = query(baseColRef, ...commonFiltersWithPrice, chunkWhere);
             const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase, chunkWhere);
             const qOrdered = qWithOrder(qFilterOnly);
-            const qPaged = lastDoc ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
+            const qPaged = lastDoc && aDocHasOrderField(lastDoc) ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
             attachListener(qPaged as Query<DocumentData>, {
               label: "communes-slugs-coloc",
               clientFilter: clientFilterCombined,
@@ -511,10 +595,11 @@ export default function HomePage() {
             const qFilterOnly = query(baseColRef, ...commonFiltersWithPrice, w);
             const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase, w);
             const qOrdered = qWithOrder(qFilterOnly);
-            const qPaged = lastDoc ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
+            const qPaged = lastDoc && aDocHasOrderField(lastDoc) ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
             attachListener(qPaged as Query<DocumentData>, {
               label: "annonces-communeSlug-in",
-              // pas de clientFilter nécessaire: le IN filtre déjà
+              // Sécurité: filtrage client additionnel (évite toute dérive si des données sont incohérentes)
+              clientFilter: annoncesClientFilter,
               fallback: qFilterOnly as Query<DocumentData>,
               fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
             });
@@ -531,6 +616,7 @@ export default function HomePage() {
             const qPaged = lastDoc ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
             attachListener(qPaged as Query<DocumentData>, {
               label: "annonces-ville-in",
+              clientFilter: annoncesClientFilter,
               fallback: qFilterOnly as Query<DocumentData>,
               fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
             });
@@ -542,7 +628,7 @@ export default function HomePage() {
         const qFilterOnly = query(baseColRef, ...commonFiltersWithPrice);
         const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase);
         const qOrdered = qWithOrder(qFilterOnly);
-        const qPaged = lastDoc ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
+  const qPaged = lastDoc && aDocHasOrderField(lastDoc) ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
         attachListener(qPaged as Query<DocumentData>, {
           label: "page",
           fallback: qFilterOnly as Query<DocumentData>,
@@ -676,7 +762,7 @@ export default function HomePage() {
       ) : (
         <>
           {/* Option: changer de type de recherche */}
-          <div className="w-full max-w-6xl flex justify-end mb-2">
+          <div className="w-full max-w-7xl flex justify-end mb-2">
             <button
               className="text-sm text-slate-600 underline hover:text-slate-800"
               onClick={() => {
@@ -692,7 +778,7 @@ export default function HomePage() {
           </div>
 
           {/* Onglets Accueil (conservés, affichés après le choix) */}
-          <div className="w-full max-w-6xl flex gap-2 mb-4">
+          <div className="w-full max-w-7xl flex gap-2 mb-4">
             <button
               className={`flex-1 px-4 py-2 rounded-lg font-semibold transition ${
                 activeHomeTab === "annonces"
@@ -716,7 +802,7 @@ export default function HomePage() {
           </div>
 
           {firestoreError && (
-            <div className="w-full max-w-6xl mb-4 px-4 py-3 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-sm">
+            <div className="w-full max-w-7xl mb-4 px-4 py-3 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-sm">
               {firestoreError}
             </div>
           )}
@@ -725,26 +811,198 @@ export default function HomePage() {
             {activeHomeTab === "annonces" ? "Annonces de colocation" : "Profils de colocataires"}
           </h1>
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault(); // mise à jour auto: pas d’appel manuel
-            }}
-            className="mb-6 w-full max-w-4xl bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4"
-          >
-            <div className="flex flex-wrap gap-4 items-end justify-center">
-              {/* Commune uniquement */}
-              <div className="flex">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Commune</label>
-                  <input
-                    type="text"
-                    value={ville}
-                    onChange={(e) => onVilleChange(e.target.value)}
-                    className="border border-gray-300 rounded px-3 py-2 w-56"
-                    placeholder="Ex: Saint-Denis"
-                    list="communes-reu"
-                  />
+          {/* Layout 2 colonnes: filtres à gauche, annonces à droite (sticky filtres) */}
+          <div className="w-full max-w-7xl flex flex-col md:flex-row md:items-start gap-6">
+            {/* Colonne annonces (droite en ≥md) */}
+            <div className="flex-1 min-w-0 md:order-2">
+              {/* Indicateur de filtrage en cours */}
+              {filtering && (
+                <div className="w-full mb-3 text-center text-slate-600 text-sm">
+                  Filtrage en cours…
                 </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {(Array.isArray(annonces) ? annonces : [])
+                  .filter((a: any) => {
+                    // Si communes sélectionnées, impose l'appartenance au set normalisé
+                    if (selectedParentSlugs.length === 0) return true;
+                    const p = a?.parentSlug;
+                    return p ? selectedParentSlugs.includes(p) : false;
+                  })
+                  .filter((a: any) => {
+                    if (prixMax === null) return true;
+                    if (typeof a?.prix !== "number") return false;
+                    return a.prix <= prixMax;
+                  })
+                  .sort((a: any, b: any) => {
+                    if (sortBy === "prix" || sortBy === "prix-desc") {
+                      const pa = typeof a?.prix === "number" ? a.prix : Number.POSITIVE_INFINITY;
+                      const pb = typeof b?.prix === "number" ? b.prix : Number.POSITIVE_INFINITY;
+                      return sortBy === "prix-desc" ? pb - pa : pa - pb;
+                    } else {
+                      const toMs = (x: any) => {
+                        const v = x?.createdAt;
+                        if (!v) return 0;
+                        if (typeof v === "number") return v;
+                        if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+                        const p = Date.parse(v);
+                        return isNaN(p) ? 0 : p;
+                      };
+                      return toMs(b) - toMs(a); // date récente d'abord
+                    }
+                  })
+                  .map((annonce) => {
+                    const card = (
+                      <AnnonceCard
+                        key={annonce.id}
+                        id={annonce.id}
+                        titre={annonce.titre}
+                        ville={annonce.ville}
+                        prix={annonce.prix}
+                        surface={annonce.surface}
+                        description={annonce.description}
+                        createdAt={annonce.createdAt}
+                        imageUrl={annonce.imageUrl || defaultAnnonceImg}
+                      />
+                    );
+                    // En mode "Colocataires", la carte ouvre le détail
+                    return activeHomeTab === "colocataires" ? (
+                      <div
+                        key={annonce.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          // Intercepte un éventuel <a> à l’intérieur de la carte
+                          const target = e.target as HTMLElement;
+                          const link = target.closest && target.closest("a");
+                          if (link) e.preventDefault();
+                          openColocDetail(annonce.id);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") openColocDetail(annonce.id);
+                        }}
+                        // Désactive le clic des liens internes de la carte côté CSS (double sécurité)
+                        className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg select-none [&_a]:pointer-events-none"
+                      >
+                        {card}
+                      </div>
+                    ) : (
+                      card
+                    );
+                  })}
+
+                {loadingMore && (
+                  <p className="text-slate-500 text-center mt-4 col-span-full">Chargement...</p>
+                )}
+
+                {!hasMore && annonces.length > 0 && (
+                  <p className="text-slate-400 text-center mt-4 col-span-full">Toutes les cartes sont affichées.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Colonne filtres (gauche en ≥md) */}
+            <div className="w-full md:w-[480px] lg:w-[520px] md:order-1">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault(); // mise à jour auto: pas d’appel manuel
+                }}
+                className="sticky top-4 w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4"
+              >
+                <div className="flex flex-wrap gap-4 items-end justify-center">
+              {/* Commune: saisie libre + ajout multiple */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-end gap-2">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Commune(s)</label>
+                    <input
+                      type="text"
+                      value={ville}
+                      onChange={(e) => onVilleChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          setVille("");
+                          setCodePostal("");
+                        }
+                        if (e.key === "Enter" || e.key === ",") {
+                          e.preventDefault();
+                          addTypedCommune();
+                        }
+                        if (e.key === "Backspace" && !ville) {
+                          // supprime le dernier tag si le champ est vide
+                          setCommunesSelected((prev) => {
+                            if (!prev || prev.length === 0) return prev;
+                            const next = prev.slice(0, -1);
+                            setZonesSelected((pz) => {
+                              const zones = computeZonesFromSlugs(next);
+                              return sameIds(pz || [], zones) ? pz : zones;
+                            });
+                            return next;
+                          });
+                        }
+                      }}
+                      onPaste={(e) => {
+                        const text = e.clipboardData?.getData("text");
+                        if (text && /[\n,;]/.test(text)) {
+                          e.preventDefault();
+                          addCommunesFromTokens(text);
+                        }
+                      }}
+                      className="border border-gray-300 rounded px-3 py-2 w-56"
+                      placeholder="Ex: Saint-Denis"
+                      list="communes-reu"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Ajouter la commune"
+                    title="Ajouter"
+                    onClick={addTypedCommune}
+                    className="h-9 px-3 rounded border text-sm bg-blue-600 text-white border-blue-600 hover:bg-blue-700"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Effacer toutes les communes"
+                    title="Effacer tout"
+                    disabled={communesSelected.length === 0 && !ville}
+                    onClick={() => {
+                      setVille("");
+                      setCodePostal("");
+                      setCommunesSelected([]);
+                      setZonesSelected([]);
+                    }}
+                    className={`h-9 px-3 rounded border text-sm transition ${
+                      communesSelected.length || ville
+                        ? "bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100"
+                        : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                    }`}
+                  >
+                    ✕
+                  </button>
+                </div>
+                {communesSelected.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {communesSelected.map((s) => (
+                      <span key={s} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
+                        {parentSlugToName[s] || s}
+                        <button
+                          type="button"
+                          className="ml-1 text-slate-500 hover:text-rose-700"
+                          aria-label={`Retirer ${parentSlugToName[s] || s}`}
+                          onClick={() => {
+                            setCommunesSelected((prev) => prev.filter((x) => x !== s));
+                            setZonesSelected((prev) => computeZonesFromSlugs((communesSelected || []).filter((x) => x !== s)));
+                          }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Suggestions communes (noms + sous-communes) TRIÉES */}
@@ -776,16 +1034,16 @@ export default function HomePage() {
                 <label className="block text-sm font-medium mb-1">Trier par</label>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as "date" | "prix")}
+                  onChange={(e) => setSortBy(e.target.value as "date" | "prix" | "prix-desc")}
                   className="border border-gray-300 rounded px-3 py-2 w-full"
                 >
                   <option value="date">Date récente</option>
                   <option value="prix">{activeHomeTab === "annonces" ? "Prix croissant" : "Budget croissant"}</option>
+                  <option value="prix-desc">{activeHomeTab === "annonces" ? "Prix décroissant" : "Budget décroissant"}</option>
                 </select>
               </div>
 
-              {/* Retrait du bouton "Filtrer" (maj auto) */}
-              <span className="text-xs text-slate-500 self-center">Mise à jour automatique</span>
+              {/* Mise à jour automatique silencieuse */}
 
               <button
                 type="button"
@@ -795,10 +1053,15 @@ export default function HomePage() {
                   setCodePostal("");
                   setPrixMax(null);
                   setSortBy("date");
+                  setCommunesSelected([]);
+                  setZonesSelected([]);
                   setAnnonces([]);
                   setLastDoc(null);
                   setHasMore(true);
                   setZoneFilters([]);
+                  // Remplacement au 1er snapshot pour éviter les doublons
+                  resetOnFirstSnapshotRef.current = true;
+                  setFiltering(true);
                   // pas d’appel direct à loadAnnonces: l’effet "filtres" va relancer proprement
                 }}
                 className="border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50"
@@ -809,21 +1072,14 @@ export default function HomePage() {
 
             {/* NOUVEAU: Filtrer par communes */}
             <div className="mt-2">
-              <button
-                type="button"
-                onClick={() => setShowCommuneMap(v => !v)}
-                className="text-sm text-blue-700 underline"
-              >
-                {showCommuneMap ? "Masquer" : "Filtrer par communes (carte)"}
-              </button>
               {/* Zones rapides (OU) */}
-              <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-2 grid grid-cols-2 gap-2 text-center justify-items-stretch">
                 {Object.keys(GROUPES).map((z) => (
                   <button
                     key={z}
                     type="button"
                     onClick={() => toggleZoneFilter(z)}
-                    className={`px-3 py-1.5 rounded-full text-sm border transition ${
+        className={`w-full px-3 py-1.5 rounded-full text-sm border transition ${
                       zoneFilters.includes(z)
                         ? "bg-blue-600 text-white border-blue-600"
                         : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
@@ -858,62 +1114,11 @@ export default function HomePage() {
                   Zones sélectionnées: {zonesSelected.join(", ")}
                 </p>
               )}
-            </div>
-          </form>
-
-          {/* Indicateur de filtrage en cours */}
-          {filtering && (
-            <div className="w-full max-w-6xl mb-3 text-center text-slate-600 text-sm">
-              Filtrage en cours…
-            </div>
-          )}
-
-          <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {annonces.map((annonce) => {
-              const card = (
-                <AnnonceCard
-                  key={annonce.id}
-                  id={annonce.id}
-                  titre={annonce.titre}
-                  ville={annonce.ville}
-                  prix={annonce.prix}
-                  surface={annonce.surface}
-                  description={annonce.description}
-                  imageUrl={annonce.imageUrl || defaultAnnonceImg}
-                />
-              );
-              // En mode "Colocataires", la carte ouvre le détail
-              return activeHomeTab === "colocataires" ? (
-                <div
-                  key={annonce.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    // Intercepte un éventuel <a> à l’intérieur de la carte
-                    const target = e.target as HTMLElement;
-                    const link = target.closest && target.closest("a");
-                    if (link) e.preventDefault();
-                    openColocDetail(annonce.id);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") openColocDetail(annonce.id);
-                  }}
-                  // Désactive le clic des liens internes de la carte côté CSS (double sécurité)
-                  className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg select-none [&_a]:pointer-events-none"
-                >
-                  {card}
                 </div>
-              ) : (
-                card
-              );
-            })}
-
-            {loadingMore && <p className="text-slate-500 text-center mt-4 col-span-full">Chargement...</p>}
-
-            {!hasMore && annonces.length > 0 && (
-              <p className="text-slate-400 text-center mt-4 col-span-full">Toutes les cartes sont affichées.</p>
-            )}
+              </form>
+            </div>
           </div>
+
 
           {/* Modal détail profil colocataire */}
           {activeHomeTab === "colocataires" && colocDetailOpen && (

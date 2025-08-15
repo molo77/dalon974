@@ -16,6 +16,7 @@ type Props = {
   onZoneClick?: (zoneId: string, zoneName: string) => void;
   onSelectionChange?: (zoneIds: string[]) => void;
   defaultSelected?: string[];
+  selected?: string[]; // contrôlé par le parent
   alwaysMultiSelect?: boolean;
   className?: string;
   height?: number;
@@ -33,6 +34,7 @@ export default function MapReunionLeaflet({
   onZoneClick,
   onSelectionChange,
   defaultSelected = [],
+  selected: selectedProp,
   alwaysMultiSelect = true,
   className,
   height = 520,
@@ -42,6 +44,8 @@ export default function MapReunionLeaflet({
   const mapRef = useRef<LeafletMap | null>(null);
   const groupRef = useRef<FeatureGroup | null>(null);
   const layerById = useRef<Record<string, L.Path>>({});
+  const onChangeRef = useRef(onSelectionChange);
+  useEffect(() => { onChangeRef.current = onSelectionChange; }, [onSelectionChange]);
 
   // Charger uniquement les communes 974
   useEffect(() => {
@@ -58,10 +62,25 @@ export default function MapReunionLeaflet({
     return () => { mounted = false; };
   }, []);
 
-  // Notifier sélection
+  // Notifier sélection (seulement si elle change réellement)
+  const lastSentRef = useRef<string[] | null>(null);
   useEffect(() => {
-    onSelectionChange?.(Array.from(selected));
-  }, [selected, onSelectionChange]);
+    const arr = Array.from(selected);
+    const prev = lastSentRef.current;
+    const same = prev && prev.length === arr.length && prev.every((v, i) => v === arr[i]);
+    if (same) return;
+    lastSentRef.current = arr;
+    onChangeRef.current?.(arr);
+  }, [selected]);
+
+  // Sync contrôlé: si le parent fournit selected, on aligne l’état interne
+  useEffect(() => {
+    if (!selectedProp) return;
+    const incoming = new Set(selectedProp.filter(Boolean));
+    // évite les setState inutiles
+    const same = incoming.size === selected.size && Array.from(incoming).every((s) => selected.has(s));
+    if (!same) setSelected(incoming);
+  }, [selectedProp]);
 
   const baseCenter = useMemo(() => ({ lat: -21.115, lng: 55.536 }), []);
 
@@ -139,7 +158,7 @@ export default function MapReunionLeaflet({
 
   return (
     <div className={className} style={{ width: '100%' }}>
-      <div className="flex flex-wrap items-center gap-2 mb-2 text-sm">
+  <div className="flex flex-wrap items-center gap-2 mb-2 text-sm">
         <button className="border rounded px-2 py-1 hover:bg-slate-50" onClick={resetView}>Réinitialiser</button>
         <button
           className="border rounded px-2 py-1 hover:bg-slate-50 disabled:opacity-50"
@@ -148,7 +167,6 @@ export default function MapReunionLeaflet({
         >
           Zoom sélection
         </button>
-        <span className="text-slate-600">Satellite + noms de communes</span>
       </div>
 
       <MapContainer
@@ -156,17 +174,16 @@ export default function MapReunionLeaflet({
         zoom={10}
         style={{ width: '100%', height }}
         ref={mapRef}
+        attributionControl={false}
       >
         {/* Fond satellite éclairci (classe CSS appliquée aux tuiles) */}
         <TileLayer
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          attribution="&copy; Esri — World Imagery"
           className="tile-bright"
         />
         {/* Overlay labels routes/villes (un peu plus visible) */}
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png"
-          attribution="&copy; CARTO"
           opacity={0.9}
         />
 

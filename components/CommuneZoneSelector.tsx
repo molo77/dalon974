@@ -50,6 +50,7 @@ export default function CommuneZoneSelector({
       {label && <label className="block text-sm font-medium mb-2">{label}</label>}
       <MapReunionLeaflet
         defaultSelected={value}
+  selected={value}
         onSelectionChange={handleSelection}
         height={height}
         className="w-full"

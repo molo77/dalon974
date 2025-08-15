@@ -8,6 +8,7 @@ type AnnonceProps = {
   prix?: number;
   surface?: number;
   description?: string;
+  createdAt?: any;
   userEmail?: string;
   onDelete?: () => void;
   onEdit?: () => void;
@@ -21,6 +22,7 @@ export default function AnnonceCard({
   prix,
   surface,
   description,
+  createdAt,
   userEmail,
   onDelete,
   onEdit,
@@ -39,13 +41,33 @@ export default function AnnonceCard({
 
   const [showMessageModal, setShowMessageModal] = useState(false);
 
+  const formatDate = (v: any): string | null => {
+    if (!v) return null;
+    let d: Date | null = null;
+    if (typeof v === 'number') d = new Date(v);
+    else if (typeof v === 'string') {
+      const t = Date.parse(v);
+      d = isNaN(t) ? null : new Date(t);
+    } else if (v && typeof v === 'object') {
+      if (typeof v.toDate === 'function') d = v.toDate();
+      else if (typeof v.seconds === 'number') d = new Date(v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0));
+    }
+    if (!d) return null;
+    try {
+      return new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }).format(d);
+    } catch {
+      return d.toLocaleDateString('fr-FR');
+    }
+  };
+  const dateLabel = formatDate(createdAt);
+
   return (
     <Link
       href={`/annonce/${id}`}
       className="block w-full"
       onClick={handleClick}
     >
-      <div className="relative border rounded-xl shadow p-4 w-full bg-white hover:bg-gray-50 transition">
+  <div className="relative border rounded-xl shadow p-4 w-full bg-white hover:bg-gray-50 transition">
         <h2 className="text-lg font-bold">{titre}</h2>
         <p className="text-sm text-gray-600">📍 {ville}</p>
         <p className="text-blue-600 font-semibold">
@@ -55,6 +77,9 @@ export default function AnnonceCard({
           <p className="text-sm text-gray-700">
             <span className="font-semibold">Surface :</span> {surface} m²
           </p>
+        )}
+        {dateLabel && (
+          <p className="text-xs text-gray-500 mt-1">📅 {dateLabel}</p>
         )}
         {description && (
           <div className="text-sm text-gray-700 mt-2">
