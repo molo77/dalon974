@@ -1449,7 +1449,7 @@ export default function DashboardPage() {
             {!colocEditing && hasColocDoc && hasMeaningfulColocData && (
               <section className="mt-8">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold">Mon profil colocataire</h2>
+                  <h2 className="text-xl font-semibold">🧑‍🤝‍🧑 Mon profil colocataire</h2>
                   <div className="flex items-center gap-2">
                     <button
                       className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
@@ -1482,35 +1482,35 @@ export default function DashboardPage() {
                   )}
                   <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <div className="text-sm text-slate-500">Nom</div>
+                      <div className="text-sm text-slate-500">🧑 Nom</div>
                       <div className="font-medium">{colocNom || "-"}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Budget</div>
+                      <div className="text-sm text-slate-500">💶 Budget</div>
                       <div className="font-medium">{typeof colocBudget === 'number' ? `${colocBudget} €` : '-'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Âge</div>
+                      <div className="text-sm text-slate-500">🎂 Âge</div>
                       <div className="font-medium">{typeof colocAge === 'number' ? colocAge : '-'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Profession</div>
+                      <div className="text-sm text-slate-500">💼 Profession</div>
                       <div className="font-medium">{colocProfession || '-'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Genre</div>
+                      <div className="text-sm text-slate-500">⚧️ Genre</div>
                       <div className="font-medium">{colocGenre || '-'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Orientation</div>
+                      <div className="text-sm text-slate-500">🧭 Orientation</div>
                       <div className="font-medium">{colocOrientation || '-'}</div>
                     </div>
                     <div className="sm:col-span-2">
-                      <div className="text-sm text-slate-500">Bio courte</div>
+                      <div className="text-sm text-slate-500">📝 Bio courte</div>
                       <div className="text-slate-700">{colocBioCourte || '-'}</div>
                     </div>
                     <div className="sm:col-span-2">
-                      <div className="text-sm text-slate-500">Zone recherchée(s)</div>
+                      <div className="text-sm text-slate-500">📍 Zone recherchée(s)</div>
                       {(Array.isArray(colocZones) && colocZones.length > 0) ? (
                         <div className="mt-1 flex flex-wrap gap-2">
                           {colocZones.map((z: string) => (
@@ -1523,7 +1523,7 @@ export default function DashboardPage() {
                     </div>
                     {/* Secteur recherché (communes) */}
                     <div className="sm:col-span-2">
-                      <div className="text-sm text-slate-500">Secteur recherché</div>
+                      <div className="text-sm text-slate-500">🗺️ Secteur recherché</div>
                       {(Array.isArray(colocCommunesSlugs) && colocCommunesSlugs.length > 0) ? (
                         <div className="mt-1 flex flex-wrap gap-2">
                           {colocCommunesSlugs.map((s: string) => (
@@ -1535,67 +1535,67 @@ export default function DashboardPage() {
                       )}
                     </div>
                     <div className="sm:col-span-2">
-                      <div className="text-sm text-slate-500">Description</div>
+                      <div className="text-sm text-slate-500">🧾 Description</div>
                       <div className="text-slate-700 whitespace-pre-line">{colocDescription || '-'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Instagram</div>
+                      <div className="text-sm text-slate-500">📸 Instagram</div>
                       <div className="font-medium">{colocInstagram || '-'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Téléphone</div>
+                      <div className="text-sm text-slate-500">📞 Téléphone</div>
                       <div className="font-medium">{colocTelephone || '-'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Date de disponibilité</div>
+                      <div className="text-sm text-slate-500">📅 Date de disponibilité</div>
                       <div className="font-medium">{colocDateDispo || '-'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Quartiers</div>
+                      <div className="text-sm text-slate-500">🏘️ Quartiers</div>
                       <div className="font-medium">{colocQuartiers || '-'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Je fume</div>
+                      <div className="text-sm text-slate-500">🚬 Je fume</div>
                       <div className="font-medium">{colocFumeur ? 'Oui' : 'Non'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">J'ai des animaux</div>
+                      <div className="text-sm text-slate-500">🐾 J'ai des animaux</div>
                       <div className="font-medium">{colocAnimaux ? 'Oui' : 'Non'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Accepte fumeurs</div>
+                      <div className="text-sm text-slate-500">🚭 Accepte fumeurs</div>
                       <div className="font-medium">{accepteFumeurs ? 'Oui' : 'Non'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Accepte animaux</div>
+                      <div className="text-sm text-slate-500">🐶 Accepte animaux</div>
                       <div className="font-medium">{accepteAnimaux ? 'Oui' : 'Non'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Rythme</div>
+                      <div className="text-sm text-slate-500">⏰ Rythme</div>
                       <div className="font-medium">{rythme || '-'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Propreté</div>
+                      <div className="text-sm text-slate-500">🧽 Propreté</div>
                       <div className="font-medium">{proprete || '-'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Sportif</div>
+                      <div className="text-sm text-slate-500">🏃 Sportif</div>
                       <div className="font-medium">{sportif ? 'Oui' : 'Non'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Végétarien</div>
+                      <div className="text-sm text-slate-500">🥗 Végétarien</div>
                       <div className="font-medium">{vegetarien ? 'Oui' : 'Non'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Aime les soirées</div>
+                      <div className="text-sm text-slate-500">🎉 Aime les soirées</div>
                       <div className="font-medium">{soirees ? 'Oui' : 'Non'}</div>
                     </div>
                     <div className="sm:col-span-2">
-                      <div className="text-sm text-slate-500">Musique</div>
+                      <div className="text-sm text-slate-500">🎵 Musique</div>
                       <div className="font-medium">{musique || '-'}</div>
                     </div>
                     <div className="sm:col-span-2">
-                      <div className="text-sm text-slate-500">Langues</div>
+                      <div className="text-sm text-slate-500">🗣️ Langues</div>
                       {languesSelected.length ? (
                         <div className="mt-1 flex flex-wrap gap-2">
                           {languesSelected.map((l) => (
@@ -1607,18 +1607,18 @@ export default function DashboardPage() {
                       )}
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Préférence colloc (genre)</div>
+                      <div className="text-sm text-slate-500">👥 Préférence colloc (genre)</div>
                       <div className="font-medium">{prefGenre || '-'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">Tranche d'âge souhaitée</div>
+                      <div className="text-sm text-slate-500">🔢 Tranche d'âge souhaitée</div>
                       <div className="font-medium">{(prefAgeMin !== '' || prefAgeMax !== '') ? `${prefAgeMin !== '' ? prefAgeMin : '—'} - ${prefAgeMax !== '' ? prefAgeMax : '—'}` : '-'}</div>
                     </div>
                   </div>
                 </div>
                 {/* Galerie de photos (URLs CSV) */}
                 <div className="mt-4">
-                  <div className="text-sm text-slate-500 mb-2">Photos</div>
+                  <div className="text-sm text-slate-500 mb-2">📷 Photos</div>
                   {colocPhotosCsv ? (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       {colocPhotosCsv.split(',').map((u, i) => {
