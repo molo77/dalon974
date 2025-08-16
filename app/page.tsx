@@ -379,6 +379,9 @@ export default function HomePage() {
     );
   }, [communesSelected, altSlugToCanonical]);
 
+  // Fallback image pour profils colocataires (utilisé uniquement pour l'UI coloc)
+  const defaultColocImg = "/images/coloc-holder.svg";
+
   const loadAnnonces = async (append: boolean = false) => {
     // Ne rien charger si aucun choix n’a été fait
     if (activeHomeTab === null) return;
@@ -404,6 +407,7 @@ export default function HomePage() {
             .filter(Boolean)
         )
       );
+
       const hasCommuneFilter = normalizedSlugs.length > 0;
 
       // Prépare séparément le where prix et les filtres "base" (sans prix)
@@ -1696,7 +1700,7 @@ export default function HomePage() {
                   <div className="flex flex-col gap-4">
                     <div className="flex gap-4 items-start">
                       <img
-                        src={colocDetail.imageUrl || defaultAnnonceImg}
+                        src={colocDetail.imageUrl || defaultColocImg}
                         alt={colocDetail.nom || "Profil"}
                         className="w-40 h-28 object-cover rounded-lg border"
                       />

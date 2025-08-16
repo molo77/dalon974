@@ -165,7 +165,7 @@ export default function AdminPage() {
     if (seeding) return;
     setSeeding(true);
     try {
-      const placeholder = "/images/annonce-placeholder.jpg";
+  const placeholder = "/images/annonce-holder.svg";
       const col = collection(db, "annonces");
       const ops: Promise<any>[] = [];
 
@@ -223,7 +223,7 @@ export default function AdminPage() {
     if (seedingColocs) return;
     setSeedingColocs(true);
     try {
-      const placeholder = "/images/annonce-placeholder.jpg";
+  const placeholder = "/images/coloc-holder.svg";
       const col = collection(db, "colocProfiles");
       const NAMES = [
         "Alex", "Camille", "Jordan", "Lea", "Noah", "Emma",
@@ -1363,7 +1363,7 @@ export default function AdminPage() {
                     {/* En-tête avec image et infos principales */}
                     <div className="flex gap-4 items-start">
                       <img
-                        src={colocDetail.imageUrl || "/images/annonce-placeholder.jpg"}
+                        src={colocDetail.imageUrl || "/images/coloc-holder.svg"}
                         alt={colocDetail.nom || "Profil"}
                         className="w-40 h-28 object-cover rounded-lg border"
                       />

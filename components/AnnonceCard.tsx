@@ -30,9 +30,13 @@ export default function AnnonceCard({
   userEmail,
   onDelete,
   onEdit,
+  imageUrl,
   zonesLabel,
   subCommunesLabel,
 }: AnnonceProps) {
+  const defaultAnnonceImg = "/images/annonce-holder.svg";
+  const defaultColocImg = "/images/coloc-holder.svg";
+  const thumbUrl = imageUrl || (zonesLabel ? defaultColocImg : defaultAnnonceImg);
   // Détermine l'origine pour le retour (accueil ou dashboard)
   const handleClick = () => {
     if (typeof window !== "undefined") {
@@ -74,6 +78,10 @@ export default function AnnonceCard({
       onClick={handleClick}
     >
   <div className="relative border rounded-xl shadow p-4 w-full bg-white hover:bg-gray-50 transition">
+        {/* miniature */}
+        <div className="w-full h-40 mb-3 overflow-hidden rounded-md bg-gray-100">
+          <img src={thumbUrl} alt={titre || "annonce"} className="w-full h-full object-cover" />
+        </div>
         <h2 className="text-lg font-bold">{titre}</h2>
         {zonesLabel ? (
           <div className="mt-1">

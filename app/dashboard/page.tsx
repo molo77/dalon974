@@ -172,7 +172,10 @@ const pickOfficialVilleFromInput = (raw: string) => {
 };
 
 // Fallback image annonce pour éviter une référence manquante
-const defaultAnnonceImg = "/images/annonce-placeholder.jpg";
+const defaultAnnonceImg = "/images/annonce-holder.svg";
+
+// Fallback image pour profils colocataires (utilisé uniquement pour l'UI coloc)
+const defaultColocImg = "/images/coloc-holder.svg";
 
 // Aide: mapping slug -> nom de commune (pour déduire les zones)
 const SLUG_TO_NAME = (COMMUNES as string[]).reduce<Record<string, string>>((acc, name) => {
@@ -214,8 +217,6 @@ async function uploadToStorage(file: File, pathPrefix: string) {
 export default function DashboardPage() {
   const [user, loading] = useAuthState(auth);
   const router = useRouter();
-  const searchParams = useSearchParams();
-
   const [mesAnnonces, setMesAnnonces] = useState<any[]>([]);
   const [loadingAnnonces, setLoadingAnnonces] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -335,7 +336,7 @@ export default function DashboardPage() {
     }
   };
 
-  const { overrideVille, setOverrideVille, officialVillePreview, MAIN_COMMUNES_SORTED, SUB_COMMUNES_SORTED } =
+  const { overrideVille, setOverrideVille, MAIN_COMMUNES_SORTED, SUB_COMMUNES_SORTED } =
     useCommuneSelection({
       modalOpen,
       editAnnonce,
@@ -426,74 +427,6 @@ export default function DashboardPage() {
   };
 
   // Chargement du profil coloc depuis Firestore
-  const loadColocProfile = async () => {
-    if (!user) return;
-    setLoadingColoc(true);
-    try {
-      const ref = doc(db, "colocProfiles", user.uid);
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        const d: any = snap.data();
-        setHasColocDoc(true);
-        setColocNom(d.nom || "");
-  // ville supprimée du profil coloc
-        setColocBudget(typeof d.budget === "number" ? d.budget : "");
-        setColocImageUrl(d.imageUrl || "");
-        setColocDescription(d.description || "");
-        setColocAge(typeof d.age === "number" ? d.age : "");
-        setColocProfession(d.profession || "");
-        setColocFumeur(!!d.fumeur);
-        setColocAnimaux(!!d.animaux);
-        setColocDateDispo(d.dateDispo || "");
-        setColocQuartiers(d.quartiers || "");
-        setColocTelephone(d.telephone || "");
-        setColocZones(Array.isArray(d.zones) ? d.zones : []);
-        setColocCommunesSlugs(Array.isArray(d.communesSlugs) ? d.communesSlugs : []);
-        // Nouveaux champs
-        setColocGenre(d.genre || "");
-        setColocOrientation(d.orientation || "");
-        setColocBioCourte(d.bioCourte || "");
-        setColocLanguesCsv(Array.isArray(d.langues) ? d.langues.join(", ") : (d.langues || ""));
-        setColocInstagram(d.instagram || "");
-        setColocPhotosCsv(Array.isArray(d.photos) ? d.photos.join(", ") : (d.photos || ""));
-        setPrefGenre(d.prefGenre || "");
-        setPrefAgeMin(typeof d.prefAgeMin === "number" ? d.prefAgeMin : "");
-        setPrefAgeMax(typeof d.prefAgeMax === "number" ? d.prefAgeMax : "");
-        setAccepteFumeurs(!!d.accepteFumeurs);
-        setAccepteAnimaux(!!d.accepteAnimaux);
-        setRythme(d.rythme || "");
-        setProprete(d.proprete || "");
-        setSportif(!!d.sportif);
-        setVegetarien(!!d.vegetarien);
-        setSoirees(!!d.soirees);
-        setMusique(d.musique || "");
-      } else {
-        setHasColocDoc(false);
-        // valeurs par défaut (profil non créé)
-        setColocNom("");
-  // ville supprimée du profil coloc
-        setColocBudget("");
-        setColocImageUrl("");
-        setColocDescription("");
-        setColocAge("");
-        setColocProfession("");
-        setColocFumeur(false);
-        setColocAnimaux(false);
-        setColocDateDispo("");
-        setColocQuartiers("");
-        setColocTelephone("");
-        setColocZones([]);
-        setColocCommunesSlugs([]);
-        setColocGenre(""); setColocOrientation(""); setColocBioCourte(""); setColocLanguesCsv(""); setColocInstagram(""); setColocPhotosCsv("");
-        setPrefGenre(""); setPrefAgeMin(""); setPrefAgeMax(""); setAccepteFumeurs(false); setAccepteAnimaux(false);
-        setRythme(""); setProprete(""); setSportif(false); setVegetarien(false); setSoirees(false); setMusique("");
-      }
-    } catch (err: any) {
-      handleFirestoreError(err, "loadColocProfile");
-    } finally {
-      setLoadingColoc(false);
-    }
-  };
 
   // NOUVEAU: abonnement live au profil colocataire (création/maj en temps réel)
   useEffect(() => {
@@ -1469,17 +1402,11 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="mt-4 rounded-lg border border-slate-200 p-4 flex flex-col sm:flex-row gap-4">
-                  {colocImageUrl ? (
-                    <img
-                      src={colocImageUrl}
-                      alt="Photo de profil"
-                      className="w-32 h-32 object-cover rounded-lg border"
-                    />
-                  ) : (
-                    <div className="w-32 h-32 rounded-lg border bg-slate-50 flex items-center justify-center text-slate-400">
-                      Aucune photo
-                    </div>
-                  )}
+                  <img
+                    src={colocImageUrl || defaultColocImg}
+                    alt="Photo de profil"
+                    className="w-32 h-32 object-cover rounded-lg border"
+                  />
                   <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <div className="text-sm text-slate-500">🧑 Nom</div>
