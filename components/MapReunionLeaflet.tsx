@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
 import type { FeatureGroup, Map as LeafletMap } from 'leaflet';
 import L from 'leaflet';
+import { loadReunionFeatures } from '@/lib/reunionGeo';
 
 type CommuneFeature = GeoJSON.Feature<GeoJSON.MultiPolygon | GeoJSON.Polygon, {
   code?: string;
@@ -20,6 +21,7 @@ type Props = {
   alwaysMultiSelect?: boolean;
   className?: string;
   height?: number;
+  hideSelectionSummary?: boolean;
 };
 
 const RAW_URL = 'https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/communes-avec-outre-mer.geojson';
@@ -38,6 +40,7 @@ export default function MapReunionLeaflet({
   alwaysMultiSelect = true,
   className,
   height = 520,
+  hideSelectionSummary = false,
 }: Props) {
   const [features, setFeatures] = useState<CommuneFeature[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set(defaultSelected));
@@ -48,17 +51,38 @@ export default function MapReunionLeaflet({
   const onChangeRef = useRef(onSelectionChange);
   useEffect(() => { onChangeRef.current = onSelectionChange; }, [onSelectionChange]);
 
+  // Mapping alt -> canon basé sur les features chargées (gère les articles le/la/les/l-)
+  const altToCanonical = useMemo(() => {
+    const map: Record<string, string> = {};
+    features.forEach((f) => {
+      const raw = String(f.properties?.nom || f.properties?.NOM || '');
+      const id = slugify(raw);
+      if (!id) return;
+      map[id] = id;
+      const base = id.replace(/^(l|le|la|les)-/, '');
+      if (base && !map[base]) map[base] = id; // ex: etang-sale -> l-etang-sale
+      // Ajouter aussi des variantes préfixées (sécurité si les slugs côté app incluent l'article)
+      ['l', 'le', 'la', 'les'].forEach((art) => {
+        const withArt = `${art}-${base}`;
+        if (withArt && !map[withArt]) map[withArt] = id; // ex: le-tampon -> tampon (si dataset sans article) ou inverse
+      });
+    });
+    return map;
+  }, [features]);
+
+  const canon = useCallback((s: string) => (altToCanonical[s] || s), [altToCanonical]);
+
   // Charger uniquement les communes 974
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const res = await fetch(RAW_URL, { cache: 'no-cache' });
-      const gj = await res.json() as GeoJSON.FeatureCollection;
-      const feats = (gj.features as CommuneFeature[]).filter(f =>
-        String(f.properties?.code || f.properties?.INSEE || '').startsWith('974')
-      );
-      if (!mounted) return;
-      setFeatures(feats);
+      try {
+        const feats = await loadReunionFeatures();
+        if (!mounted) return;
+        setFeatures(feats as any);
+      } catch {
+        // Fallback: pas bloquant, mais on peut laisser features vide
+      }
     })();
     return () => { mounted = false; };
   }, []);
@@ -77,17 +101,32 @@ export default function MapReunionLeaflet({
   // Sync contrôlé: si le parent fournit selected, on aligne l’état interne
   useEffect(() => {
     if (!selectedProp) return;
-    const incoming = new Set(selectedProp.filter(Boolean));
+    // Normalise via le mapping alt->canon (aligne avec les IDs des polygones)
+    const incoming = new Set<string>(
+      (selectedProp as (string | null | undefined)[])
+        .filter((x): x is string => typeof x === 'string' && !!x)
+        .map(canon)
+    );
     // évite les setState inutiles
     const same = incoming.size === selected.size && Array.from(incoming).every((s) => selected.has(s));
     if (!same) setSelected(incoming);
-  }, [selectedProp]);
+  }, [selectedProp, canon]);
+
+  // Quand les features arrivent (ou changent), re-normaliser la sélection existante
+  useEffect(() => {
+    if (features.length === 0 || selected.size === 0) return;
+    setSelected((prev) => {
+      const next: Set<string> = new Set<string>(Array.from(prev).map(canon));
+      const same = next.size === prev.size && Array.from(next).every((s) => prev.has(s));
+      return same ? prev : next;
+    });
+  }, [features, canon]);
 
   const baseCenter = useMemo(() => ({ lat: -21.115, lng: 55.536 }), []);
 
   const styleFn = (f: CommuneFeature): L.PathOptions => {
     const name = String(f.properties?.nom || f.properties?.NOM || '');
-    const id = slugify(name);
+  const id = canon(slugify(name));
     const isSel = selected.has(id);
     return {
       color: isSel ? '#16a34a' : '#0ea5e9',
@@ -100,7 +139,7 @@ export default function MapReunionLeaflet({
   const onEachFeature = (feature: CommuneFeature, layer: L.Layer) => {
     if (!(layer as any).bindTooltip) return;
     const name = String(feature.properties?.nom || feature.properties?.NOM || '');
-    const id = slugify(name);
+  const id = canon(slugify(name));
     const path = layer as L.Path;
     layerById.current[id] = path;
 
@@ -138,7 +177,7 @@ export default function MapReunionLeaflet({
   };
 
   const resetView = () => {
-    mapRef.current?.setView(baseCenter as any, 10);
+  mapRef.current?.setView(baseCenter as any, 9);
   };
 
   const zoomSelection = () => {
@@ -173,10 +212,11 @@ export default function MapReunionLeaflet({
 
       <MapContainer
         center={baseCenter as any}
-        zoom={10}
-        style={{ width: '100%', height }}
+        zoom={9}
+        style={{ width: '100%', height, borderRadius: '12px', overflow: 'hidden' }}
         ref={mapRef}
         attributionControl={false}
+        className="rounded-xl overflow-hidden"
       >
         {/* Fond satellite éclairci (classe CSS appliquée aux tuiles) */}
         <TileLayer
@@ -213,14 +253,17 @@ export default function MapReunionLeaflet({
         }
         /* Eclaircissement du fond satellite */
         .leaflet-tile.tile-bright {
-          filter: brightness(1.18) saturate(1.12) contrast(1.04);
+          /* éclaircissement très léger */
+          filter: brightness(1.08) saturate(1.06) contrast(1.02);
         }
       `}</style>
 
-      <div className="mt-2 text-sm">
-        <strong>Sélection :</strong>{' '}
-        {Array.from(selected).length ? Array.from(selected).join(', ') : '—'}
-      </div>
+      {!hideSelectionSummary && (
+        <div className="mt-2 text-sm">
+          <strong>Sélection :</strong>{' '}
+          {Array.from(selected).length ? Array.from(selected).join(', ') : '—'}
+        </div>
+      )}
     </div>
   );
 }

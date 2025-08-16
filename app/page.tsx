@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import {
   collection,
   getDocs,
@@ -18,6 +18,7 @@ import { db } from "@/lib/firebase";
 import AnnonceCard from "@/components/AnnonceCard";
 import CommuneZoneSelector from "@/components/CommuneZoneSelector";
 import useCommuneCp from "@/hooks/useCommuneCp";
+import { preloadReunionFeatures } from "@/lib/reunionGeo";
 
 // Helper: compare deux listes de slugs sans tenir compte de l’ordre
 const sameIds = (a: string[], b: string[]) => {
@@ -42,7 +43,7 @@ export default function HomePage() {
   const [sortBy, setSortBy] = useState<"date" | "prix" | "prix-desc">("date");
 
   // NOUVEAU: onglets accueil
-  const [activeHomeTab, setActiveHomeTab] = useState<"annonces" | "colocataires" | null>(null);
+  const [activeHomeTab, setActiveHomeTab] = useState<"annonces" | "colocataires" | null>("annonces");
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
   // NOUVEAU: communes sélectionnées (slugs)
   const [communesSelected, setCommunesSelected] = useState<string[]>([]);
@@ -55,6 +56,10 @@ export default function HomePage() {
   const [colocDetailLoading, setColocDetailLoading] = useState(false);
   const [colocDetail, setColocDetail] = useState<any | null>(null);
   const [filtering, setFiltering] = useState(false);
+  // Accordéons UI
+  const [mapSectionOpen, setMapSectionOpen] = useState(true);
+  // Source de la sélection (carte, saisie, zones) pour piloter l'affichage des chips sous le champ
+  const [selectionSource, setSelectionSource] = useState<"map" | "input" | "zones" | null>(null);
 
   // Image d'annonce par défaut (16:9)
   const defaultAnnonceImg =
@@ -89,20 +94,38 @@ export default function HomePage() {
   // NOUVEAU: groupes de communes (zones)
   const GROUPES: Record<string, string[]> = {
     Nord: ["Saint-Denis", "Sainte-Marie", "Sainte-Suzanne"],
-    Est: ["Saint-André", "Bras-Panon", "Salazie", "Saint-Benoît", "La Plaine-des-Palmistes", "Sainte-Rose", "Saint-Philippe"],
+    Est: ["Saint-André", "Bras-Panon", "Saint-Benoît", "La Plaine-des-Palmistes", "Sainte-Rose", "Saint-Philippe"],
     Ouest: ["Le Port", "La Possession", "Saint-Paul", "Trois-Bassins", "Saint-Leu", "Les Avirons", "L'Étang-Salé"],
-    Sud: ["Saint-Louis", "Saint-Pierre", "Le Tampon", "Entre-Deux", "Petite-Île", "Saint-Joseph", "Cilaos"],
-    Intérieur: ["Cilaos", "Salazie", "La Plaine-des-Palmistes"],
+    Sud: ["Saint-Louis", "Saint-Pierre", "Le Tampon", "Entre-Deux", "Petite-Île", "Saint-Joseph"],
+    Intérieur: ["Cilaos", "Salazie"],
   };
+
+  // Précharge les zones de la carte en arrière-plan pour une ouverture instantanée
+  useEffect(() => {
+    preloadReunionFeatures();
+  }, []);
 
   // NOUVEAU: map “nom (commune/sous-commune) -> slug parent de la commune”
   const nameToParentSlug = useMemo(() => {
     const m: Record<string, string> = {};
     (COMMUNES_CP_SORTED as any[]).forEach((c) => {
       const parentSlug = slugify(c.name);
-      m[parentSlug] = parentSlug; // la commune pointe vers elle-même
+      // La commune pointe vers elle-même (slug canonique)
+      m[parentSlug] = parentSlug;
+      // Alias sans article (ex: le-/la-/les-/l-)
+      const noArticle = parentSlug.replace(/^(l|le|la|les)-/, "");
+      if (noArticle && !m[noArticle]) m[noArticle] = parentSlug;
+      // Variante compactée (sécurité)
+      const compact = noArticle.replace(/-+/g, "-");
+      if (compact && !m[compact]) m[compact] = parentSlug;
       (c.alts || []).forEach((a: any) => {
-        m[slugify(a.name)] = parentSlug; // la sous-commune pointe vers la commune parente
+        const alt = slugify(a.name);
+        m[alt] = parentSlug; // la sous-commune pointe vers la commune parente
+        // Alias pour la sous-commune également
+        const altNoArticle = alt.replace(/^(l|le|la|les)-/, "");
+        if (altNoArticle && !m[altNoArticle]) m[altNoArticle] = parentSlug;
+        const altCompact = altNoArticle.replace(/-+/g, "-");
+        if (altCompact && !m[altCompact]) m[altCompact] = parentSlug;
       });
     });
     return m;
@@ -208,6 +231,7 @@ export default function HomePage() {
     const norm = slugify(val);
     const parent = nameToParentSlug[norm];
     if (!parent) return; // non reconnue
+  setSelectionSource("input");
     setCommunesSelected((prev) => {
       const next = Array.from(new Set([...(prev || []), parent]));
       // recalcul zones sur la même base "next"
@@ -231,6 +255,7 @@ export default function HomePage() {
       .filter(Boolean);
     if (tokens.length === 0) return 0;
     let added = 0;
+  setSelectionSource("input");
     setCommunesSelected((prev) => {
       const set = new Set(prev || []);
       for (const t of tokens) {
@@ -256,6 +281,30 @@ export default function HomePage() {
   const pendingStreamsRef = useRef(0);
   const filtersDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const resetOnFirstSnapshotRef = useRef(false);
+  // Mémorise la position du scroll pendant les changements de filtres
+  const scrollPosBeforeFilterRef = useRef<number | null>(null);
+  // Référence du conteneur de la carte (pour stabiliser sa position visible)
+  const mapWrapRef = useRef<HTMLDivElement | null>(null);
+  const mapTopBeforeRef = useRef<number | null>(null);
+  // Référence et observer pour le bloc des chips "Communes sélectionnées"
+  const selectedChipsRef = useRef<HTMLDivElement | null>(null);
+  const chipsPrevHRef = useRef<number>(0);
+  const chipsRORef = useRef<ResizeObserver | null>(null);
+  // Réfs pour menu d'ancrage (zone/budget/commune)
+  const zonesBlockRef = useRef<HTMLDivElement | null>(null);
+  const communeBlockRef = useRef<HTMLDivElement | null>(null);
+  const budgetBlockRef = useRef<HTMLDivElement | null>(null);
+  // Modes d'affichage des filtres principaux (multi-sélection). [] = menu seul
+  const [filterMenuModes, setFilterMenuModes] = useState<Array<"map" | "commune" | "budget" | "criteres">>([]);
+  const hasMode = useCallback((m: "map" | "commune" | "budget" | "criteres") => filterMenuModes.includes(m), [filterMenuModes]);
+  const toggleMode = useCallback((m: "map" | "commune" | "budget" | "criteres") => {
+    setFilterMenuModes((prev) => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]);
+  }, []);
+
+  // Critères (onglet colocataires)
+  const [critAgeMin, setCritAgeMin] = useState<number | null>(null);
+  const [critAgeMax, setCritAgeMax] = useState<number | null>(null);
+  const [critProfession, setCritProfession] = useState<string>("");
 
   const clearAllSubs = () => {
     subsRef.current.forEach((u) => { try { u(); } catch {} });
@@ -425,18 +474,18 @@ export default function HomePage() {
                 const zonesArr: string[] = Array.isArray((d as any).zones) && (d as any).zones.length
                   ? ((d as any).zones as string[])
                   : zonesFromSlugs;
-                  const zonesLabel = zonesArr && zonesArr.length ? zonesArr.join(", ") : (d.ville || "-");
+                const zonesLabel = zonesArr && zonesArr.length ? zonesArr.join(", ") : (d.ville || "-");
                 return {
                   id: doc.id,
                   titre: d.nom || "Recherche colocation",
-                    ville: zonesLabel, // Affiche les zones recherchées à la place de la commune
+                  ville: zonesLabel, // Affiche les zones recherchées à la place de la commune
                   prix: Number.isFinite(budgetNum) ? budgetNum : undefined, // AnnonceCard affiche “prix” -> budget ici
                   surface: undefined,
                   description: short.slice(0, 180), // extrait court
                   imageUrl: d.imageUrl || defaultAnnonceImg,
                   createdAt: d.createdAt,
-                    parentSlug,
-                    zonesLabel,
+                  parentSlug,
+                  zonesLabel,
                 };
               }
               // -- annonces (inchangé) --
@@ -460,20 +509,20 @@ export default function HomePage() {
                 mapped.forEach((m) => byId.set(m.id, { ...(byId.get(m.id) || {}), ...m }));
                 return Array.from(byId.values());
               })();
-               const toMs = (x: any) => {
-                 const v = x?.createdAt;
-                 if (!v) return 0;
-                 if (typeof v === "number") return v;
-                 if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
-                 const p = Date.parse(v);
-                 return isNaN(p) ? 0 : p;
-               };
-               if (sortBy === "date") arr.sort((a, b) => toMs(b) - toMs(a));
-               else if (sortBy === "prix-desc") arr.sort((a, b) => (b.prix ?? 0) - (a.prix ?? 0));
-               else arr.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
-               if (resetOnFirstSnapshotRef.current) resetOnFirstSnapshotRef.current = false;
-               return arr;
-             });
+              const toMs = (x: any) => {
+                const v = x?.createdAt;
+                if (!v) return 0;
+                if (typeof v === "number") return v;
+                if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+                const p = Date.parse(v);
+                return isNaN(p) ? 0 : p;
+              };
+              if (sortBy === "date") arr.sort((a, b) => toMs(b) - toMs(a));
+              else if (sortBy === "prix-desc") arr.sort((a, b) => (b.prix ?? 0) - (a.prix ?? 0));
+              else arr.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
+              if (resetOnFirstSnapshotRef.current) resetOnFirstSnapshotRef.current = false;
+              return arr;
+            });
             // Mémorise un curseur uniquement si le doc possède bien le champ d’ordre
             const hasOrderField = (snap: any) => {
               try {
@@ -559,20 +608,20 @@ export default function HomePage() {
                       mapped.forEach((m) => byId.set(m.id, { ...(byId.get(m.id) || {}), ...m }));
                       return Array.from(byId.values());
                     })();
-                     const toMs = (x: any) => {
-                       const v = x?.createdAt;
-                       if (!v) return 0;
-                       if (typeof v === "number") return v;
-                       if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
-                       const p = Date.parse(v);
-                       return isNaN(p) ? 0 : p;
-                     };
-                     if (sortBy === "date") arr.sort((a, b) => toMs(b) - toMs(a));
-                     else if (sortBy === "prix-desc") arr.sort((a, b) => (b.prix ?? 0) - (a.prix ?? 0));
-                     else arr.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
-                      if (resetOnFirstSnapshotRef.current) resetOnFirstSnapshotRef.current = false;
-                     return arr;
-                   });
+                    const toMs = (x: any) => {
+                      const v = x?.createdAt;
+                      if (!v) return 0;
+                      if (typeof v === "number") return v;
+                      if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+                      const p = Date.parse(v);
+                      return isNaN(p) ? 0 : p;
+                    };
+                    if (sortBy === "date") arr.sort((a, b) => toMs(b) - toMs(a));
+                    else if (sortBy === "prix-desc") arr.sort((a, b) => (b.prix ?? 0) - (a.prix ?? 0));
+                    else arr.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
+                    if (resetOnFirstSnapshotRef.current) resetOnFirstSnapshotRef.current = false;
+                    return arr;
+                  });
                   // Pas d’orderBy en fallback: ne met pas à jour lastDoc pour éviter des curseurs invalides
                   if (docsArr.length === 0) setHasMore(false);
                   setLoadingMore(false);
@@ -696,6 +745,10 @@ export default function HomePage() {
     setCommunesSelected([]);
     setVille("");
     setCodePostal("");
+  // reset critères coloc
+  setCritAgeMin(null);
+  setCritAgeMax(null);
+  setCritProfession("");
     // Ne pas appeler loadAnnonces ici (il sera déclenché par l’effet “filtres”)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeHomeTab]);
@@ -703,6 +756,15 @@ export default function HomePage() {
   // Rechargement quand les filtres changent (sans vider la liste immédiatement)
   useEffect(() => {
     if (activeHomeTab === null) return;
+    // Mémoriser la position de scroll (une seule fois par rafale de changements)
+    if (typeof window !== "undefined" && scrollPosBeforeFilterRef.current === null) {
+      scrollPosBeforeFilterRef.current = window.scrollY;
+    }
+    // Mémoriser la position relative de la carte (pour compenser le reflow)
+    if (mapTopBeforeRef.current === null && typeof window !== "undefined") {
+      const el = mapWrapRef.current;
+      mapTopBeforeRef.current = el ? el.getBoundingClientRect().top : null;
+    }
     clearAllSubs();
     setLastDoc(null);
     setHasMore(true);
@@ -713,7 +775,141 @@ export default function HomePage() {
       loadAnnonces();
     }, 250);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortBy, prixMax, ville, codePostal, communesSelected]);
+  }, [sortBy, prixMax, ville, codePostal, communesSelected, critAgeMin, critAgeMax, critProfession]);
+
+  // Liste affichée (filtrée + triée) utilisée à la fois pour l'entête et la grille
+  const displayedAnnonces = useMemo(() => {
+    let list = (Array.isArray(annonces) ? annonces : [])
+      .filter((a: any) => {
+        if (selectedParentSlugs.length === 0) return true;
+        const p = a?.parentSlug;
+        return p ? selectedParentSlugs.includes(p) : false;
+      })
+      .filter((a: any) => {
+        if (prixMax === null) return true;
+        if (typeof a?.prix !== "number") return false;
+        return a.prix <= prixMax;
+      });
+
+    // Filtrage client additionnel pour l’onglet colocataires (critères)
+    if (activeHomeTab === 'colocataires') {
+      list = list.filter((a: any) => {
+        // Le mapping coloc place le "prix" dans a.prix (budget) et calcule un short desc dans a.description
+        const age = Number((a as any).age ?? (a as any).Age ?? NaN);
+        const profession = String((a as any).profession ?? '').toLowerCase();
+        if (critAgeMin !== null && !(Number.isFinite(age) && age >= critAgeMin)) return false;
+        if (critAgeMax !== null && !(Number.isFinite(age) && age <= critAgeMax)) return false;
+        if (critProfession && !profession.includes(critProfession.toLowerCase())) return false;
+        return true;
+      });
+    }
+
+    list = list.sort((a: any, b: any) => {
+        if (sortBy === "prix" || sortBy === "prix-desc") {
+          const pa = typeof a?.prix === "number" ? a.prix : Number.POSITIVE_INFINITY;
+          const pb = typeof b?.prix === "number" ? b.prix : Number.POSITIVE_INFINITY;
+          return sortBy === "prix-desc" ? pb - pa : pa - pb;
+        } else {
+          const toMs = (x: any) => {
+            const v = x?.createdAt;
+            if (!v) return 0;
+            if (typeof v === "number") return v;
+            if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+            const p = Date.parse(v);
+            return isNaN(p) ? 0 : p;
+          };
+          return toMs(b) - toMs(a);
+        }
+      });
+    return list;
+  }, [annonces, selectedParentSlugs, prixMax, sortBy, activeHomeTab, critAgeMin, critAgeMax, critProfession]);
+
+  // Quand le filtrage se termine, restaurer la position de scroll initiale
+  useEffect(() => {
+    if (!filtering && typeof window !== "undefined" && scrollPosBeforeFilterRef.current !== null) {
+      const y = scrollPosBeforeFilterRef.current;
+      scrollPosBeforeFilterRef.current = null;
+      try {
+        window.scrollTo({ top: y, behavior: "auto" });
+      } catch {
+        window.scrollTo(0, y);
+      }
+    }
+    // Compense le décalage pour que la carte reste au même niveau visuel
+    if (!filtering && typeof window !== "undefined" && mapTopBeforeRef.current !== null) {
+      const el = mapWrapRef.current;
+      const nowTop = el ? el.getBoundingClientRect().top : null;
+      const beforeTop = mapTopBeforeRef.current;
+      mapTopBeforeRef.current = null;
+      if (nowTop !== null && beforeTop !== null) {
+        const delta = nowTop - beforeTop; // valeur positive => déplacer vers le haut
+        if (delta !== 0) {
+          try {
+            window.scrollBy({ top: delta, behavior: "auto" });
+          } catch {
+            window.scrollBy(0, delta);
+          }
+        }
+      }
+    }
+  }, [filtering]);
+
+  // Observer la hauteur du bloc des chips et compenser instantanément les variations
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Si la source est la carte, les chips sont masqués: débrancher l'observer
+    if (selectionSource === "map") {
+      if (chipsRORef.current) {
+        chipsRORef.current.disconnect();
+        chipsRORef.current = null;
+      }
+      chipsPrevHRef.current = 0;
+      return;
+    }
+    const el = selectedChipsRef.current;
+    // Nettoyage si pas de bloc
+    if (!el) {
+      if (chipsRORef.current) {
+        chipsRORef.current.disconnect();
+        chipsRORef.current = null;
+      }
+      chipsPrevHRef.current = 0;
+      return;
+    }
+    // Installer un ResizeObserver
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const newH = entry.contentRect?.height ?? el.offsetHeight;
+      if (chipsPrevHRef.current === 0) {
+        chipsPrevHRef.current = newH;
+        return; // ignorer la première mesure
+      }
+      const delta = newH - chipsPrevHRef.current;
+      if (delta !== 0) {
+        const mapEl = mapWrapRef.current;
+        if (mapEl) {
+          const rect = mapEl.getBoundingClientRect();
+          const visible = rect.top < window.innerHeight && rect.bottom > 0;
+          if (visible) {
+            try {
+              window.scrollBy({ top: delta, behavior: "auto" });
+            } catch {
+              window.scrollBy(0, delta);
+            }
+          }
+        }
+      }
+      chipsPrevHRef.current = newH;
+    });
+    ro.observe(el);
+    chipsRORef.current = ro;
+    return () => {
+      ro.disconnect();
+      chipsRORef.current = null;
+      chipsPrevHRef.current = 0;
+    };
+  }, [communesSelected.length, selectionSource]);
 
   // Nettoyage global à l’unmount
   useEffect(() => {
@@ -761,6 +957,7 @@ export default function HomePage() {
         (SLUG_TO_NAME[a] || a).localeCompare(SLUG_TO_NAME[b] || b, "fr", { sensitivity: "base" })
       );
       // MAJ groupée pour cohérence UI + requêtes
+  setSelectionSource("zones");
       setCommunesSelected((prevSlugs) => (sameIds(prevSlugs, zoneSlugs) ? prevSlugs : zoneSlugs));
       setZonesSelected((prevZones) => (sameIds(prevZones, next) ? prevZones : next));
       return next;
@@ -839,7 +1036,7 @@ export default function HomePage() {
             {activeHomeTab === "annonces" ? "Annonces de colocation" : "Profils de colocataires"}
           </h1>
 
-          {/* Layout 2 colonnes: filtres à gauche, annonces à droite (sticky filtres) */}
+          {/* Layout 3 colonnes (desktop): ruban communes | filtres | annonces */}
           <div className="w-full max-w-7xl flex flex-col md:flex-row md:items-start gap-6">
             {/* Colonne annonces (droite en ≥md) */}
             <div className="flex-1 min-w-0 md:order-2">
@@ -850,44 +1047,43 @@ export default function HomePage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {(() => {
-                  const list = (Array.isArray(annonces) ? annonces : [])
-                    .filter((a: any) => {
-                      if (selectedParentSlugs.length === 0) return true;
-                      const p = a?.parentSlug;
-                      return p ? selectedParentSlugs.includes(p) : false;
-                    })
-                    .filter((a: any) => {
-                      if (prixMax === null) return true;
-                      if (typeof a?.prix !== "number") return false;
-                      return a.prix <= prixMax;
-                    })
-                    .sort((a: any, b: any) => {
-                      if (sortBy === "prix" || sortBy === "prix-desc") {
-                        const pa = typeof a?.prix === "number" ? a.prix : Number.POSITIVE_INFINITY;
-                        const pb = typeof b?.prix === "number" ? b.prix : Number.POSITIVE_INFINITY;
-                        return sortBy === "prix-desc" ? pb - pa : pa - pb;
-                      } else {
-                        const toMs = (x: any) => {
-                          const v = x?.createdAt;
-                          if (!v) return 0;
-                          if (typeof v === "number") return v;
-                          if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
-                          const p = Date.parse(v);
-                          return isNaN(p) ? 0 : p;
-                        };
-                        return toMs(b) - toMs(a);
-                      }
-                    });
+              {/* Entête résultats + tri rapide */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm text-slate-600">
+                  {displayedAnnonces.length} résultat{displayedAnnonces.length > 1 ? "s" : ""}
+                </div>
+                <div className="flex items-center gap-1">
+                  {activeHomeTab === "annonces" && (
+                    <button
+                      type="button"
+                      onClick={() => setSortBy("date")}
+                      className={`px-2 py-1 rounded text-sm border ${sortBy === "date" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
+                    >
+                      Date
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("prix")}
+                    className={`px-2 py-1 rounded text-sm border ${sortBy === "prix" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
+                  >
+                    {activeHomeTab === "annonces" ? "Prix ↑" : "Budget ↑"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("prix-desc")}
+                    className={`px-2 py-1 rounded text-sm border ${sortBy === "prix-desc" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
+                  >
+                    {activeHomeTab === "annonces" ? "Prix ↓" : "Budget ↓"}
+                  </button>
+                </div>
+              </div>
 
-                  if (!filtering && list.length === 0) {
-                    return (
-                      <p className="text-slate-500 text-center mt-4 col-span-full">Aucune annonce trouvée.</p>
-                    );
-                  }
-
-                  return list.map((annonce: any) => {
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 prevent-anchor">
+                {(!filtering && displayedAnnonces.length === 0) ? (
+                  <p className="text-slate-500 text-center mt-4 col-span-full">Aucune annonce trouvée.</p>
+                ) : (
+                  displayedAnnonces.map((annonce: any) => {
                     const card = (
                       <AnnonceCard
                         key={annonce.id}
@@ -923,8 +1119,8 @@ export default function HomePage() {
                     ) : (
                       card
                     );
-                  });
-                })()}
+                  })
+                )}
 
                 {loadingMore && (
                   <p className="text-slate-500 text-center mt-4 col-span-full">Chargement...</p>
@@ -932,6 +1128,10 @@ export default function HomePage() {
 
                 {/* Message de fin de liste retiré à la demande */}
               </div>
+              {/* Style local: empêche l'ancrage automatique qui peut déplacer la page quand du contenu est inséré */}
+              <style jsx>{`
+                .prevent-anchor { overflow-anchor: none; }
+              `}</style>
             </div>
 
             {/* Colonne filtres (gauche en ≥md) */}
@@ -942,8 +1142,86 @@ export default function HomePage() {
                 }}
                 className="sticky top-4 w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4"
               >
-                <div className="flex flex-wrap gap-4 items-end justify-center">
+                {/* Menu navigation */}
+                <div className="text-xs font-medium text-slate-600 text-center mb-1">Rechercher par</div>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    className={`px-3 py-1.5 rounded-lg text-xs border ${hasMode('map') ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                    onClick={() => {
+                      const willEnable = !hasMode('map');
+                      toggleMode('map');
+                      if (willEnable) mapWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                  >
+                    Secteur de recherche
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-3 py-1.5 rounded-lg text-xs border ${hasMode('budget') ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                    onClick={() => {
+                      const willEnable = !hasMode('budget');
+                      toggleMode('budget');
+                      if (willEnable) budgetBlockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                  >
+                    Budget
+                  </button>
+                  {activeHomeTab === 'annonces' ? (
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 rounded-lg text-xs border ${hasMode('commune') ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                      onClick={() => {
+                        const willEnable = !hasMode('commune');
+                        toggleMode('commune');
+                        if (willEnable) communeBlockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                    >
+                      Commune
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 rounded-lg text-xs border ${hasMode('criteres') ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                      onClick={() => {
+                        const willEnable = !hasMode('criteres');
+                        toggleMode('criteres');
+                        if (willEnable) communeBlockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                    >
+                      Critères
+                    </button>
+                  )}
+                </div>
+                {/* Zones rapides (OU) tout en haut - visibles seulement en mode carte */}
+                {hasMode('map') && (
+                  <div ref={zonesBlockRef}>
+                    <div className="mb-2 text-xs font-medium text-slate-600">Zones</div>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1 text-center justify-items-stretch">
+                      {Object.keys(GROUPES).map((z) => (
+                        <button
+                          key={z}
+                          type="button"
+                          onClick={() => toggleZoneFilter(z)}
+                          className={`w-full px-2 py-1 rounded-full text-xs leading-none border transition ${
+                            zoneFilters.includes(z)
+                              ? "bg-blue-600 text-white border-blue-600"
+                              : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                          }`}
+                        >
+                          {z === "Intérieur" ? "Centre" : z}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Carte sera rendue plus bas (sous Commune/Budget) */}
+
+                {/* Carte (déplacée en bas) */}
+                <div ref={communeBlockRef} className="flex flex-wrap gap-4 items-end justify-center">
               {/* Commune: saisie libre + ajout multiple */}
+              {activeHomeTab === 'annonces' && hasMode('commune') && (
               <div className="flex flex-col gap-2">
                 <div className="flex items-end gap-2">
                   <div>
@@ -1005,6 +1283,7 @@ export default function HomePage() {
                       setCodePostal("");
                       setCommunesSelected([]);
                       setZonesSelected([]);
+                      setSelectionSource(null);
                     }}
                     className={`h-9 px-3 rounded border text-sm transition ${
                       communesSelected.length || ville
@@ -1015,27 +1294,9 @@ export default function HomePage() {
                     ✕
                   </button>
                 </div>
-                {communesSelected.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {communesSelected.map((s) => (
-                      <span key={s} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
-                        {parentSlugToName[s] || s}
-                        <button
-                          type="button"
-                          className="ml-1 text-slate-500 hover:text-rose-700"
-                          aria-label={`Retirer ${parentSlugToName[s] || s}`}
-                          onClick={() => {
-                            setCommunesSelected((prev) => prev.filter((x) => x !== s));
-                            setZonesSelected((prev) => computeZonesFromSlugs((communesSelected || []).filter((x) => x !== s)));
-                          }}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
+                {/* Affichage des communes sélectionnées (chips) désactivé à la demande */}
               </div>
+              )}
 
               {/* Suggestions communes (noms + sous-communes) TRIÉES */}
               <datalist id="communes-reu">
@@ -1049,31 +1310,40 @@ export default function HomePage() {
                 )}
               </datalist>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  {activeHomeTab === "annonces" ? "Prix max (€)" : "Budget max (€)"}
-                </label>
-                <input
-                  type="number"
-                  value={prixMax ?? ""}
-                  onChange={(e) => setPrixMax(Number(e.target.value) || null)}
-                  className="border border-gray-300 rounded px-3 py-2 w-full"
-                  placeholder={activeHomeTab === "annonces" ? "Ex: 600" : "Ex: 600"}
-                />
-              </div>
+              {hasMode('budget') && (
+                <div ref={budgetBlockRef}>
+                  <label className="block text-sm font-medium mb-1">
+                    {activeHomeTab === "annonces" ? "Prix max (€)" : "Budget max (€)"}
+                  </label>
+                  <input
+                    type="number"
+                    value={prixMax ?? ""}
+                    onChange={(e) => setPrixMax(Number(e.target.value) || null)}
+                    className="border border-gray-300 rounded px-3 py-2 w-full"
+                    placeholder={activeHomeTab === "annonces" ? "Ex: 600" : "Ex: 600"}
+                  />
+                </div>
+              )}
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Trier par</label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as "date" | "prix" | "prix-desc")}
-                  className="border border-gray-300 rounded px-3 py-2 w-full"
-                >
-                  {activeHomeTab === "annonces" && <option value="date">Date récente</option>}
-                  <option value="prix">{activeHomeTab === "annonces" ? "Prix croissant" : "Budget croissant"}</option>
-                  <option value="prix-desc">{activeHomeTab === "annonces" ? "Prix décroissant" : "Budget décroissant"}</option>
-                </select>
-              </div>
+              {/* Bloc Critères (uniquement en mode colocataires) */}
+              {activeHomeTab === 'colocataires' && hasMode('criteres') && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Âge min</label>
+                    <input type="number" className="border border-gray-300 rounded px-3 py-2 w-full" value={critAgeMin ?? ''} onChange={(e) => setCritAgeMin(Number(e.target.value) || null)} placeholder="Ex: 20" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Âge max</label>
+                    <input type="number" className="border border-gray-300 rounded px-3 py-2 w-full" value={critAgeMax ?? ''} onChange={(e) => setCritAgeMax(Number(e.target.value) || null)} placeholder="Ex: 35" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Profession</label>
+                    <input type="text" className="border border-gray-300 rounded px-3 py-2 w-full" value={critProfession} onChange={(e) => setCritProfession(e.target.value)} placeholder="Ex: Étudiant, CDI..." />
+                  </div>
+                </div>
+              )}
+
+              {/* Tri retiré de la barre gauche */}
 
               {/* Mise à jour automatique silencieuse */}
 
@@ -1091,6 +1361,7 @@ export default function HomePage() {
                   setLastDoc(null);
                   setHasMore(true);
                   setZoneFilters([]);
+                  setSelectionSource(null);
                   // Remplacement au 1er snapshot pour éviter les doublons
                   resetOnFirstSnapshotRef.current = true;
                   setFiltering(true);
@@ -1102,52 +1373,154 @@ export default function HomePage() {
               </button>
             </div>
 
-            {/* NOUVEAU: Filtrer par communes */}
-            <div className="mt-2">
-              {/* Zones rapides (OU) */}
-      <div className="mt-2 grid grid-cols-2 gap-2 text-center justify-items-stretch">
-                {Object.keys(GROUPES).map((z) => (
-                  <button
-                    key={z}
-                    type="button"
-                    onClick={() => toggleZoneFilter(z)}
-        className={`w-full px-3 py-1.5 rounded-full text-sm border transition ${
-                      zoneFilters.includes(z)
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
-                    }`}
-                  >
-                    {z}
-                  </button>
-                ))}
+              {/* Zones rapides déplacées en haut */}
+              {/* Blocs de sélection visibles seulement s'il y a au moins une sélection */}
+              {(zonesSelected.length > 0 || communesSelected.length > 0) && (
+              <div className="space-y-3">
+                <div className="bg-white rounded-xl border border-slate-200 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-medium text-slate-600">Zones sélectionnées</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{zonesSelected.length}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setZoneFilters([]);
+                          setCommunesSelected([]);
+                          setZonesSelected([]);
+                          setSelectionSource(null);
+                        }}
+                        disabled={zonesSelected.length === 0 && communesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0}
+                        className={`text-[11px] px-2 py-0.5 rounded border transition ${
+                          (zonesSelected.length === 0 && communesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0)
+                            ? "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
+                            : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                        }`}
+                        title="Tout effacer"
+                        aria-label="Tout effacer les zones et communes"
+                      >
+                        Tout effacer
+                      </button>
+                    </div>
+                  </div>
+                  <div className="max-h-[22vh] overflow-auto pr-1">
+                    <div className="flex flex-wrap gap-1">
+                      {zonesSelected.map((z) => (
+                        <span key={z} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                          {z}
+                          <button
+                            type="button"
+                            aria-label={`Retirer la zone ${z}`}
+                            title="Retirer"
+                            className="ml-1 rounded text-blue-700/80 hover:text-blue-900"
+                            onClick={() => {
+                              if (zoneFilters.includes(z)) {
+                                const nextZF = zoneFilters.filter((x) => x !== z);
+                                const union = Array.from(new Set(nextZF.flatMap((x) => ZONE_TO_SLUGS[x] || [])));
+                                union.sort((a, b) => (SLUG_TO_NAME[a] || a).localeCompare(SLUG_TO_NAME[b] || b, "fr", { sensitivity: "base" }));
+                                setSelectionSource("zones");
+                                setZoneFilters(nextZF);
+                                setCommunesSelected(union);
+                                setZonesSelected(nextZF);
+                              } else {
+                                const toRemove = new Set((ZONE_TO_SLUGS[z] || []).map((s) => altSlugToCanonical[s] || s));
+                                setSelectionSource("zones");
+                                setCommunesSelected((prev) => {
+                                  const next = (prev || []).filter((s) => !toRemove.has(altSlugToCanonical[s] || s));
+                                  setZonesSelected(computeZonesFromSlugs(next));
+                                  setZoneFilters([]);
+                                  return sameIds(prev || [], next) ? prev : next;
+                                });
+                              }
+                            }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl border border-slate-200 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-medium text-slate-600">Communes sélectionnées</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{communesSelected.length}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVille("");
+                          setCodePostal("");
+                          setZoneFilters([]);
+                          setCommunesSelected([]);
+                          setZonesSelected([]);
+                          setSelectionSource(null);
+                        }}
+                        disabled={communesSelected.length === 0 && zonesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0}
+                        className={`text-[11px] px-2 py-0.5 rounded border transition ${
+                          (communesSelected.length === 0 && zonesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0)
+                            ? "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
+                            : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                        }`}
+                        title="Tout effacer"
+                        aria-label="Tout effacer les communes et zones"
+                      >
+                        Tout effacer
+                      </button>
+                    </div>
+                  </div>
+                  <div ref={selectedChipsRef} className="max-h-[22vh] overflow-auto pr-1">
+                    <div className="flex flex-wrap gap-1">
+                      {communesSelected.map((s) => (
+                        <span key={s} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200" title={parentSlugToName[s] || s}>
+                          {parentSlugToName[s] || s}
+                          <button
+                            type="button"
+                            aria-label={`Retirer ${parentSlugToName[s] || s}`}
+                            title="Retirer"
+                            className="ml-1 rounded text-slate-600 hover:text-slate-900"
+                            onClick={() => {
+                              const canon = altSlugToCanonical[s] || s;
+                              setSelectionSource("input");
+                              setCommunesSelected((prev) => {
+                                const next = (prev || []).filter((x) => (altSlugToCanonical[x] || x) !== canon);
+                                setZonesSelected(computeZonesFromSlugs(next));
+                                setZoneFilters([]);
+                                return sameIds(prev || [], next) ? prev : next;
+                              });
+                            }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
-              {showCommuneMap && (
-                <div className="mt-3 rounded-2xl border border-slate-200 p-3">
+              )}
+              {/* Carte (sous Commune et Budget, au-dessus des blocs de sélection) */}
+              {showCommuneMap && hasMode('map') && (
+                <div id="map-section" ref={mapWrapRef} className="rounded-2xl border border-slate-200 p-3 overflow-hidden">
                   <CommuneZoneSelector
                     value={communesSelected}
                     computeZonesFromSlugs={computeZonesFromSlugs}
                     onChange={(slugs, zones = []) => {
+                      setSelectionSource("map");
                       setCommunesSelected((prev) => (sameIds(prev, slugs as string[]) ? prev : (slugs as string[])));
                       setZonesSelected((prev) => (sameIds(prev, zones as string[]) ? prev : (zones as string[])));
                     }}
                     height={420}
                     className="w-full"
                     alwaysMultiSelect
-                    // Plus de repères sur la carte (markers retirés à la demande)
+                    // Masque le résumé de sélection sous la carte
+                    hideSelectionSummary
                   />
                 </div>
               )}
-              {communesSelected.length > 0 && (
-                <p className="mt-2 text-xs text-slate-600">
-                  Communes sélectionnées: {communesSelected.join(", ")}
-                </p>
-              )}
-              {zonesSelected.length > 0 && (
-                <p className="mt-1 text-xs text-slate-600">
-                  Zones sélectionnées: {zonesSelected.join(", ")}
-                </p>
-              )}
-                </div>
+
+              {/* fin blocs sélection */}
               </form>
             </div>
           </div>

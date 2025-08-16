@@ -13,6 +13,7 @@ type Props = {
   height?: number;
   className?: string;
   alwaysMultiSelect?: boolean;
+  hideSelectionSummary?: boolean;
 };
 
 // Compare deux listes (ordre ignoré)
@@ -34,6 +35,7 @@ export default function CommuneZoneSelector({
   height = 420,
   className,
   alwaysMultiSelect = true,
+  hideSelectionSummary = false,
 }: Props) {
   const handleSelection = useCallback(
     (ids: string[]) => {
@@ -55,6 +57,7 @@ export default function CommuneZoneSelector({
         height={height}
         className="w-full"
   alwaysMultiSelect={alwaysMultiSelect}
+  hideSelectionSummary={hideSelectionSummary}
       />
     </div>
   );
