@@ -12,6 +12,7 @@ import {
   onSnapshot,
   doc,
   getDoc,
+  getCountFromServer,
 } from "firebase/firestore";
 import type { Query, QuerySnapshot, DocumentData } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -60,6 +61,8 @@ export default function HomePage() {
   const [mapSectionOpen, setMapSectionOpen] = useState(true);
   // Source de la sélection (carte, saisie, zones) pour piloter l'affichage des chips sous le champ
   const [selectionSource, setSelectionSource] = useState<"map" | "input" | "zones" | null>(null);
+  // Refonte scroll: marquer pour scroller vers l’ancre résultats au premier snapshot suivant un changement de filtres
+  const shouldScrollToResultsOnNextDataRef = useRef(false);
 
   // Image d'annonce par défaut (16:9)
   const defaultAnnonceImg =
@@ -103,6 +106,20 @@ export default function HomePage() {
   // Précharge les zones de la carte en arrière-plan pour une ouverture instantanée
   useEffect(() => {
     preloadReunionFeatures();
+  }, []);
+
+  // Charger les compteurs globaux au montage
+  useEffect(() => {
+    (async () => {
+      try {
+        const annoncesCount = await getCountFromServer(query(collection(db, 'annonces')));
+        setCountAnnoncesTotal(annoncesCount.data().count || 0);
+      } catch {}
+      try {
+        const profilsCount = await getCountFromServer(query(collection(db, 'colocProfiles')));
+        setCountProfilsTotal(profilsCount.data().count || 0);
+      } catch {}
+    })();
   }, []);
 
   // NOUVEAU: map “nom (commune/sous-commune) -> slug parent de la commune”
@@ -168,6 +185,21 @@ export default function HomePage() {
     });
     return zones;
   };
+
+  // NOUVEAU: lister les sous-communes couvertes par les zones sélectionnées (zoneFilters)
+  const selectedSubCommunesLabel = useMemo(() => {
+    if (!Array.isArray(zoneFilters) || zoneFilters.length === 0) return "";
+    const set = new Set<string>();
+    for (const z of zoneFilters) {
+      const slugs = (ZONE_TO_SLUGS as any)[z] || [];
+      for (const s of slugs) {
+        const entry = (COMMUNES_CP_SORTED as any[]).find((c) => slugify(c.name) === s);
+        const alts = (entry?.alts || []) as Array<{ name: string; cp: string }>;
+        alts.forEach((a) => { if (a?.name) set.add(a.name); });
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" })).join(", ");
+  }, [zoneFilters, ZONE_TO_SLUGS, COMMUNES_CP_SORTED]);
 
   // NOUVEAU: altSlug -> slug canonique (gère les articles l-/le-/la-/les-)
   const altSlugToCanonical = useMemo(() => {
@@ -286,10 +318,18 @@ export default function HomePage() {
   // Référence du conteneur de la carte (pour stabiliser sa position visible)
   const mapWrapRef = useRef<HTMLDivElement | null>(null);
   const mapTopBeforeRef = useRef<number | null>(null);
+  // Ancre au-dessus des onglets
+  const tabsTopRef = useRef<HTMLDivElement | null>(null);
+  // Référence pour ancrer le haut de la liste des résultats
+  const resultsTopRef = useRef<HTMLDivElement | null>(null);
   // Référence et observer pour le bloc des chips "Communes sélectionnées"
   const selectedChipsRef = useRef<HTMLDivElement | null>(null);
   const chipsPrevHRef = useRef<number>(0);
   const chipsRORef = useRef<ResizeObserver | null>(null);
+  // Sentinel de fin de liste pour scroll infini
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  // Throttle pour l'IntersectionObserver (évite les déclenchements en rafale)
+  const lastIoTriggerAtRef = useRef<number>(0);
   // Réfs pour menu d'ancrage (zone/budget/commune)
   const zonesBlockRef = useRef<HTMLDivElement | null>(null);
   const communeBlockRef = useRef<HTMLDivElement | null>(null);
@@ -305,6 +345,11 @@ export default function HomePage() {
   const [critAgeMin, setCritAgeMin] = useState<number | null>(null);
   const [critAgeMax, setCritAgeMax] = useState<number | null>(null);
   const [critProfession, setCritProfession] = useState<string>("");
+
+  // Compteurs
+  const [countAnnoncesTotal, setCountAnnoncesTotal] = useState<number | null>(null);
+  const [countProfilsTotal, setCountProfilsTotal] = useState<number | null>(null);
+  const [countFiltered, setCountFiltered] = useState<number | null>(null);
 
   const clearAllSubs = () => {
     subsRef.current.forEach((u) => { try { u(); } catch {} });
@@ -334,14 +379,16 @@ export default function HomePage() {
     );
   }, [communesSelected, altSlugToCanonical]);
 
-  const loadAnnonces = async () => {
+  const loadAnnonces = async (append: boolean = false) => {
     // Ne rien charger si aucun choix n’a été fait
     if (activeHomeTab === null) return;
     if (loadingMore || !hasMore || firestoreError) return;
 
     setLoadingMore(true);
-    setFiltering(true);
-    pendingStreamsRef.current = 0;
+    if (!append) {
+      setFiltering(true);
+      pendingStreamsRef.current = 0;
+    }
 
     try {
       const isColoc = activeHomeTab === "colocataires";
@@ -377,9 +424,10 @@ export default function HomePage() {
         return out;
       };
 
+  const PAGE_SIZE = 15;
       const qWithOrder = (qBase: Query<DocumentData>) => {
         const direction = sortBy === "date" ? "desc" : sortBy === "prix-desc" ? "desc" : "asc";
-        return query(qBase, orderBy(orderField, direction as any), limit(10));
+        return query(qBase, orderBy(orderField, direction as any), limit(PAGE_SIZE));
       };
 
       // Helper: vérifier que le curseur possède bien le champ d’ordre
@@ -486,6 +534,7 @@ export default function HomePage() {
                   createdAt: d.createdAt,
                   parentSlug,
                   zonesLabel,
+                  subCommunesLabel: selectedSubCommunesLabel || undefined,
                 };
               }
               // -- annonces (inchangé) --
@@ -500,6 +549,7 @@ export default function HomePage() {
                 imageUrl: d.imageUrl || defaultAnnonceImg,
                 createdAt: d.createdAt,
                 parentSlug: getDocParentSlug(d),
+                subCommunesLabel: selectedSubCommunesLabel || undefined,
               };
             });
             setAnnonces((prev) => {
@@ -532,8 +582,24 @@ export default function HomePage() {
             };
             const docsWithField = docsArr.filter(hasOrderField);
             if (docsWithField.length > 0) setLastDoc(docsWithField[docsWithField.length - 1]);
-            else if (docsArr.length === 0) setHasMore(false);
+            if (docsArr.length < PAGE_SIZE) setHasMore(false);
             setLoadingMore(false);
+
+            // NOUVEAU: scroller vers les résultats au premier snapshot suivant un changement de filtres
+            if (shouldScrollToResultsOnNextDataRef.current) {
+              try {
+                const el = resultsTopRef.current;
+                if (el && typeof el.scrollIntoView === 'function') {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } else if (typeof window !== 'undefined') {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+              } catch {
+                try { window.scrollTo(0, 0); } catch {}
+              } finally {
+                shouldScrollToResultsOnNextDataRef.current = false;
+              }
+            }
           },
           (err: any) => {
             if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
@@ -625,6 +691,22 @@ export default function HomePage() {
                   // Pas d’orderBy en fallback: ne met pas à jour lastDoc pour éviter des curseurs invalides
                   if (docsArr.length === 0) setHasMore(false);
                   setLoadingMore(false);
+
+                  // NOUVEAU: scroller vers les résultats au premier snapshot (fallback)
+                  if (shouldScrollToResultsOnNextDataRef.current) {
+                    try {
+                      const el = resultsTopRef.current;
+                      if (el && typeof el.scrollIntoView === 'function') {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      } else if (typeof window !== 'undefined') {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }
+                    } catch {
+                      try { window.scrollTo(0, 0); } catch {}
+                    } finally {
+                      shouldScrollToResultsOnNextDataRef.current = false;
+                    }
+                  }
                 },
                 (err2: any) => {
                   console.error("[Accueil][onSnapshot][fallback-noOrder][" + label + "]", err2);
@@ -712,10 +794,15 @@ export default function HomePage() {
         }
       } else {
         // Pas de filtre communes: comportement standard
-        const qFilterOnly = query(baseColRef, ...commonFiltersWithPrice);
-        const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase);
-        const qOrdered = qWithOrder(qFilterOnly);
-  const qPaged = lastDoc && aDocHasOrderField(lastDoc) ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
+  const qFilterOnly = query(baseColRef, ...commonFiltersWithPrice);
+  const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase);
+  const qOrdered = qWithOrder(qFilterOnly);
+        // Si on est en affichage total par défaut, on ne pagine pas
+        const noExtraCriteria = isColoc
+          ? (critAgeMin === null && critAgeMax === null && !critProfession && !ville)
+          : (!ville && !codePostal);
+        const isDefaultAll = !hasCommuneFilter && prixMax === null && noExtraCriteria;
+  const qPaged = (!isDefaultAll && lastDoc && aDocHasOrderField(lastDoc)) ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
         attachListener(qPaged as Query<DocumentData>, {
           label: "page",
           fallback: qFilterOnly as Query<DocumentData>,
@@ -732,11 +819,21 @@ export default function HomePage() {
   // Reset quand on change d’onglet
   useEffect(() => {
     if (activeHomeTab === null) return;
+    // Si les onglets sont masqués derrière le header, remonter juste jusqu'à l'ancre
+    try {
+      const anchor = tabsTopRef.current;
+      if (anchor) {
+        const rect = anchor.getBoundingClientRect();
+        if (rect && rect.top < 12) {
+          anchor.scrollIntoView({ behavior: 'auto', block: 'start' });
+        }
+      }
+    } catch {}
     clearAllSubs();
     setFirestoreError(null);
     setAnnonces([]);
-    setLastDoc(null);
-    setHasMore(true);
+  setLastDoc(null);
+  setHasMore(true);
     // Désactiver le tri par date pour l’onglet colocataires: par défaut trier par budget croissant
     if (activeHomeTab === "colocataires" && sortBy === "date") {
       setSortBy("prix");
@@ -756,15 +853,11 @@ export default function HomePage() {
   // Rechargement quand les filtres changent (sans vider la liste immédiatement)
   useEffect(() => {
     if (activeHomeTab === null) return;
-    // Mémoriser la position de scroll (une seule fois par rafale de changements)
-    if (typeof window !== "undefined" && scrollPosBeforeFilterRef.current === null) {
-      scrollPosBeforeFilterRef.current = window.scrollY;
-    }
-    // Mémoriser la position relative de la carte (pour compenser le reflow)
-    if (mapTopBeforeRef.current === null && typeof window !== "undefined") {
-      const el = mapWrapRef.current;
-      mapTopBeforeRef.current = el ? el.getBoundingClientRect().top : null;
-    }
+    // Marque pour scroller après le premier snapshot reçu
+    shouldScrollToResultsOnNextDataRef.current = true;
+    // Neutralise les anciennes compensations de scroll et d'ancrage carte
+    scrollPosBeforeFilterRef.current = null;
+    mapTopBeforeRef.current = null;
     clearAllSubs();
     setLastDoc(null);
     setHasMore(true);
@@ -772,8 +865,54 @@ export default function HomePage() {
     resetOnFirstSnapshotRef.current = true; // remplacera les cartes au premier snapshot
     if (filtersDebounceRef.current) clearTimeout(filtersDebounceRef.current);
     filtersDebounceRef.current = setTimeout(() => {
-      loadAnnonces();
+      loadAnnonces(false);
     }, 250);
+
+    // Met à jour un compteur filtré approximatif basé sur Firestore count (sans pagination)
+    (async () => {
+      try {
+        const isColoc = activeHomeTab === 'colocataires';
+        const col = collection(db, isColoc ? 'colocProfiles' : 'annonces');
+        const filters: any[] = [];
+        if (prixMax !== null) filters.push(where(isColoc ? 'budget' : 'prix', '<=', prixMax));
+        if (!isColoc) {
+          if (codePostal) filters.push(where('codePostal', '==', codePostal));
+          else if (ville) filters.push(where('ville', '==', ville));
+        } else {
+          if (ville) filters.push(where('ville', '==', ville));
+          // critères client (age/profession) non indexés: on ne les ajoute pas ici car count exige un index valide
+        }
+        // communes sélectionnées: utiliser un count sur un IN/array-contains-any si possible pour les chunks (prendre la somme des chunks)
+        let total = 0;
+        const slugs = selectedParentSlugs;
+        if (slugs.length > 0) {
+          const chunks = (arr: string[], size = 10) => {
+            const out: string[][] = []; for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size)); return out;
+          };
+          const field = isColoc ? 'communesSlugs' : 'communeSlug';
+          const op = isColoc ? 'array-contains-any' : 'in';
+          for (const c of chunks(slugs, 10)) {
+            try {
+              const qCount = query(col, ...filters, where(field as any, op as any, c));
+              const snap = await getCountFromServer(qCount);
+              total += snap.data().count || 0;
+            } catch {}
+          }
+          setCountFiltered(total);
+        } else {
+          try {
+            const qCount = query(col, ...filters);
+            const snap = await getCountFromServer(qCount);
+            total = snap.data().count || 0;
+            setCountFiltered(total);
+          } catch {
+            setCountFiltered(null);
+          }
+        }
+      } catch {
+        setCountFiltered(null);
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortBy, prixMax, ville, codePostal, communesSelected, critAgeMin, critAgeMax, critProfession]);
 
@@ -826,31 +965,10 @@ export default function HomePage() {
 
   // Quand le filtrage se termine, restaurer la position de scroll initiale
   useEffect(() => {
-    if (!filtering && typeof window !== "undefined" && scrollPosBeforeFilterRef.current !== null) {
-      const y = scrollPosBeforeFilterRef.current;
+    // Nouveau comportement: ne restaure pas l'ancienne position; rester en haut de la liste
+    if (!filtering) {
       scrollPosBeforeFilterRef.current = null;
-      try {
-        window.scrollTo({ top: y, behavior: "auto" });
-      } catch {
-        window.scrollTo(0, y);
-      }
-    }
-    // Compense le décalage pour que la carte reste au même niveau visuel
-    if (!filtering && typeof window !== "undefined" && mapTopBeforeRef.current !== null) {
-      const el = mapWrapRef.current;
-      const nowTop = el ? el.getBoundingClientRect().top : null;
-      const beforeTop = mapTopBeforeRef.current;
       mapTopBeforeRef.current = null;
-      if (nowTop !== null && beforeTop !== null) {
-        const delta = nowTop - beforeTop; // valeur positive => déplacer vers le haut
-        if (delta !== 0) {
-          try {
-            window.scrollBy({ top: delta, behavior: "auto" });
-          } catch {
-            window.scrollBy(0, delta);
-          }
-        }
-      }
     }
   }, [filtering]);
 
@@ -911,6 +1029,27 @@ export default function HomePage() {
     };
   }, [communesSelected.length, selectionSource]);
 
+  // Scroll infini: observer le sentinel en bas de page
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      if (!entry?.isIntersecting) return;
+      // Throttle: au moins 400ms entre deux déclenchements
+      const now = Date.now();
+      if (now - (lastIoTriggerAtRef.current || 0) < 400) return;
+      // Charger la page suivante si possible
+      if (!loadingMore && hasMore && !filtering) {
+        lastIoTriggerAtRef.current = now;
+        loadAnnonces(true);
+      }
+    }, { root: null, rootMargin: '200px', threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, loadingMore, filtering, activeHomeTab, sortBy, prixMax, ville, codePostal, communesSelected.length, critAgeMin, critAgeMax, critProfession]);
+
   // Nettoyage global à l’unmount
   useEffect(() => {
     return () => {
@@ -965,7 +1104,7 @@ export default function HomePage() {
   };
 
   return (
-    <main className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
+  <main className="min-h-screen p-2 sm:p-6 flex flex-col items-center scroll-pt-28 md:scroll-pt-32">
       {/* Ecran de CHOIX initial */}
       {activeHomeTab === null ? (
         <section className="w-full max-w-6xl flex flex-col items-center">
@@ -1002,28 +1141,41 @@ export default function HomePage() {
         <>
           {/* Bouton “Changer de type de recherche” retiré */}
 
-          {/* Onglets Accueil (conservés, affichés après le choix) */}
-          <div className="w-full max-w-7xl flex gap-2 mb-4">
-            <button
-              className={`flex-1 px-4 py-2 rounded-lg font-semibold transition ${
-                activeHomeTab === "annonces"
-                  ? "bg-blue-600 text-white shadow"
-                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-              }`}
-              onClick={() => setActiveHomeTab("annonces")}
+          {/* Ancre au-dessus des onglets */}
+          <div ref={tabsTopRef} className="h-0 scroll-mt-28 md:scroll-mt-32" aria-hidden="true" />
+          {/* Onglets Accueil — version légèrement agrandie et centrée */}
+          <div className="w-full max-w-7xl mb-4 flex justify-center">
+            <div
+              role="tablist"
+              aria-label="Type de recherche"
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white shadow-sm overflow-hidden"
             >
-              Annonces
-            </button>
-            <button
-              className={`flex-1 px-4 py-2 rounded-lg font-semibold transition ${
-                activeHomeTab === "colocataires"
-                  ? "bg-blue-600 text-white shadow"
-                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-              }`}
-              onClick={() => setActiveHomeTab("colocataires")}
-            >
-              Colocataires
-            </button>
+              <button
+                role="tab"
+                aria-selected={activeHomeTab === "annonces"}
+                className={`px-4 sm:px-5 py-1.5 sm:py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  activeHomeTab === "annonces"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-700 hover:bg-slate-50"
+                }`}
+                onClick={() => setActiveHomeTab("annonces")}
+              >
+                🏠 <span className="ml-1.5">Annonces</span>
+              </button>
+              <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
+              <button
+                role="tab"
+                aria-selected={activeHomeTab === "colocataires"}
+                className={`px-4 sm:px-5 py-1.5 sm:py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  activeHomeTab === "colocataires"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-700 hover:bg-slate-50"
+                }`}
+                onClick={() => setActiveHomeTab("colocataires")}
+              >
+                👥 <span className="ml-1.5">Colocataires</span>
+              </button>
+            </div>
           </div>
 
           {firestoreError && (
@@ -1047,38 +1199,30 @@ export default function HomePage() {
                 </div>
               )}
 
-              {/* Entête résultats + tri rapide */}
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-sm text-slate-600">
-                  {displayedAnnonces.length} résultat{displayedAnnonces.length > 1 ? "s" : ""}
-                </div>
-                <div className="flex items-center gap-1">
-                  {activeHomeTab === "annonces" && (
-                    <button
-                      type="button"
-                      onClick={() => setSortBy("date")}
-                      className={`px-2 py-1 rounded text-sm border ${sortBy === "date" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
-                    >
-                      Date
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setSortBy("prix")}
-                    className={`px-2 py-1 rounded text-sm border ${sortBy === "prix" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
-                  >
-                    {activeHomeTab === "annonces" ? "Prix ↑" : "Budget ↑"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSortBy("prix-desc")}
-                    className={`px-2 py-1 rounded text-sm border ${sortBy === "prix-desc" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
-                  >
-                    {activeHomeTab === "annonces" ? "Prix ↓" : "Budget ↓"}
-                  </button>
+        {/* Entête: libellé : compteur (total si aucun filtre au 1er affichage, sinon nombre filtré) + suffixe "trouvé(e)s" */}
+              <div className="flex items-center mb-2">
+                <div className="text-sm text-slate-700">
+                  {activeHomeTab === 'annonces' ? 'Nombre d\'annonces' : 'Nombre de profils'}
+                  {" : "}
+                  {(() => {
+                    const hasCommuneSel = selectedParentSlugs.length > 0;
+                    const hasBudget = prixMax !== null;
+                    const hasVille = !!ville || !!codePostal;
+                    const hasCriteres = activeHomeTab === 'colocataires' && (critAgeMin !== null || critAgeMax !== null || !!critProfession);
+                    const anyFilter = hasCommuneSel || hasBudget || hasVille || hasCriteres;
+                    // Si aucun filtre et premier affichage, montrer le total global par onglet
+                    if (!anyFilter && annonces.length === 0) {
+                      return activeHomeTab === 'annonces' ? (countAnnoncesTotal ?? '…') : (countProfilsTotal ?? '…');
+                    }
+                    // Sinon, montrer le nombre filtré retourné par Firestore si dispo, sinon fallback sur la liste affichée
+                    return (countFiltered ?? displayedAnnonces.length);
+                  })()}
+          {" "}
+          {activeHomeTab === 'annonces' ? 'trouvées' : 'trouvés'}
                 </div>
               </div>
 
+              <div ref={resultsTopRef} className="h-0 scroll-mt-28 md:scroll-mt-32" aria-hidden="true" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 prevent-anchor">
                 {(!filtering && displayedAnnonces.length === 0) ? (
                   <p className="text-slate-500 text-center mt-4 col-span-full">Aucune annonce trouvée.</p>
@@ -1126,6 +1270,13 @@ export default function HomePage() {
                   <p className="text-slate-500 text-center mt-4 col-span-full">Chargement...</p>
                 )}
 
+                {/* Sentinel pour scroll infini */}
+                <div ref={loadMoreRef} className="col-span-full h-8" aria-hidden="true" />
+
+                {!hasMore && !loadingMore && displayedAnnonces.length > 0 && (
+                  <p className="text-slate-400 text-center text-xs mt-2 col-span-full">Fin de liste</p>
+                )}
+
                 {/* Message de fin de liste retiré à la demande */}
               </div>
               {/* Style local: empêche l'ancrage automatique qui peut déplacer la page quand du contenu est inséré */}
@@ -1135,7 +1286,7 @@ export default function HomePage() {
             </div>
 
             {/* Colonne filtres (gauche en ≥md) */}
-            <div className="w-full md:w-[480px] lg:w-[520px] md:order-1">
+            <div className="w-full md:order-1 md:basis-[34%] lg:basis-[36%] md:flex-shrink-0">
               <form
                 onSubmit={(e) => {
                   e.preventDefault(); // mise à jour auto: pas d’appel manuel
@@ -1143,15 +1294,17 @@ export default function HomePage() {
                 className="sticky top-4 w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4"
               >
                 {/* Menu navigation */}
-                <div className="text-xs font-medium text-slate-600 text-center mb-1">Rechercher par</div>
+                <div className="flex items-center justify-center gap-3 mb-3">
+                  <span className="hidden md:block h-px w-8 bg-slate-200" />
+                  <div className="text-base md:text-lg font-semibold text-slate-700 tracking-tight">Filtrer par</div>
+                  <span className="hidden md:block h-px w-8 bg-slate-200" />
+                </div>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     className={`px-3 py-1.5 rounded-lg text-xs border ${hasMode('map') ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
                     onClick={() => {
-                      const willEnable = !hasMode('map');
                       toggleMode('map');
-                      if (willEnable) mapWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }}
                   >
                     Secteur de recherche
@@ -1160,9 +1313,7 @@ export default function HomePage() {
                     type="button"
                     className={`px-3 py-1.5 rounded-lg text-xs border ${hasMode('budget') ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
                     onClick={() => {
-                      const willEnable = !hasMode('budget');
                       toggleMode('budget');
-                      if (willEnable) budgetBlockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }}
                   >
                     Budget
@@ -1172,9 +1323,7 @@ export default function HomePage() {
                       type="button"
                       className={`px-3 py-1.5 rounded-lg text-xs border ${hasMode('commune') ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
                       onClick={() => {
-                        const willEnable = !hasMode('commune');
                         toggleMode('commune');
-                        if (willEnable) communeBlockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                       }}
                     >
                       Commune
@@ -1184,9 +1333,7 @@ export default function HomePage() {
                       type="button"
                       className={`px-3 py-1.5 rounded-lg text-xs border ${hasMode('criteres') ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
                       onClick={() => {
-                        const willEnable = !hasMode('criteres');
                         toggleMode('criteres');
-                        if (willEnable) communeBlockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                       }}
                     >
                       Critères
@@ -1367,140 +1514,13 @@ export default function HomePage() {
                   setFiltering(true);
                   // pas d’appel direct à loadAnnonces: l’effet "filtres" va relancer proprement
                 }}
-                className="border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50"
+                className="border border-slate-300 text-slate-700 px-3 py-1.5 rounded-md hover:bg-slate-50 text-sm"
               >
-                Réinitialiser
+                Réinitialiser filtre
               </button>
             </div>
 
-              {/* Zones rapides déplacées en haut */}
-              {/* Blocs de sélection visibles seulement s'il y a au moins une sélection */}
-              {(zonesSelected.length > 0 || communesSelected.length > 0) && (
-              <div className="space-y-3">
-                <div className="bg-white rounded-xl border border-slate-200 p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs font-medium text-slate-600">Zones sélectionnées</div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{zonesSelected.length}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setZoneFilters([]);
-                          setCommunesSelected([]);
-                          setZonesSelected([]);
-                          setSelectionSource(null);
-                        }}
-                        disabled={zonesSelected.length === 0 && communesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0}
-                        className={`text-[11px] px-2 py-0.5 rounded border transition ${
-                          (zonesSelected.length === 0 && communesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0)
-                            ? "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
-                            : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                        }`}
-                        title="Tout effacer"
-                        aria-label="Tout effacer les zones et communes"
-                      >
-                        Tout effacer
-                      </button>
-                    </div>
-                  </div>
-                  <div className="max-h-[22vh] overflow-auto pr-1">
-                    <div className="flex flex-wrap gap-1">
-                      {zonesSelected.map((z) => (
-                        <span key={z} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">
-                          {z}
-                          <button
-                            type="button"
-                            aria-label={`Retirer la zone ${z}`}
-                            title="Retirer"
-                            className="ml-1 rounded text-blue-700/80 hover:text-blue-900"
-                            onClick={() => {
-                              if (zoneFilters.includes(z)) {
-                                const nextZF = zoneFilters.filter((x) => x !== z);
-                                const union = Array.from(new Set(nextZF.flatMap((x) => ZONE_TO_SLUGS[x] || [])));
-                                union.sort((a, b) => (SLUG_TO_NAME[a] || a).localeCompare(SLUG_TO_NAME[b] || b, "fr", { sensitivity: "base" }));
-                                setSelectionSource("zones");
-                                setZoneFilters(nextZF);
-                                setCommunesSelected(union);
-                                setZonesSelected(nextZF);
-                              } else {
-                                const toRemove = new Set((ZONE_TO_SLUGS[z] || []).map((s) => altSlugToCanonical[s] || s));
-                                setSelectionSource("zones");
-                                setCommunesSelected((prev) => {
-                                  const next = (prev || []).filter((s) => !toRemove.has(altSlugToCanonical[s] || s));
-                                  setZonesSelected(computeZonesFromSlugs(next));
-                                  setZoneFilters([]);
-                                  return sameIds(prev || [], next) ? prev : next;
-                                });
-                              }
-                            }}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-xl border border-slate-200 p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs font-medium text-slate-600">Communes sélectionnées</div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{communesSelected.length}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setVille("");
-                          setCodePostal("");
-                          setZoneFilters([]);
-                          setCommunesSelected([]);
-                          setZonesSelected([]);
-                          setSelectionSource(null);
-                        }}
-                        disabled={communesSelected.length === 0 && zonesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0}
-                        className={`text-[11px] px-2 py-0.5 rounded border transition ${
-                          (communesSelected.length === 0 && zonesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0)
-                            ? "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
-                            : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                        }`}
-                        title="Tout effacer"
-                        aria-label="Tout effacer les communes et zones"
-                      >
-                        Tout effacer
-                      </button>
-                    </div>
-                  </div>
-                  <div ref={selectedChipsRef} className="max-h-[22vh] overflow-auto pr-1">
-                    <div className="flex flex-wrap gap-1">
-                      {communesSelected.map((s) => (
-                        <span key={s} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200" title={parentSlugToName[s] || s}>
-                          {parentSlugToName[s] || s}
-                          <button
-                            type="button"
-                            aria-label={`Retirer ${parentSlugToName[s] || s}`}
-                            title="Retirer"
-                            className="ml-1 rounded text-slate-600 hover:text-slate-900"
-                            onClick={() => {
-                              const canon = altSlugToCanonical[s] || s;
-                              setSelectionSource("input");
-                              setCommunesSelected((prev) => {
-                                const next = (prev || []).filter((x) => (altSlugToCanonical[x] || x) !== canon);
-                                setZonesSelected(computeZonesFromSlugs(next));
-                                setZoneFilters([]);
-                                return sameIds(prev || [], next) ? prev : next;
-                              });
-                            }}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              )}
-              {/* Carte (sous Commune et Budget, au-dessus des blocs de sélection) */}
+              {/* Carte (sous Commune et Budget) */}
               {showCommuneMap && hasMode('map') && (
                 <div id="map-section" ref={mapWrapRef} className="rounded-2xl border border-slate-200 p-3 overflow-hidden">
                   <CommuneZoneSelector
@@ -1517,6 +1537,133 @@ export default function HomePage() {
                     // Masque le résumé de sélection sous la carte
                     hideSelectionSummary
                   />
+                </div>
+              )}
+
+              {/* Blocs de sélection — déscendus en bas de la barre gauche */}
+              {(zonesSelected.length > 0 || communesSelected.length > 0) && (
+                <div className="space-y-3 mt-3">
+                  <div className="bg-white rounded-xl border border-slate-200 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs font-medium text-slate-600">Zones sélectionnées</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{zonesSelected.length}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setZoneFilters([]);
+                            setCommunesSelected([]);
+                            setZonesSelected([]);
+                            setSelectionSource(null);
+                          }}
+                          disabled={zonesSelected.length === 0 && communesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0}
+                          className={`text-[11px] px-2 py-0.5 rounded border transition ${
+                            (zonesSelected.length === 0 && communesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0)
+                              ? "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
+                              : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                          }`}
+                          title="Tout effacer"
+                          aria-label="Tout effacer les zones et communes"
+                        >
+                          Tout effacer
+                        </button>
+                      </div>
+                    </div>
+                    <div className="max-h-[22vh] overflow-auto pr-1">
+                      <div className="flex flex-wrap gap-1">
+                        {zonesSelected.map((z) => (
+                          <span key={z} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                            {z}
+                            <button
+                              type="button"
+                              aria-label={`Retirer la zone ${z}`}
+                              title="Retirer"
+                              className="ml-1 rounded text-blue-700/80 hover:text-blue-900"
+                              onClick={() => {
+                                if (zoneFilters.includes(z)) {
+                                  const nextZF = zoneFilters.filter((x) => x !== z);
+                                  const union = Array.from(new Set(nextZF.flatMap((x) => ZONE_TO_SLUGS[x] || [])));
+                                  union.sort((a, b) => (SLUG_TO_NAME[a] || a).localeCompare(SLUG_TO_NAME[b] || b, "fr", { sensitivity: "base" }));
+                                  setSelectionSource("zones");
+                                  setZoneFilters(nextZF);
+                                  setCommunesSelected(union);
+                                  setZonesSelected(nextZF);
+                                } else {
+                                  const toRemove = new Set((ZONE_TO_SLUGS[z] || []).map((s) => altSlugToCanonical[s] || s));
+                                  setSelectionSource("zones");
+                                  setCommunesSelected((prev) => {
+                                    const next = (prev || []).filter((s) => !toRemove.has(altSlugToCanonical[s] || s));
+                                    setZonesSelected(computeZonesFromSlugs(next));
+                                    setZoneFilters([]);
+                                    return sameIds(prev || [], next) ? prev : next;
+                                  });
+                                }
+                              }}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-slate-200 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs font-medium text-slate-600">Communes sélectionnées</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{communesSelected.length}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVille("");
+                            setCodePostal("");
+                            setZoneFilters([]);
+                            setCommunesSelected([]);
+                            setZonesSelected([]);
+                            setSelectionSource(null);
+                          }}
+                          disabled={communesSelected.length === 0 && zonesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0}
+                          className={`text-[11px] px-2 py-0.5 rounded border transition ${
+                            (communesSelected.length === 0 && zonesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0)
+                              ? "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
+                              : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                          }`}
+                          title="Tout effacer"
+                          aria-label="Tout effacer les communes et zones"
+                        >
+                          Tout effacer
+                        </button>
+                      </div>
+                    </div>
+                    <div ref={selectedChipsRef} className="max-h-[22vh] overflow-auto pr-1">
+                      <div className="flex flex-wrap gap-1">
+                        {communesSelected.map((s) => (
+                          <span key={s} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200" title={parentSlugToName[s] || s}>
+                            {parentSlugToName[s] || s}
+                            <button
+                              type="button"
+                              aria-label={`Retirer ${parentSlugToName[s] || s}`}
+                              title="Retirer"
+                              className="ml-1 rounded text-slate-600 hover:text-slate-900"
+                              onClick={() => {
+                                const canon = altSlugToCanonical[s] || s;
+                                setSelectionSource("input");
+                                setCommunesSelected((prev) => {
+                                  const next = (prev || []).filter((x) => (altSlugToCanonical[x] || x) !== canon);
+                                  setZonesSelected(computeZonesFromSlugs(next));
+                                  setZoneFilters([]);
+                                  return sameIds(prev || [], next) ? prev : next;
+                                });
+                              }}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 

@@ -293,22 +293,22 @@ export default function AdminAnnonces({
             <table className="w-full text-sm border-separate border-spacing-y-2">
               <thead>
                 <tr className="bg-blue-50">
-                  {selectable && <th className="py-2 px-3 rounded-l-lg">Sélection</th>}
-                  <th className="py-2 px-3 rounded-l-lg">Titre</th>
-                  <th className="py-2 px-3">Ville</th>
-                  <th className="py-2 px-3">Prix</th>
-                  <th className="py-2 px-3">Surface</th>
-                  <th className="py-2 px-3">Chambres</th>
-                  <th className="py-2 px-3">Description</th>
-                  <th className="py-2 px-3">Date création</th>
-                  <th className="py-2 px-3 rounded-r-lg">Actions</th>
+                  {selectable && <th className="py-2 px-3 rounded-l-lg align-middle">Sélection</th>}
+                  <th className="py-2 px-3 rounded-l-lg align-middle">Titre</th>
+                  <th className="py-2 px-3 align-middle">Ville</th>
+                  <th className="py-2 px-3 align-middle">Prix</th>
+                  <th className="py-2 px-3 align-middle">Surface</th>
+                  <th className="py-2 px-3 align-middle">Chambres</th>
+                  <th className="py-2 px-3 align-middle">Description</th>
+                  <th className="py-2 px-3 align-middle">Date création</th>
+                  <th className="py-2 px-3 rounded-r-lg text-center align-middle">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {annonces.map((a) => (
                   <tr key={a.id} className="bg-gray-50 hover:bg-blue-50 transition">
                     {selectable && (
-                      <td className="py-2 px-3">
+                      <td className="py-2 px-3 align-middle">
                         <input
                           type="checkbox"
                           checked={selectedIds.includes(a.id)}
@@ -318,7 +318,7 @@ export default function AdminAnnonces({
                     )}
                     {editAnnonceId === a.id ? (
                       <>
-                        <td className="py-2 px-3">
+                        <td className="py-2 px-3 align-middle">
                           <input
                             name="titre"
                             value={editAnnonceData.titre}
@@ -326,7 +326,7 @@ export default function AdminAnnonces({
                             className="border rounded px-2 py-1 w-full"
                           />
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-2 px-3 align-middle">
                           <input
                             name="ville"
                             value={editAnnonceData.ville}
@@ -334,7 +334,7 @@ export default function AdminAnnonces({
                             className="border rounded px-2 py-1 w-full"
                           />
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-2 px-3 align-middle">
                           <input
                             name="prix"
                             value={editAnnonceData.prix}
@@ -343,7 +343,7 @@ export default function AdminAnnonces({
                             type="number"
                           />
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-2 px-3 align-middle">
                           <input
                             name="surface"
                             value={editAnnonceData.surface ?? ""}
@@ -352,7 +352,7 @@ export default function AdminAnnonces({
                             type="number"
                           />
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-2 px-3 align-middle">
                           <input
                             name="chambres"
                             value={editAnnonceData.chambres ?? ""}
@@ -361,7 +361,7 @@ export default function AdminAnnonces({
                             type="number"
                           />
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-2 px-3 align-middle">
                           <input
                             name="description"
                             value={editAnnonceData.description ?? ""}
@@ -369,7 +369,7 @@ export default function AdminAnnonces({
                             className="border rounded px-2 py-1 w-full"
                           />
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-2 px-3 align-middle">
                           {a.createdAt
                             ? new Date(
                                 a.createdAt.seconds
@@ -378,7 +378,7 @@ export default function AdminAnnonces({
                               ).toLocaleString()
                             : "-"}
                         </td>
-                        <td className="py-2 px-3 flex gap-2">
+                        <td className="py-2 px-3 align-middle flex items-center justify-center gap-2">
                           <button
                             className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
                             onClick={() => handleSaveAnnonce(a.id)}
@@ -395,13 +395,13 @@ export default function AdminAnnonces({
                       </>
                     ) : (
                       <>
-                        <td className="py-2 px-3">{a.titre}</td>
-                        <td className="py-2 px-3">{a.ville}</td>
-                        <td className="py-2 px-3">{a.prix}</td>
-                        <td className="py-2 px-3">{a.surface ?? "-"}</td>
-                        <td className="py-2 px-3">{a.chambres ?? "-"}</td>
-                        <td className="py-2 px-3">{a.description ?? "-"}</td>
-                        <td className="py-2 px-3">
+                        <td className="py-2 px-3 align-middle">{a.titre}</td>
+                        <td className="py-2 px-3 align-middle">{a.ville}</td>
+                        <td className="py-2 px-3 align-middle">{a.prix}</td>
+                        <td className="py-2 px-3 align-middle">{a.surface ?? "-"}</td>
+                        <td className="py-2 px-3 align-middle">{a.chambres ?? "-"}</td>
+                        <td className="py-2 px-3 align-middle">{a.description ?? "-"}</td>
+                        <td className="py-2 px-3 align-middle">
                           {a.createdAt
                             ? new Date(
                                 a.createdAt.seconds
@@ -410,7 +410,7 @@ export default function AdminAnnonces({
                               ).toLocaleString()
                             : "-"}
                         </td>
-                        <td className="py-2 px-3 flex gap-2">
+                        <td className="py-2 px-3 align-middle flex items-center justify-center gap-2">
                           <button
                             className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
                             onClick={() => handleEditAnnonce(a)}

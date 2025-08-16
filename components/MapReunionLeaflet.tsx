@@ -199,11 +199,18 @@ export default function MapReunionLeaflet({
 
   return (
     <div className={className} style={{ width: '100%' }}>
-  <div className="flex flex-wrap items-center gap-2 mb-2 text-sm">
-        <button className="border rounded px-2 py-1 hover:bg-slate-50" onClick={resetView}>Réinitialiser</button>
+      <div className="flex flex-wrap items-center gap-2 mb-2 text-sm">
         <button
+          type="button"
+          className="border rounded px-2 py-1 hover:bg-slate-50"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); resetView(); }}
+        >
+          Réinitialiser
+        </button>
+        <button
+          type="button"
           className="border rounded px-2 py-1 hover:bg-slate-50 disabled:opacity-50"
-          onClick={zoomSelection}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); zoomSelection(); }}
           disabled={selected.size === 0}
         >
           Zoom sélection

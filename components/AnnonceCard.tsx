@@ -15,6 +15,8 @@ type AnnonceProps = {
   imageUrl: string;
   // Optionnel: pour les profils colocataires, affiche un badge Zones
   zonesLabel?: string;
+  // NOUVEAU: sous-communes couvertes par les zones sélectionnées
+  subCommunesLabel?: string;
 };
 
 export default function AnnonceCard({
@@ -29,6 +31,7 @@ export default function AnnonceCard({
   onDelete,
   onEdit,
   zonesLabel,
+  subCommunesLabel,
 }: AnnonceProps) {
   // Détermine l'origine pour le retour (accueil ou dashboard)
   const handleClick = () => {
@@ -80,6 +83,13 @@ export default function AnnonceCard({
           </div>
         ) : (
           <p className="text-sm text-gray-600">📍 {ville}</p>
+        )}
+        {subCommunesLabel && (
+          <div className="mt-1">
+            <span className="inline-block px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-600 border border-slate-200">
+              Sous-communes: {subCommunesLabel}
+            </span>
+          </div>
         )}
         <p className="text-blue-600 font-semibold">
           {prix ? `${prix} € / mois` : "Prix non renseigné"}

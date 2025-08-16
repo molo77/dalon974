@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { translateFirebaseError } from "@/lib/firebaseErrors";
@@ -25,6 +25,26 @@ export default function AdminUsers({
   const [newUser, setNewUser] = useState({ email: "", displayName: "", role: "", ville: "", telephone: "" });
   const [confirmModal, setConfirmModal] = useState<string | null>(null);
   const [normalizing, setNormalizing] = useState(false);
+  const [sort, setSort] = useState<{ key: "email"|"displayName"|"role"|"type"; dir: "asc"|"desc" }>({ key: "email", dir: "asc" });
+
+  const computeType = (u: any) => (u.providerId === "google.com" || (u.email && u.email.endsWith("@gmail.com") && !u.passwordHash)) ? "Google" : "Email";
+  const sortedUsers = useMemo(() => {
+    const arr = [...users];
+    arr.sort((a: any, b: any) => {
+      const dirMul = sort.dir === "asc" ? 1 : -1;
+      let va: any, vb: any;
+      switch (sort.key) {
+        case "displayName": va = (a.displayName || "").toString().toLowerCase(); vb = (b.displayName || "").toString().toLowerCase(); break;
+        case "role": va = (a.role || "").toString().toLowerCase(); vb = (b.role || "").toString().toLowerCase(); break;
+        case "type": va = computeType(a).toLowerCase(); vb = computeType(b).toLowerCase(); break;
+        default: va = (a.email || "").toString().toLowerCase(); vb = (b.email || "").toString().toLowerCase();
+      }
+      if (va < vb) return -1 * dirMul;
+      if (va > vb) return 1 * dirMul;
+      return 0;
+    });
+    return arr;
+  }, [users, sort]);
 
   // Abonnement temps réel aux utilisateurs
   useEffect(() => {
@@ -258,7 +278,7 @@ export default function AdminUsers({
         ) : users.length === 0 ? (
           <p className="text-slate-500">Aucun utilisateur.</p>
         ) : (
-          users.map((u) => {
+          sortedUsers.map((u) => {
             const original = {
               email: u.email,
               displayName: u.displayName || "",
@@ -402,15 +422,15 @@ export default function AdminUsers({
           <table className="w-full text-sm">
             <thead className="bg-slate-50 sticky top-0">
               <tr>
-                <th className="py-2 px-3 text-left">Email</th>
-                <th className="py-2 px-3 text-left">Nom</th>
-                <th className="py-2 px-3 text-left">Rôle</th>
-                <th className="py-2 px-3 text-left">Type de compte</th>
+                <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => setSort(prev => prev.key === "email" ? { key: "email", dir: prev.dir === "asc" ? "desc" : "asc" } : { key: "email", dir: "asc" })}>Email <span className="text-xs opacity-60">{sort.key !== "email" ? "↕" : sort.dir === "asc" ? "▲" : "▼"}</span></th>
+                <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => setSort(prev => prev.key === "displayName" ? { key: "displayName", dir: prev.dir === "asc" ? "desc" : "asc" } : { key: "displayName", dir: "asc" })}>Nom <span className="text-xs opacity-60">{sort.key !== "displayName" ? "↕" : sort.dir === "asc" ? "▲" : "▼"}</span></th>
+                <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => setSort(prev => prev.key === "role" ? { key: "role", dir: prev.dir === "asc" ? "desc" : "asc" } : { key: "role", dir: "asc" })}>Rôle <span className="text-xs opacity-60">{sort.key !== "role" ? "↕" : sort.dir === "asc" ? "▲" : "▼"}</span></th>
+                <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => setSort(prev => prev.key === "type" ? { key: "type", dir: prev.dir === "asc" ? "desc" : "asc" } : { key: "type", dir: "asc" })}>Type de compte <span className="text-xs opacity-60">{sort.key !== "type" ? "↕" : sort.dir === "asc" ? "▲" : "▼"}</span></th>
                 <th className="py-2 px-3 text-left">Actions</th>
               </tr>
             </thead>
             <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50">
-              {users.map((u) => {
+              {sortedUsers.map((u) => {
                 const isEditing = !!editing[u.id];
                 const original = { email: u.email, displayName: u.displayName || "", role: u.role || "user", ville: u.ville || "", telephone: u.telephone || "" };
                 const edited = isEditing ? (editedUsers[u.id] || original) : original;
@@ -419,13 +439,10 @@ export default function AdminUsers({
                   (edited.displayName || "") === (original.displayName || "") &&
                   edited.role === original.role;
                 // Détection du type de compte
-                let typeCompte = "Email";
-                if (u.providerId === "google.com" || (u.email && u.email.endsWith("@gmail.com") && !u.passwordHash)) {
-                  typeCompte = "Google";
-                }
+                const typeCompte = computeType(u);
                 return (
                   <tr key={u.id} className="hover:bg-blue-50/50 transition">
-                    <td className="py-2 px-3">
+                    <td className="py-2 px-3 align-middle">
                       <input
                         type="email"
                         value={edited.email}
@@ -439,7 +456,7 @@ export default function AdminUsers({
                         disabled={!isEditing}
                       />
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-2 px-3 align-middle">
                       <input
                         type="text"
                         value={edited.displayName}
@@ -453,7 +470,7 @@ export default function AdminUsers({
                         disabled={!isEditing}
                       />
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-2 px-3 align-middle">
                       <select
                         value={edited.role}
                         onChange={e =>
@@ -469,12 +486,12 @@ export default function AdminUsers({
                         <option value="admin">admin</option>
                       </select>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-2 px-3 align-middle">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${typeCompte === "Google" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-700"}`}>
                         {typeCompte}
                       </span>
                     </td>
-                    <td className="py-2 px-3 flex items-center gap-2">
+                    <td className="py-2 px-3 align-middle flex items-center gap-2">
                       {!isEditing ? (
                         <button
                           type="button"

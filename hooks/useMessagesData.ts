@@ -28,7 +28,6 @@ export default function useMessagesData(params: {
             const unsorted = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             unsorted.sort((a: any, b: any) => (b?.createdAt?.seconds || 0) - (a?.createdAt?.seconds || 0));
             setMessages(unsorted);
-            showToast("info", "Index messages en cours de création. Tri appliqué côté client.");
           } catch (fallbackErr: any) {
             handleFirestoreError(fallbackErr, "messages-fallback");
           }
@@ -66,7 +65,7 @@ export default function useMessagesData(params: {
                 },
                 (e2) => handleFirestoreError(e2, "messages-fallback-snapshot")
               );
-              showToast("info", "Index messages en cours de création. Tri appliqué côté client.");
+              
             } catch (inner) {
               handleFirestoreError(inner, "messages-fallback-setup");
             }
@@ -108,7 +107,7 @@ export default function useMessagesData(params: {
                 },
                 (e2) => handleFirestoreError(e2, "sent-fallback-snapshot")
               );
-              showToast("info", "Index messages envoyés en cours de création. Tri appliqué côté client.");
+              
             } catch (inner) {
               handleFirestoreError(inner, "sent-fallback-setup");
             }

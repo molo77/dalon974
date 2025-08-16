@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
@@ -42,6 +42,33 @@ const SEED_COMMUNES = [
   "Saint-Louis","Cilaos","Le Tampon","Entre-Deux","Saint-Pierre","Petite-Île","Saint-Joseph"
 ];
 
+// Sous-communes avec leur CP et commune parente (extrait de notre référentiel)
+const SUB_COMMUNES: { name: string; cp: string; parent: string }[] = [
+  { name: "Sainte-Clotilde", cp: "97490", parent: "Saint-Denis" },
+  { name: "La Montagne", cp: "97417", parent: "Saint-Denis" },
+
+  { name: "Dos d'Âne", cp: "97419", parent: "La Possession" },
+
+  { name: "Saint-Gilles-les-Bains", cp: "97434", parent: "Saint-Paul" },
+  { name: "L'Hermitage-les-Bains", cp: "97434", parent: "Saint-Paul" },
+  { name: "Saint-Gilles-les-Hauts", cp: "97435", parent: "Saint-Paul" },
+  { name: "La Saline", cp: "97422", parent: "Saint-Paul" },
+  { name: "La Saline-les-Hauts", cp: "97423", parent: "Saint-Paul" },
+  { name: "Bois-de-Nèfles Saint-Paul", cp: "97411", parent: "Saint-Paul" },
+  { name: "Plateau-Caillou", cp: "97460", parent: "Saint-Paul" },
+
+  { name: "La Chaloupe", cp: "97416", parent: "Saint-Leu" },
+  { name: "Piton Saint-Leu", cp: "97424", parent: "Saint-Leu" },
+
+  { name: "L'Étang-Salé-les-Bains", cp: "97427", parent: "L'Étang-Salé" },
+
+  { name: "La Rivière", cp: "97421", parent: "Saint-Louis" },
+
+  { name: "La Plaine des Cafres", cp: "97418", parent: "Le Tampon" },
+
+  { name: "Terre-Sainte", cp: "97432", parent: "Saint-Pierre" },
+];
+
 export default function AdminPage() {
   const [user, loading] = useAuthState(auth);
   const router = useRouter();
@@ -60,6 +87,9 @@ export default function AdminPage() {
   const [adminColocsSelected, setAdminColocsSelected] = useState<string[]>([]);
   const [colocModalOpen, setColocModalOpen] = useState(false);
   const [editColoc, setEditColoc] = useState<any | null>(null);
+  // Tri tableaux (annonces, colocs)
+  const [annoncesSort, setAnnoncesSort] = useState<{ key: "titre"|"ville"|"prix"|"owner"|"createdAt"; dir: "asc"|"desc" }>({ key: "createdAt", dir: "desc" });
+  const [colocsSort, setColocsSort] = useState<{ key: "nom"|"ville"|"zones"|"budget"|"email"|"createdAt"; dir: "asc"|"desc" }>({ key: "createdAt", dir: "desc" });
   // Formulaire d’édition coloc (modale)
   const [colocNomEdit, setColocNomEdit] = useState("");
   const [colocVilleEdit, setColocVilleEdit] = useState("");
@@ -137,11 +167,14 @@ export default function AdminPage() {
     try {
       const placeholder = "/images/annonce-placeholder.jpg";
       const col = collection(db, "annonces");
-      await Promise.all(
-        SEED_COMMUNES.map(async (name, idx) => {
-          const prix = 350 + (idx % 12) * 25; // variation simple
-          const surface = 12 + (idx % 8) * 2;
-          await addDoc(col, {
+      const ops: Promise<any>[] = [];
+
+      // 1) Une annonce d'exemple par commune
+      SEED_COMMUNES.forEach((name, idx) => {
+        const prix = 350 + (idx % 12) * 25; // variation simple
+        const surface = 12 + (idx % 8) * 2;
+        ops.push(
+          addDoc(col, {
             titre: `Chambre en colocation à ${name}`,
             ville: name,
             communeSlug: slugify(name),
@@ -150,10 +183,33 @@ export default function AdminPage() {
             description: `Exemple d’annonce pour ${name}. Proche commodités, colocation conviviale.`,
             imageUrl: placeholder,
             createdAt: serverTimestamp(),
-          });
-        })
-      );
-      showToast("success", `${SEED_COMMUNES.length} annonces d'exemple créées.`);
+          })
+        );
+      });
+
+      // 2) Une annonce d'exemple par sous-commune (ville = sous-commune, CP défini, slug = parent)
+      SUB_COMMUNES.forEach((s, i) => {
+        const prix = 420 + (i % 10) * 20;
+        const surface = 10 + (i % 6) * 3;
+        const parentSlug = slugify(s.parent);
+        ops.push(
+          addDoc(col, {
+            titre: `Chambre à ${s.name} (${s.parent})`,
+            ville: s.name,
+            codePostal: s.cp,
+            communeSlug: parentSlug,
+            prix,
+            surface,
+            description: `Exemple d’annonce située à ${s.name} (${s.parent}). Quartier agréable, bien desservi.`,
+            imageUrl: placeholder,
+            createdAt: serverTimestamp(),
+          })
+        );
+      });
+
+      await Promise.all(ops);
+      const total = SEED_COMMUNES.length + SUB_COMMUNES.length;
+      showToast("success", `${total} annonces d'exemple créées (dont sous-communes).`);
     } catch (e: any) {
       console.error("[Admin][SeedExamples]", e);
       showToast("error", "Erreur lors de la création des annonces d’exemple.");
@@ -681,6 +737,69 @@ export default function AdminPage() {
     }
   };
 
+  // Hoisted: tri mémorisé (doit être appelé à chaque rendu, même lors des écrans de chargement)
+  const sortedAdminAnnonces = useMemo(() => {
+    const arr = [...adminAnnonces];
+    const getTime = (v: any) => {
+      try {
+        if (v && typeof v.toDate === "function") return v.toDate().getTime();
+        if (v?.seconds) return v.seconds * 1000;
+        if (typeof v === "number") return v;
+        const d = new Date(v);
+        return isNaN(d.getTime()) ? 0 : d.getTime();
+      } catch { return 0; }
+    };
+    const getOwner = (a: any) => {
+      const uid = a.ownerId || a.uid;
+      const owner = ownersById[uid || ""] || {};
+      return (owner.displayName || owner.email || uid || "").toString().toLowerCase();
+    };
+    arr.sort((a: any, b: any) => {
+      const dirMul = annoncesSort.dir === "asc" ? 1 : -1;
+      let va: any, vb: any;
+      switch (annoncesSort.key) {
+        case "titre": va = (a.titre || "").toString().toLowerCase(); vb = (b.titre || "").toString().toLowerCase(); break;
+        case "ville": va = (a.ville || "").toString().toLowerCase(); vb = (b.ville || "").toString().toLowerCase(); break;
+        case "prix": va = Number.isFinite(a.prix) ? a.prix : -Infinity; vb = Number.isFinite(b.prix) ? b.prix : -Infinity; break;
+        case "owner": va = getOwner(a); vb = getOwner(b); break;
+        default: va = getTime(a.createdAt); vb = getTime(b.createdAt);
+      }
+      if (va < vb) return -1 * dirMul;
+      if (va > vb) return 1 * dirMul;
+      return 0;
+    });
+    return arr;
+  }, [adminAnnonces, annoncesSort, ownersById]);
+
+  const sortedAdminColocs = useMemo(() => {
+    const arr = [...adminColocs];
+    const getTime = (v: any) => {
+      try {
+        if (v && typeof v.toDate === "function") return v.toDate().getTime();
+        if (v?.seconds) return v.seconds * 1000;
+        if (typeof v === "number") return v;
+        const d = new Date(v);
+        return isNaN(d.getTime()) ? 0 : d.getTime();
+      } catch { return 0; }
+    };
+    arr.sort((a: any, b: any) => {
+      const dirMul = colocsSort.dir === "asc" ? 1 : -1;
+      let va: any, vb: any;
+      switch (colocsSort.key) {
+        case "nom": va = (a.nom || "").toString().toLowerCase(); vb = (b.nom || "").toString().toLowerCase(); break;
+        case "ville": va = (a.ville || "").toString().toLowerCase(); vb = (b.ville || "").toString().toLowerCase(); break;
+        case "zones": va = Array.isArray(a.zones) ? a.zones.length : 0; vb = Array.isArray(b.zones) ? b.zones.length : 0; break;
+        case "budget": va = Number.isFinite(a.budget) ? a.budget : -Infinity; vb = Number.isFinite(b.budget) ? b.budget : -Infinity; break;
+        case "email": va = (a.email || "").toString().toLowerCase(); vb = (b.email || "").toString().toLowerCase(); break;
+        default: va = getTime(a.createdAt); vb = getTime(b.createdAt);
+      }
+      if (va < vb) return -1 * dirMul;
+      if (va > vb) return 1 * dirMul;
+      return 0;
+    });
+    return arr;
+  }, [adminColocs, colocsSort]);
+
   if (loading || checkingAdmin) {
     return (
       <main className="min-h-screen bg-gray-100 p-8 flex items-center justify-center">
@@ -697,8 +816,14 @@ export default function AdminPage() {
   const allSelected = adminAnnonces.length > 0 && adminSelected.length === adminAnnonces.length;
   const allColocsSelected = adminColocs.length > 0 && adminColocsSelected.length === adminColocs.length;
 
+
   const renderTab = () => {
     if (activeTab === "annonces") {
+
+      const toggleSortAnnonces = (key: typeof annoncesSort.key) => {
+        setAnnoncesSort(prev => prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
+      };
+      const sortIcon = (key: typeof annoncesSort.key) => annoncesSort.key !== key ? "↕" : annoncesSort.dir === "asc" ? "▲" : "▼";
       return (
         <>
           {/* Barre d’actions + table annonces */}
@@ -759,17 +884,17 @@ export default function AdminPage() {
                   <thead className="bg-slate-50 sticky top-0">
                     <tr>
                       <th className="py-2 px-3 w-12 text-center select-none cursor-default" aria-label="Sélection"></th>
-                      <th className="py-2 px-3 text-left">Titre</th>
-                      <th className="py-2 px-3 text-left">Ville</th>
-                      <th className="py-2 px-3 text-left">Prix</th>
+                      <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortAnnonces("titre")}>Titre <span className="text-xs opacity-60">{sortIcon("titre")}</span></th>
+                      <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortAnnonces("ville")}>Ville <span className="text-xs opacity-60">{sortIcon("ville")}</span></th>
+                      <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortAnnonces("prix")}>Prix <span className="text-xs opacity-60">{sortIcon("prix")}</span></th>
                       <th className="py-2 px-3 text-left">Description (court)</th>
-                      <th className="py-2 px-3 text-left">Propriétaire</th>
-                      <th className="py-2 px-3 text-left">Créé le</th>
+                      <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortAnnonces("owner")}>Propriétaire <span className="text-xs opacity-60">{sortIcon("owner")}</span></th>
+                      <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortAnnonces("createdAt")}>Créé le <span className="text-xs opacity-60">{sortIcon("createdAt")}</span></th>
                       <th className="py-2 px-3 text-left">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50">
-                    {adminAnnonces.map((a) => {
+                    {sortedAdminAnnonces.map((a) => {
                       const uid = a.ownerId || a.uid;
                       const owner = ownersById[uid || ""] || {};
                       const ownerLabel = owner.displayName || owner.email || uid || "-";
@@ -937,7 +1062,12 @@ export default function AdminPage() {
         </>
       );
     }
-    if (activeTab === "colocs") {
+  if (activeTab === "colocs") {
+
+      const toggleSortColocs = (key: typeof colocsSort.key) => {
+        setColocsSort(prev => prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
+      };
+      const sortIcon2 = (key: typeof colocsSort.key) => colocsSort.key !== key ? "↕" : colocsSort.dir === "asc" ? "▲" : "▼";
       return (
         <>
           {/* Barre d’actions profils + table */}
@@ -977,17 +1107,18 @@ export default function AdminPage() {
               <thead className="bg-slate-50 sticky top-0">
                 <tr>
                   <th className="py-2 px-3 w-12 text-center select-none cursor-default" aria-label="Sélection"></th>
-                  <th className="py-2 px-3 text-left">Nom</th>
-                  <th className="py-2 px-3 text-left">Ville</th>
-                  <th className="py-2 px-3 text-left">Budget</th>
+                  <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortColocs("nom")}>Nom <span className="text-xs opacity-60">{sortIcon2("nom")}</span></th>
+                  <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortColocs("ville")}>Ville <span className="text-xs opacity-60">{sortIcon2("ville")}</span></th>
+                  <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortColocs("zones")}>Zone recherchée(s) <span className="text-xs opacity-60">{sortIcon2("zones")}</span></th>
+                  <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortColocs("budget")}>Budget <span className="text-xs opacity-60">{sortIcon2("budget")}</span></th>
                   <th className="py-2 px-3 text-left">Description (court)</th>
-                  <th className="py-2 px-3 text-left">Email</th>
-                  <th className="py-2 px-3 text-left">Créé le</th>
+                  <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortColocs("email")}>Email <span className="text-xs opacity-60">{sortIcon2("email")}</span></th>
+                  <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortColocs("createdAt")}>Créé le <span className="text-xs opacity-60">{sortIcon2("createdAt")}</span></th>
                   <th className="py-2 px-3 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50">
-                {adminColocs.map((p) => {
+                {sortedAdminColocs.map((p) => {
                   const shortDesc = (p.description || "").toString().slice(0, 160) + ((p.description || "").length > 160 ? "…" : "");
                   return (
                     <tr
@@ -1014,6 +1145,20 @@ export default function AdminPage() {
                       </td>
                       <td className="py-2 px-3">{p.nom || "(sans nom)"}</td>
                       <td className="py-2 px-3">{p.ville || "-"}</td>
+                      <td className="py-2 px-3">
+                        {Array.isArray(p.zones) && p.zones.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 max-w-[320px]">
+                            {p.zones.slice(0, 2).map((z: string) => (
+                              <span key={z} className="px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">{z}</span>
+                            ))}
+                            {p.zones.length > 2 && (
+                              <span className="px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">+{p.zones.length - 2}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-500">-</span>
+                        )}
+                      </td>
                       <td className="py-2 px-3">{typeof p.budget === "number" ? `${p.budget} €` : "-"}</td>
                       <td className="py-2 px-3 max-w-[560px] whitespace-normal">{shortDesc}</td>
                       <td className="py-2 px-3">{p.email || "-"}</td>

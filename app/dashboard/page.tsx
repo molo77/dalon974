@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, type MouseEvent } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, type MouseEvent } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
@@ -117,6 +117,23 @@ const SUB_COMMUNES: { name: string; cp: string; parent: string }[] = [
   { name: "Terre-Sainte", cp: "97432", parent: "Saint-Pierre" },
 
   { name: "Dos d'Âne", cp: "97419", parent: "La Possession" },
+];
+
+// Options de langues (liste déroulante)
+const LANG_OPTIONS = [
+  "Français",
+  "Anglais",
+  "Créole réunionnais",
+  "Malgache",
+  "Comorien",
+  "Tamoul",
+  "Arabe",
+  "Chinois",
+  // En dernier comme demandé
+  "Espagnol",
+  "Allemand",
+  "Italien",
+  "Portugais",
 ];
 
 // [DÉPLACÉ ICI] utils + helpers qui utilisent les constantes ci‑dessus
@@ -264,6 +281,37 @@ export default function DashboardPage() {
   // Suivi existence doc & prêt pour autosave
   const [hasColocDoc, setHasColocDoc] = useState<boolean | null>(null);
   const [colocReady, setColocReady] = useState(false);
+  const [colocEditing, setColocEditing] = useState(false);
+  // Profil considéré "significatif" si au moins un champ utile est renseigné
+  const hasMeaningfulColocData = useMemo(() => {
+    const hasBudget = typeof colocBudget === "number" && colocBudget > 0;
+    return !!(
+      (colocNom && colocNom.trim()) ||
+      hasBudget ||
+      (colocDescription && colocDescription.trim()) ||
+      (Array.isArray(colocZones) && colocZones.length) ||
+      (Array.isArray(colocCommunesSlugs) && colocCommunesSlugs.length) ||
+      (colocImageUrl && colocImageUrl.trim())
+    );
+  }, [colocNom, colocBudget, colocDescription, colocZones, colocCommunesSlugs, colocImageUrl]);
+
+  // Dérivé: langues sélectionnées (depuis CSV)
+  const languesSelected = useMemo(() => (
+    colocLanguesCsv
+      ? colocLanguesCsv.split(",").map((s) => s.trim()).filter(Boolean)
+      : []
+  ), [colocLanguesCsv]);
+  // Référence pour faire défiler vers le formulaire coloc
+  const colocFormRef = useRef<HTMLFormElement | null>(null);
+  const scrollToColocForm = useCallback(() => {
+    try {
+      const el = colocFormRef.current;
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch {}
+  }, []);
+
+  // Formulaire caché par défaut. Ouverture uniquement via actions (Créer/Modifier).
+  // On ne force plus la fermeture automatique pendant la saisie.
 
   const handleFirestoreError = (err: any, context: string) => {
     console.error(`[Dashboard][${context}]`, err);
@@ -493,7 +541,7 @@ export default function DashboardPage() {
           setHasColocDoc(false);
           // valeurs par défaut (profil non créé)
           setColocNom("");
-          // ville supprimée du profil coloc
+  // ville supprimée du profil coloc
           setColocBudget("");
           setColocImageUrl("");
           setColocDescription("");
@@ -685,6 +733,8 @@ export default function DashboardPage() {
       });
       await setDoc(ref, payload, { merge: true });
       showToast("success", "Profil colocataire enregistré ✅");
+  // Masquer le formulaire après l'enregistrement
+  setColocEditing(false);
     } catch (err: any) {
       console.error("[Dashboard][saveColocProfile]", err);
       showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de l'enregistrement ❌");
@@ -715,6 +765,7 @@ export default function DashboardPage() {
       setColocGenre(""); setColocOrientation(""); setColocBioCourte(""); setColocLanguesCsv(""); setColocInstagram(""); setColocPhotosCsv("");
       setPrefGenre(""); setPrefAgeMin(""); setPrefAgeMax(""); setAccepteFumeurs(false); setAccepteAnimaux(false);
       setRythme(""); setProprete(""); setSportif(false); setVegetarien(false); setSoirees(false); setMusique("");
+  setColocEditing(false);
       showToast("success", "Profil supprimé ✅");
     } catch (err: any) {
       console.error("[Dashboard][deleteColocProfile]", err);
@@ -794,7 +845,7 @@ export default function DashboardPage() {
     let unsubs: Array<() => void> = [];
     setLoadingAnnonces(true);
 
-    const attach = (qAny: any, label: string) => {
+  const attach = (qAny: any, label: string, fallbackField: "uid" | "ownerId" | "userId" = "uid") => {
       try {
         const u = onSnapshot(
           qAny,
@@ -813,7 +864,7 @@ export default function DashboardPage() {
             if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
               // Fallback sans orderBy: tri côté client
               const u2 = onSnapshot(
-                query(collection(db, "annonces"), where("uid", "==", user.uid)),
+                query(collection(db, "annonces"), where(fallbackField, "==", user.uid)),
                 (snap2) => {
                   const docs2 = snap2.docs.map((d) => ({ id: d.id, ...d.data() }));
                   setMesAnnonces((prev) => {
@@ -842,12 +893,20 @@ export default function DashboardPage() {
     // Essayer avec uid
     attach(
       query(collection(db, "annonces"), where("uid", "==", user.uid), orderBy("createdAt", "desc")),
+      "uid",
       "uid"
     );
     // Essayer aussi avec ownerId (selon service)
     attach(
       query(collection(db, "annonces"), where("ownerId", "==", user.uid), orderBy("createdAt", "desc")),
+      "ownerId",
       "ownerId"
+    );
+    // Et avec userId (champ utilisé à la création d'annonce)
+    attach(
+      query(collection(db, "annonces"), where("userId", "==", user.uid), orderBy("createdAt", "desc")),
+      "userId",
+      "userId"
     );
 
     return () => {
@@ -1256,7 +1315,7 @@ export default function DashboardPage() {
                             type="checkbox"
                             checked={selectedReceivedIds.includes(msg.id)}
                             onChange={() => toggleSelectMsg(msg.id)}
-                            className="mt-1 w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem]"
+                            className="mt-1 w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3 8.2 L6.2 11.4 L13 4.6%22/></svg>')] checked:bg-[length:0.85rem_0.85rem]"
                           />
                           <div className="flex-1">
                             <div className="mb-1 text-gray-600 text-sm">
@@ -1329,7 +1388,7 @@ export default function DashboardPage() {
                             type="checkbox"
                             checked={selectedSentIds.includes(msg.id)}
                             onChange={() => toggleSelectMsg(msg.id)}
-                            className="mt-1 w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem]"
+                            className="mt-1 w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3 8.2 L6.2 11.4 L13 4.6%22/></svg>')] checked:bg-[length:0.85rem_0.85rem]"
                           />
                           <div className="flex-1">
                             <div className="mb-1 text-gray-600 text-sm">
@@ -1386,24 +1445,243 @@ export default function DashboardPage() {
 
         {activeTab === "coloc" && (
           <>
-            <h2 className="text-2xl font-semibold mb-4">Mon profil colocataire</h2>
-            {/* NOUVEAU: proposition de création si le doc n'existe pas */}
-            {hasColocDoc === false && !loadingColoc && (
-              <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 px-4 py-3 text-sm">
-                Aucun profil trouvé. Cliquez sur “Créer maintenant” ou commencez à remplir le formulaire, l’enregistrement est automatique.
-                <button
-                  type="button"
-                  className="ml-3 underline font-semibold"
-                  onClick={saveColocProfile}
-                >
-                  Créer maintenant
-                </button>
-              </div>
+            {/* Mon profil colocataire - Affichage complet (caché pendant l'édition/création) */}
+            {!colocEditing && hasColocDoc && hasMeaningfulColocData && (
+              <section className="mt-8">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold">Mon profil colocataire</h2>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
+                      onClick={() => {
+                        setColocEditing(true);
+                        setTimeout(scrollToColocForm, 50);
+                      }}
+                    >
+                      Modifier
+                    </button>
+                    <button
+                      className="px-4 py-2 rounded-md bg-rose-600 text-white font-semibold hover:bg-rose-700 transition"
+                      onClick={deleteColocProfile}
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-lg border border-slate-200 p-4 flex flex-col sm:flex-row gap-4">
+                  {colocImageUrl ? (
+                    <img
+                      src={colocImageUrl}
+                      alt="Photo de profil"
+                      className="w-32 h-32 object-cover rounded-lg border"
+                    />
+                  ) : (
+                    <div className="w-32 h-32 rounded-lg border bg-slate-50 flex items-center justify-center text-slate-400">
+                      Aucune photo
+                    </div>
+                  )}
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-sm text-slate-500">Nom</div>
+                      <div className="font-medium">{colocNom || "-"}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Budget</div>
+                      <div className="font-medium">{typeof colocBudget === 'number' ? `${colocBudget} €` : '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Âge</div>
+                      <div className="font-medium">{typeof colocAge === 'number' ? colocAge : '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Profession</div>
+                      <div className="font-medium">{colocProfession || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Genre</div>
+                      <div className="font-medium">{colocGenre || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Orientation</div>
+                      <div className="font-medium">{colocOrientation || '-'}</div>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <div className="text-sm text-slate-500">Bio courte</div>
+                      <div className="text-slate-700">{colocBioCourte || '-'}</div>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <div className="text-sm text-slate-500">Zone recherchée(s)</div>
+                      {(Array.isArray(colocZones) && colocZones.length > 0) ? (
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {colocZones.map((z: string) => (
+                            <span key={z} className="px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">{z}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="font-medium">-</div>
+                      )}
+                    </div>
+                    {/* Secteur recherché (communes) */}
+                    <div className="sm:col-span-2">
+                      <div className="text-sm text-slate-500">Secteur recherché</div>
+                      {(Array.isArray(colocCommunesSlugs) && colocCommunesSlugs.length > 0) ? (
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {colocCommunesSlugs.map((s: string) => (
+                            <span key={s} className="px-2 py-1 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">{SLUG_TO_NAME[s] || s}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="font-medium">-</div>
+                      )}
+                    </div>
+                    <div className="sm:col-span-2">
+                      <div className="text-sm text-slate-500">Description</div>
+                      <div className="text-slate-700 whitespace-pre-line">{colocDescription || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Instagram</div>
+                      <div className="font-medium">{colocInstagram || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Téléphone</div>
+                      <div className="font-medium">{colocTelephone || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Date de disponibilité</div>
+                      <div className="font-medium">{colocDateDispo || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Quartiers</div>
+                      <div className="font-medium">{colocQuartiers || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Je fume</div>
+                      <div className="font-medium">{colocFumeur ? 'Oui' : 'Non'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">J'ai des animaux</div>
+                      <div className="font-medium">{colocAnimaux ? 'Oui' : 'Non'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Accepte fumeurs</div>
+                      <div className="font-medium">{accepteFumeurs ? 'Oui' : 'Non'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Accepte animaux</div>
+                      <div className="font-medium">{accepteAnimaux ? 'Oui' : 'Non'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Rythme</div>
+                      <div className="font-medium">{rythme || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Propreté</div>
+                      <div className="font-medium">{proprete || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Sportif</div>
+                      <div className="font-medium">{sportif ? 'Oui' : 'Non'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Végétarien</div>
+                      <div className="font-medium">{vegetarien ? 'Oui' : 'Non'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Aime les soirées</div>
+                      <div className="font-medium">{soirees ? 'Oui' : 'Non'}</div>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <div className="text-sm text-slate-500">Musique</div>
+                      <div className="font-medium">{musique || '-'}</div>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <div className="text-sm text-slate-500">Langues</div>
+                      {languesSelected.length ? (
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {languesSelected.map((l) => (
+                            <span key={l} className="px-2 py-1 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">{l}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="font-medium">-</div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Préférence colloc (genre)</div>
+                      <div className="font-medium">{prefGenre || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-500">Tranche d'âge souhaitée</div>
+                      <div className="font-medium">{(prefAgeMin !== '' || prefAgeMax !== '') ? `${prefAgeMin !== '' ? prefAgeMin : '—'} - ${prefAgeMax !== '' ? prefAgeMax : '—'}` : '-'}</div>
+                    </div>
+                  </div>
+                </div>
+                {/* Galerie de photos (URLs CSV) */}
+                <div className="mt-4">
+                  <div className="text-sm text-slate-500 mb-2">Photos</div>
+                  {colocPhotosCsv ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {colocPhotosCsv.split(',').map((u, i) => {
+                        const url = u.trim();
+                        if (!url) return null;
+                        return (
+                          <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block rounded-lg overflow-hidden border">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt={`photo-${i+1}`} className="w-full h-28 object-cover" />
+                          </a>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-slate-600">-</div>
+                  )}
+                </div>
+              </section>
             )}
+
+            {/* Invite à créer le profil quand vide ou inexistant (cachée si le formulaire est ouvert) */}
+            {(!colocEditing && (!hasColocDoc || (hasColocDoc && !hasMeaningfulColocData))) && (
+              <section className="mt-8">
+                <div className="rounded-md border border-dashed p-4 text-center">
+                  <p className="mb-3">Vous n’avez pas encore renseigné votre profil colocataire.</p>
+                  <button
+                    className="inline-flex items-center gap-2 px-5 py-3 rounded-full text-white bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg hover:from-blue-700 hover:to-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 transition-transform duration-200 will-change-transform hover:scale-[1.02] active:scale-[0.99]"
+                    onClick={() => {
+                      setColocEditing(true);
+                      setTimeout(scrollToColocForm, 50);
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                      <path fillRule="evenodd" d="M12 4.5a.75.75 0 01.75.75v6h6a.75.75 0 010 1.5h-6v6a.75.75 0 01-1.5 0v-6h-6a.75.75 0 010-1.5h6v-6A.75.75 0 0112 4.5z" clipRule="evenodd" />
+                    </svg>
+                    Créer mon profil
+                  </button>
+                </div>
+              </section>
+            )}
+
             {loadingColoc ? (
               <p className="text-gray-500">Chargement du profil…</p>
-            ) : (
-              <form onSubmit={(e)=>{e.preventDefault(); saveColocProfile();}} className="flex flex-col gap-4">
+            ) : (colocEditing ? (
+              <form ref={colocFormRef} onSubmit={(e)=>{e.preventDefault(); saveColocProfile();}} className="flex flex-col gap-4">
+                {/* Actions en haut du formulaire */}
+                <div className="sticky top-16 z-20 -mx-6 px-6 py-3 bg-white flex justify-center gap-3 border-b border-slate-200 shadow-sm">
+                  {hasColocDoc && hasMeaningfulColocData && (
+                    <button
+                      type="button"
+                      onClick={deleteColocProfile}
+                      className="px-4 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-700 transition"
+                    >
+                      Supprimer le profil
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
+                  >
+                    {savingColoc ? "Enregistrement..." : "Enregistrer le profil"}
+                  </button>
+                </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Nom</label>
                   <input
@@ -1504,8 +1782,30 @@ export default function DashboardPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Langues (CSV)</label>
-                    <input type="text" value={colocLanguesCsv} onChange={e=>setColocLanguesCsv(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="fr, en, es" />
+                    <label className="block text-sm font-medium mb-1">Langues</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
+                      {LANG_OPTIONS.map((l) => {
+                        const id = `lang-${l}`;
+                        const checked = languesSelected.includes(l);
+                        return (
+                          <label key={l} htmlFor={id} className="inline-flex items-center gap-2 text-sm">
+                            <input
+                              id={id}
+                              type="checkbox"
+                              className="w-4 h-4 appearance-none rounded border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem]"
+                              checked={checked}
+                              onChange={(e) => {
+                                const set = new Set(languesSelected);
+                                if (e.target.checked) set.add(l); else set.delete(l);
+                                const arr = Array.from(set);
+                                setColocLanguesCsv(arr.join(", "));
+                              }}
+                            />
+                            {l}
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Instagram</label>
@@ -1563,7 +1863,7 @@ export default function DashboardPage() {
                 </div>
                 {/* Remplacement: zones/communes par la carte de sélection */}
                 <div className="mt-2">
-                  <label className="block text-sm font-medium mb-2">Zones recherchées (sélection par communes)</label>
+                  <label className="block text-sm font-medium mb-2">Zone recherchée(s)</label>
                   <div className="rounded-2xl border border-slate-200 p-3">
                     <CommuneZoneSelector
                       value={colocCommunesSlugs}
@@ -1575,33 +1875,55 @@ export default function DashboardPage() {
                       height={420}
                       className="w-full"
                       alwaysMultiSelect
+                      hideSelectionSummary
                     />
                   </div>
+                  {/* Tuto d'utilisation de la carte */}
+                  <div className="mt-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-3">
+                    <p className="font-medium text-slate-700 mb-1">Comment utiliser la carte</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>Cliquez sur une commune pour la sélectionner ou la retirer.</li>
+                      <li>Choisissez-en plusieurs si besoin; les zones sont calculées automatiquement.</li>
+                      <li>Utilisez la molette ou les boutons +/− pour zoomer/dézoomer; maintenez le clic pour déplacer la carte.</li>
+                      <li>Deux boutons en haut à droite: « Réinitialiser » (revient à la vue initiale) et « Zoom sélection » (cadre les communes choisies).</li>
+                      <li>La liste des communes sélectionnées s’affiche ci-dessous.</li>
+                    </ul>
+                  </div>
                   {colocCommunesSlugs.length > 0 && (
-                    <p className="mt-2 text-xs text-slate-600">
-                      Communes sélectionnées: {colocCommunesSlugs.join(", ")}
-                    </p>
+                    <div className="mt-3">
+                      <div className="bg-white rounded-xl border border-slate-200 p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs font-medium text-slate-600">Secteur recherché</div>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{colocCommunesSlugs.length}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {colocCommunesSlugs.map((s: string) => (
+                            <span key={s} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">{SLUG_TO_NAME[s] || s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {Array.isArray(colocZones) && colocZones.length > 0 && (
+                    <div className="mt-3">
+                      <div className="bg-white rounded-xl border border-slate-200 p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs font-medium text-slate-600">Zones sélectionnées</div>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{colocZones.length}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {colocZones.map((z: string) => (
+                            <span key={z} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">{z}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
 
-                <div className="flex justify-end gap-4">
-                  <button
-                    type="button"
-                    onClick={deleteColocProfile}
-                    className="px-4 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-700 transition"
-                  >
-                    Supprimer le profil
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
-                  >
-                    {savingColoc ? "Enregistrement..." : "Enregistrer le profil"}
-                  </button>
-                </div>
-                <p className="text-xs text-slate-500 -mt-2">Enregistrement automatique activé.</p>
+                {/* Boutons déplacés en haut du formulaire */}
               </form>
-            )}
+            ) : null)}
           </>
         )}
       </div>
