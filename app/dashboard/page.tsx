@@ -6,6 +6,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { collection, query, where, orderBy, onSnapshot, doc, getDoc, serverTimestamp, setDoc, deleteDoc, getDocs } from "firebase/firestore";
 import Image from "next/image";
+import dynamic from "next/dynamic";
+import ExpandableImage from "@/components/ExpandableImage";
+import PhotoUploader from "@/components/PhotoUploader";
+const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr: false });
 import AnnonceCard from "@/components/AnnonceCard";
 import AnnonceModal from "@/components/AnnonceModal";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -250,6 +254,7 @@ export default function DashboardPage() {
   const [colocNom, setColocNom] = useState("");
   const [colocBudget, setColocBudget] = useState<number | "">("");
   const [colocImageUrl, setColocImageUrl] = useState("");
+  const [colocPhotos, setColocPhotos] = useState<{url:string;isMain:boolean}[]>([]);
   const [colocDescription, setColocDescription] = useState("");
   const [colocAge, setColocAge] = useState<number | "">("");
   const [colocProfession, setColocProfession] = useState("");
@@ -266,7 +271,11 @@ export default function DashboardPage() {
   const [colocBioCourte, setColocBioCourte] = useState("");
   const [colocLanguesCsv, setColocLanguesCsv] = useState(""); // CSV vers tableau
   const [colocInstagram, setColocInstagram] = useState("");
-  const [colocPhotosCsv, setColocPhotosCsv] = useState(""); // CSV vers tableau
+  // photos are handled via uploader; remove CSV input support
+  const [colocPhotosCsv, setColocPhotosCsv] = useState(""); // legacy - kept for compatibility but not used in UI
+  // Lightbox for coloc profile images
+  const [colocGalleryIndex, setColocGalleryIndex] = useState<number>(0);
+  const [colocLightboxOpen, setColocLightboxOpen] = useState<boolean>(false);
   // Préférences & style de vie
   const [prefGenre, setPrefGenre] = useState("");
   const [prefAgeMin, setPrefAgeMin] = useState<number | "">("");
@@ -443,6 +452,12 @@ export default function DashboardPage() {
           // ville supprimée du profil coloc
           setColocBudget(typeof d.budget === "number" ? d.budget : "");
           setColocImageUrl(d.imageUrl || "");
+          // load photos array (if present) into uploader state
+          if (Array.isArray(d.photos) && d.photos.length) {
+            setColocPhotos((d.photos as string[]).map((u: string) => ({ url: u, isMain: (d.imageUrl ? u === d.imageUrl : false) })));
+          } else {
+            setColocPhotos([]);
+          }
           setColocDescription(d.description || "");
           setColocAge(typeof d.age === "number" ? d.age : "");
           setColocProfession(d.profession || "");
@@ -506,11 +521,14 @@ export default function DashboardPage() {
   }, [activeTab, user]);
 
   // NOUVEAU: autosave silencieux (création si besoin) avec debounce
+  // track last saved payload to avoid redundant writes
+  const lastSavedRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!colocReady || activeTab !== "coloc" || !user) return;
     const t = setTimeout(() => {
       autoSaveColoc();
-    }, 800);
+    }, 2000); // increased debounce to reduce write frequency
     return () => clearTimeout(t);
   }, [
     colocNom,
@@ -578,7 +596,8 @@ export default function DashboardPage() {
         bioCourte: colocBioCourte || undefined,
         langues: colocLanguesCsv ? colocLanguesCsv.split(",").map(s=>s.trim()).filter(Boolean) : undefined,
         instagram: colocInstagram || undefined,
-        photos: colocPhotosCsv ? colocPhotosCsv.split(",").map(s=>s.trim()).filter(Boolean) : undefined,
+  // photos: use uploader / stored array instead of CSV
+  photos: undefined,
         prefGenre: prefGenre || undefined,
         prefAgeMin: prefAgeMin !== "" ? Number(prefAgeMin) : undefined,
         prefAgeMax: prefAgeMax !== "" ? Number(prefAgeMax) : undefined,
@@ -603,7 +622,35 @@ export default function DashboardPage() {
           delete (payload as any)[k];
         }
       });
-      await setDoc(ref, payload, { merge: true });
+      // avoid unnecessary writes: only enqueue autosave when payload changed
+      try {
+        const key = JSON.stringify(payload);
+        if (lastSavedRef.current === key) return;
+        // retrieve current user's ID token to authenticate the request
+        try {
+          // get current Firebase ID token from client SDK
+          // auth is imported at top of file
+          const currentUser = auth.currentUser;
+          if (!currentUser) {
+            console.warn('[autoSaveColoc] no currentUser');
+          } else {
+            const token = await currentUser.getIdToken(/* forceRefresh */ false);
+            await fetch('/api/coloc-autosave', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ payload }),
+            });
+            lastSavedRef.current = key;
+          }
+        } catch (e) {
+          console.warn('[autoSaveColoc] enqueue failed', e);
+        }
+      } catch (e) {
+        console.warn('[autoSaveColoc] payload serialisation failed', e);
+      }
     } catch {
       // silencieux
     }
@@ -638,7 +685,7 @@ export default function DashboardPage() {
         bioCourte: colocBioCourte || undefined,
         langues: colocLanguesCsv ? colocLanguesCsv.split(",").map(s=>s.trim()).filter(Boolean) : undefined,
         instagram: colocInstagram || undefined,
-        photos: colocPhotosCsv ? colocPhotosCsv.split(",").map(s=>s.trim()).filter(Boolean) : undefined,
+  photos: colocPhotos && colocPhotos.length ? colocPhotos.map(p => p.url) : undefined,
         prefGenre: prefGenre || undefined,
         prefAgeMin: prefAgeMin !== "" ? Number(prefAgeMin) : undefined,
         prefAgeMax: prefAgeMax !== "" ? Number(prefAgeMax) : undefined,
@@ -679,12 +726,22 @@ export default function DashboardPage() {
   const deleteColocProfile = async () => {
     if (!user) return;
     try {
+      // remove stored photos (meta + storage) when deleting profile
+      try {
+        const { deleteColocPhotoWithMeta } = await import("@/lib/photoService");
+        if (Array.isArray(colocPhotos) && colocPhotos.length) {
+          await Promise.all(colocPhotos.map(p => p.url ? deleteColocPhotoWithMeta(user.uid, p.url).catch(()=>{}) : Promise.resolve()));
+        }
+      } catch (e) {
+        console.warn('Erreur lors de la suppression des photos associées au profil', e);
+      }
       await deleteDoc(doc(db, "colocProfiles", user.uid));
       // Reset des états
       setColocNom("");
   // ville supprimée du profil coloc
       setColocBudget("");
       setColocImageUrl("");
+  setColocPhotos([]);
       setColocDescription("");
       setColocAge("");
       setColocProfession("");
@@ -695,7 +752,8 @@ export default function DashboardPage() {
       setColocTelephone("");
       setColocZones([]);
       setColocCommunesSlugs([]);
-      setColocGenre(""); setColocOrientation(""); setColocBioCourte(""); setColocLanguesCsv(""); setColocInstagram(""); setColocPhotosCsv("");
+  setColocGenre(""); setColocOrientation(""); setColocBioCourte(""); setColocLanguesCsv(""); setColocInstagram(""); setColocPhotosCsv("");
+  setColocPhotos([]);
       setPrefGenre(""); setPrefAgeMin(""); setPrefAgeMax(""); setAccepteFumeurs(false); setAccepteAnimaux(false);
       setRythme(""); setProprete(""); setSportif(false); setVegetarien(false); setSoirees(false); setMusique("");
   setColocEditing(false);
@@ -1406,6 +1464,21 @@ export default function DashboardPage() {
                     src={colocImageUrl || defaultColocImg}
                     alt="Photo de profil"
                     className="w-32 h-32 object-cover rounded-lg border"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      // compute gallery image list and open lightbox at the main image position
+                      const galleryImages = (colocPhotos && colocPhotos.length) ? colocPhotos.map(p => p.url) : (colocImageUrl ? [colocImageUrl] : [defaultColocImg]);
+                      // try exact match to the stored main URL
+                      let idx = galleryImages.findIndex((u) => u === colocImageUrl);
+                      // fallback: find the item flagged as isMain in colocPhotos
+                      if (idx === -1 && Array.isArray(colocPhotos) && colocPhotos.length) {
+                        const mainIdx = colocPhotos.findIndex((p) => !!p.isMain);
+                        if (mainIdx >= 0) idx = mainIdx;
+                      }
+                      if (idx === -1) idx = 0;
+                      setColocGalleryIndex(idx);
+                      setColocLightboxOpen(true);
+                    }}
                   />
                   <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -1543,26 +1616,29 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
-                {/* Galerie de photos (URLs CSV) */}
+                {/* Galerie de photos */}
                 <div className="mt-4">
                   <div className="text-sm text-slate-500 mb-2">📷 Photos</div>
-                  {colocPhotosCsv ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {colocPhotosCsv.split(',').map((u, i) => {
-                        const url = u.trim();
-                        if (!url) return null;
-                        return (
-                          <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block rounded-lg overflow-hidden border">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={url} alt={`photo-${i+1}`} className="w-full h-28 object-cover" />
-                          </a>
-                        );
-                      })}
+                  {colocPhotos && colocPhotos.length ? (
+                    <div className="flex gap-2 flex-wrap">
+                      {colocPhotos.map((p, idx) => (
+                        <div key={p.url || idx} className="w-20 h-20 rounded overflow-hidden border cursor-pointer" onClick={() => { setColocGalleryIndex(idx); setColocLightboxOpen(true); }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={p.url} alt={`photo-${idx}`} className="w-full h-full object-cover" />
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="text-slate-600">-</div>
                   )}
                 </div>
+                {colocLightboxOpen && (
+                  <ImageLightbox
+                    images={colocPhotos && colocPhotos.length ? colocPhotos.map(p => p.url) : (colocImageUrl ? [colocImageUrl] : [defaultColocImg])}
+                    initialIndex={colocGalleryIndex}
+                    onClose={() => setColocLightboxOpen(false)}
+                  />
+                )}
               </section>
             )}
 
@@ -1631,34 +1707,19 @@ export default function DashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Image (URL)</label>
-                  <input
-                    type="url"
-                    value={colocImageUrl}
-                    onChange={(e) => setColocImageUrl(e.target.value)}
-                    className="border rounded px-3 py-2 w-full"
-                    placeholder="https://…"
+                  <label className="block text-sm font-medium mb-1">Photos</label>
+                  <PhotoUploader
+                    initial={colocPhotos.map(p => p.url)}
+                    initialMain={colocPhotos.find(p=>p.isMain)?.url}
+                    resourceType="coloc"
+                    resourceId={user?.uid}
+                    onChange={(photos) => {
+                      // photos: {url,isMain}[]
+                      setColocPhotos(photos.map(p=>({ url: p.url, isMain: !!p.isMain })));
+                      const main = photos.find(p => p.isMain)?.url || photos[0]?.url || "";
+                      if (main) setColocImageUrl(main);
+                    }}
                   />
-                 <div className="mt-2">
-                   <input
-                     type="file"
-                     accept="image/*"
-                     onChange={async (e) => {
-                       const f = e.target.files?.[0];
-                       if (!f || !user) return;
-                       try {
-                         const url = await uploadToStorage(f, `colocProfiles/${user.uid}`);
-                         setColocImageUrl(url);
-                         appToast.success("Photo de profil mise à jour");
-                       } catch {
-                         appToast.error("Échec de l’upload de la photo de profil");
-                       }
-                     }}
-                   />
-                   {colocImageUrl && (
-                     <img src={colocImageUrl} alt="profil" className="mt-2 w-28 h-20 object-cover rounded border" />
-                   )}
-                 </div>
                 </div>
 
                 <div>
@@ -1739,10 +1800,7 @@ export default function DashboardPage() {
                     <input type="text" value={colocInstagram} onChange={e=>setColocInstagram(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="@handle" />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Photos (URLs, CSV)</label>
-                  <input type="text" value={colocPhotosCsv} onChange={e=>setColocPhotosCsv(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="https://… , https://…" />
-                </div>
+                {/* legacy CSV input removed - photos managed by PhotoUploader above */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <select className="border rounded px-3 py-2" value={prefGenre} onChange={e=>setPrefGenre(e.target.value)}>
                     <option value="">Préférence colloc (genre)</option><option value="femme">Femme</option><option value="homme">Homme</option><option value="mixte">Mixte</option><option value="peu-importe">Peu importe</option>

@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { useState } from "react";
+import dynamic from "next/dynamic";
+
+const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr: false });
 
 type AnnonceProps = {
   id: string;
@@ -50,6 +53,7 @@ export default function AnnonceCard({
   };
 
   const [showMessageModal, setShowMessageModal] = useState(false);
+  const [openImg, setOpenImg] = useState(false);
 
   const formatDate = (v: any): string | null => {
     if (!v) return null;
@@ -77,72 +81,74 @@ export default function AnnonceCard({
       className="block w-full"
       onClick={handleClick}
     >
-  <div className="relative border rounded-xl shadow p-4 w-full bg-white hover:bg-gray-50 transition">
-        {/* miniature */}
-        <div className="w-full h-40 mb-3 overflow-hidden rounded-md bg-gray-100">
-          <img src={thumbUrl} alt={titre || "annonce"} className="w-full h-full object-cover" />
-        </div>
-        <h2 className="text-lg font-bold">{titre}</h2>
-        {zonesLabel ? (
-          <div className="mt-1">
-            <span className="inline-block px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 border border-slate-200">
-              Zones: {zonesLabel}
-            </span>
+      <div className="relative border rounded-xl shadow p-4 w-full bg-white hover:bg-gray-50 transition">
+        <div className="flex items-start gap-4">
+          {/* miniature carrée */}
+          <div className="flex-shrink-0 w-28 h-28 rounded-lg overflow-hidden bg-gray-100">
+            <img src={thumbUrl} alt={titre || "annonce"} className="w-full h-full object-cover" onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); setOpenImg(true); }} />
           </div>
-        ) : (
-          <p className="text-sm text-gray-600">📍 {ville}</p>
-        )}
-        {subCommunesLabel && (
-          <div className="mt-1">
-            <span className="inline-block px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-600 border border-slate-200">
-              Sous-communes: {subCommunesLabel}
-            </span>
-          </div>
-        )}
-        <p className="text-blue-600 font-semibold">
-          {prix ? `${prix} € / mois` : "Prix non renseigné"}
-        </p>
-        {surface && (
-          <p className="text-sm text-gray-700">
-            <span className="font-semibold">Surface :</span> {surface} m²
-          </p>
-        )}
-        {dateLabel && (
-          <p className="text-xs text-gray-500 mt-1">📅 {dateLabel}</p>
-        )}
-        {description && (
-          <div className="text-sm text-gray-700 mt-2">
-            {(() => {
-              const lines = description.split("\n");
-              const firstLines = lines.slice(0, 2);
-              const rest = lines.slice(2);
-              return (
-                <>
-                  <span className="font-semibold">Description :</span>{" "}
-                  {firstLines.map((line, idx) => (
-                    <span key={idx} className="block">
-                      {line}
-                    </span>
-                  ))}
-                  {rest.length > 0 && (
+
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-bold truncate">{titre}</h2>
+            {zonesLabel ? (
+              <div className="mt-1">
+                <span className="inline-block px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 border border-slate-200">
+                  Zones: {zonesLabel}
+                </span>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600">📍 {ville}</p>
+            )}
+            {subCommunesLabel && (
+              <div className="mt-1">
+                <span className="inline-block px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-600 border border-slate-200">
+                  Sous-communes: {subCommunesLabel}
+                </span>
+              </div>
+            )}
+
+            <div className="mt-2 flex items-center justify-between gap-4">
+              <p className="text-blue-600 font-semibold truncate">
+                {prix ? `${prix} € / mois` : "Prix non renseigné"}
+              </p>
+              {surface && (
+                <p className="text-sm text-gray-700">
+                  <span className="font-semibold">Surface :</span> {surface} m²
+                </p>
+              )}
+            </div>
+
+            {dateLabel && (
+              <p className="text-xs text-gray-500 mt-1">📅 {dateLabel}</p>
+            )}
+
+            {description && (
+              <div className="text-sm text-gray-700 mt-2">
+                {(() => {
+                  const lines = description.split("\n");
+                  const firstLines = lines.slice(0, 2);
+                  const rest = lines.slice(2);
+                  return (
                     <>
-                      <span
-                        className="block bg-gradient-to-r from-gray-700/80 to-transparent text-transparent bg-clip-text select-none"
-                        style={{
-                          WebkitBackgroundClip: "text",
-                          WebkitTextFillColor: "transparent",
-                        }}
-                      >
-                        {rest.join("\n")}
-                      </span>
-                      <span className="text-gray-400 ml-1">...</span>
+                      <span className="font-semibold">Description :</span>{" "}
+                      {firstLines.map((line, idx) => (
+                        <span key={idx} className="block truncate">
+                          {line}
+                        </span>
+                      ))}
+                      {rest.length > 0 && (
+                        <>
+                          <span className="text-gray-400 ml-1">...</span>
+                        </>
+                      )}
                     </>
-                  )}
-                </>
-              );
-            })()}
+                  );
+                })()}
+              </div>
+            )}
           </div>
-        )}
+        </div>
+
         {onDelete && (
           <button
             onClick={(e) => {
@@ -168,6 +174,9 @@ export default function AnnonceCard({
           </button>
         )}
       </div>
+      {openImg && (
+        <ImageLightbox images={[thumbUrl]} initialIndex={0} onClose={() => setOpenImg(false)} />
+      )}
     </Link>
   );
 }

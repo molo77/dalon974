@@ -1,7 +1,10 @@
 "use client";
 import { Fragment, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { toast as appToast } from "@/components/Toast";
+
+const PhotoUploader = dynamic(() => import("@/components/PhotoUploader"), { ssr: false });
 
 export default function AnnonceModal({
   isOpen,
@@ -51,6 +54,9 @@ export default function AnnonceModal({
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+
+  // PhotoUploader fournit UI pour multi-upload/local storage et sélection de la photo principale
+  // import dynamique pour éviter de charger côté serveur
 
   useEffect(() => {
     if (annonce) {
@@ -144,27 +150,26 @@ export default function AnnonceModal({
           <textarea className="border rounded px-3 py-2 w-full" rows={4} placeholder="Description" value={description} onChange={e=>setDescription(e.target.value)} />
 
           <div>
-            <label className="block text-sm font-medium mb-1">Image principale (URL)</label>
-            <input className="border rounded px-3 py-2 w-full" placeholder="https://…" value={imageUrl} onChange={e=>setImageUrl(e.target.value)} />
-            <div className="mt-2 flex items-center gap-2">
-              <input type="file" accept="image/*" multiple onChange={(e)=>uploadAnnoncePhotos(e.target.files)} />
-              {imageUrl && <img src={imageUrl} alt="cover" className="w-16 h-12 object-cover rounded border" />}
+            <label className="block text-sm font-medium mb-1">Photos</label>
+            <PhotoUploader
+              initial={photos}
+              onChange={(list) => {
+                // list: { url, isMain }
+                const urls = list.map((l) => l.url);
+                setPhotos(urls);
+                const main = list.find((l) => l.isMain);
+                if (main) setImageUrl(main.url);
+              }}
+            />
+            <div className="mt-2">
+              <div className="text-sm text-slate-500">Photo principale actuelle</div>
+              {imageUrl ? (
+                <img src={imageUrl} alt="cover" className="w-16 h-12 object-cover rounded border mt-1" />
+              ) : (
+                <div className="text-slate-600">Aucune photo sélectionnée</div>
+              )}
             </div>
           </div>
-
-          {photos.length > 0 && (
-            <div>
-              <div className="text-sm font-medium mb-1">Galerie</div>
-              <div className="grid grid-cols-3 gap-2">
-                {photos.map((u) => (
-                  <div key={u} className="relative">
-                    <img src={u} alt="photo" className="w-full h-20 object-cover rounded border" />
-                    <button type="button" onClick={() => removePhoto(u)} className="absolute -top-2 -right-2 bg-black/60 text-white rounded-full w-6 h-6" aria-label="Supprimer">✖</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm rounded bg-gray-200 text-gray-700">Annuler</button>

@@ -7,6 +7,10 @@ import { doc, getDoc } from "firebase/firestore";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+import ExpandableImage from "@/components/ExpandableImage";
+
+const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr: false });
 import { getUserRole } from "@/lib/services/userService";
 import { updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/lib/services/annonceService";
 
@@ -74,12 +78,18 @@ export default function AnnonceDetailPage() {
           <p className="text-gray-600 mb-2 text-lg">📍 {annonce?.ville}</p>
           <p className="text-blue-600 font-bold text-xl mb-4">{annonce?.prix} € / mois</p>
           {annonce?.imageUrl && (
-            <img
+            <ExpandableImage
               src={annonce.imageUrl}
-              alt={annonce?.titre}
+              images={annonce.photos || (annonce.imageUrl ? [annonce.imageUrl] : [])}
               className="w-full h-72 object-cover rounded mb-6"
+              alt={annonce?.titre}
             />
           )}
+          {/* Galerie : afficher toutes les photos uploadées si présentes */}
+          {Array.isArray(annonce?.photos) && annonce.photos.length > 0 && (
+            <GalleryBlock images={annonce.photos} />
+          )}
+          
           <div className="mt-4 w-full flex flex-col gap-2">
             {/* Champs supplémentaires */}
             {annonce?.surface && (
@@ -206,6 +216,33 @@ export default function AnnonceDetailPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+function GalleryBlock({ images }: { images: string[] }) {
+  const [open, setOpen] = useState(false);
+  const [idx, setIdx] = useState(0);
+  return (
+    <div className="w-full mb-6">
+      <div className="text-sm font-medium text-slate-600 mb-2">📷 Galerie</div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-medium text-slate-600">📷 Galerie</div>
+        <div>
+          <button type="button" className="text-sm text-blue-600 hover:underline" onClick={() => { setIdx(0); setOpen(true); }}>
+            Agrandir la galerie
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {images.map((u, i) => (
+          <div key={i} className="block rounded-lg overflow-hidden border p-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={u} alt={`photo-${i+1}`} className="w-full h-28 object-cover" />
+          </div>
+        ))}
+      </div>
+      {open && <ImageLightbox images={images} initialIndex={idx} onClose={() => setOpen(false)} />}
+    </div>
   );
 }
 

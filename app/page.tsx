@@ -16,6 +16,9 @@ import {
 } from "firebase/firestore";
 import type { Query, QuerySnapshot, DocumentData } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import dynamic from "next/dynamic";
+import ExpandableImage from "@/components/ExpandableImage";
+const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr: false });
 import AnnonceCard from "@/components/AnnonceCard";
 import CommuneZoneSelector from "@/components/CommuneZoneSelector";
 import useCommuneCp from "@/hooks/useCommuneCp";
@@ -34,6 +37,23 @@ const sameIds = (a: string[], b: string[]) => {
 
 export default function HomePage() {
   const [annonces, setAnnonces] = useState<any[]>([]);
+  const [galleryIndex, setGalleryIndex] = useState<number>(0);
+  const [lightboxOpen, setLightboxOpen] = useState<boolean>(false);
+
+  // Keyboard handlers for lightbox (Esc to close, arrows to navigate)
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightboxOpen(false);
+      if (e.key === 'ArrowLeft') setGalleryIndex((i) => Math.max(0, i - 1));
+      if (e.key === 'ArrowRight') setGalleryIndex((i) => {
+        const len = Array.isArray((colocDetail as any)?.photos) ? ((colocDetail as any).photos as string[]).length : 0;
+        return Math.min(len - 1, i + 1);
+      });
+    };
+    try { window.addEventListener('keydown', onKey); } catch {}
+    return () => { try { window.removeEventListener('keydown', onKey); } catch {} };
+  }, [lightboxOpen]);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [lastDoc, setLastDoc] = useState<any | null>(null);
@@ -386,6 +406,8 @@ export default function HomePage() {
     // Ne rien charger si aucun choix n’a été fait
     if (activeHomeTab === null) return;
     if (loadingMore || !hasMore || firestoreError) return;
+  // Debug: trace des appels
+  try { console.debug('[Accueil] loadAnnonces called', { append, activeHomeTab, loadingMore, hasMore, firestoreError, filtering }); } catch {}
 
     setLoadingMore(true);
     if (!append) {
@@ -753,12 +775,105 @@ export default function HomePage() {
             const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase, chunkWhere);
             const qOrdered = qWithOrder(qFilterOnly);
             const qPaged = lastDoc && aDocHasOrderField(lastDoc) ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
-            attachListener(qPaged as Query<DocumentData>, {
-              label: "communes-slugs-coloc",
-              clientFilter: clientFilterCombined,
-              fallback: qFilterOnly as Query<DocumentData>,
-              fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
-            });
+            if (append) {
+              let skipBranch = false;
+              try {
+                // Ensure we page after lastDoc if possible; if startAfter fails, disable pagination for this branch
+                let qForGet: Query<DocumentData> = qPaged as Query<DocumentData>;
+                try {
+                  if (lastDoc) qForGet = query(qOrdered, startAfter(lastDoc));
+                } catch (e) {
+                  try { console.debug('[Accueil][append][communes-slugs-coloc] startAfter failed, disabling pagination for this branch', e); } catch {}
+                  setHasMore(false);
+                  setLoadingMore(false);
+                  skipBranch = true;
+                }
+                if (!skipBranch) {
+                  const snap = await getDocs(qForGet as Query<DocumentData>);
+                try { console.debug('[Accueil][append][communes-slugs-coloc] getDocs result', { snapLength: snap.docs.length }); } catch {}
+                const docsArr = snap.docs.filter((d: any) => {
+                  if (typeof clientFilterCombined === 'function') return (clientFilterCombined as any)(d.data());
+                  return true;
+                });
+                if (docsArr.length) {
+                  setAnnonces((prev) => {
+                    const ids = new Set(prev.map((x) => x.id));
+                    const items = docsArr.map((doc: any) => {
+                      const d = doc.data() as any;
+                      const budgetNum = Number(d.budget);
+                      const head = [d.profession, typeof d.age === "number" ? `${d.age} ans` : null].filter(Boolean).join(" • ");
+                      const tail = (d.description || "").toString();
+                      const short = head ? `${head}${tail ? " • " : ""}${tail}` : tail;
+                      let parentSlug: string | undefined;
+                      const slugsArr = Array.isArray((d as any).communesSlugs) ? (d as any).communesSlugs as string[] : [];
+                      if (slugsArr.length > 0) {
+                        const s0 = altSlugToCanonical[slugsArr[0]] || slugsArr[0];
+                        parentSlug = s0;
+                      } else if (d.ville) {
+                        const s = slugify(String(d.ville));
+                        parentSlug = nameToParentSlug[s] || s;
+                      }
+                      const zonesFromSlugs = slugsArr.length
+                        ? computeZonesFromSlugs(slugsArr.map((s) => altSlugToCanonical[s] || s))
+                        : [];
+                      const zonesArr: string[] = Array.isArray((d as any).zones) && (d as any).zones.length
+                        ? ((d as any).zones as string[])
+                        : zonesFromSlugs;
+                      const zonesLabel = zonesArr && zonesArr.length ? zonesArr.join(", ") : (d.ville || "-");
+                      return {
+                        id: doc.id,
+                        titre: d.nom || "Recherche colocation",
+                        ville: zonesLabel,
+                        prix: Number.isFinite(budgetNum) ? budgetNum : undefined,
+                        surface: undefined,
+                        description: short.slice(0, 180),
+                        imageUrl: d.imageUrl || defaultAnnonceImg,
+                        createdAt: d.createdAt,
+                        parentSlug,
+                        zonesLabel,
+                        subCommunesLabel: selectedSubCommunesLabel || undefined,
+                      };
+                    });
+                    const merged = [...prev, ...items.filter(i => !ids.has(i.id))];
+                    // Tri identique à celui du listener
+                    const toMs = (x: any) => {
+                      const v = x?.createdAt;
+                      if (!v) return 0;
+                      if (typeof v === "number") return v;
+                      if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+                      const p = Date.parse(v);
+                      return isNaN(p) ? 0 : p;
+                    };
+                    if (sortBy === "date") merged.sort((a, b) => toMs(b) - toMs(a));
+                    else if (sortBy === "prix-desc") merged.sort((a, b) => (b.prix ?? 0) - (a.prix ?? 0));
+                    else merged.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
+                    return merged;
+                  });
+                }
+                const docsWithField = snap.docs.filter((snapDoc: any) => {
+                  try {
+                    const v = typeof snapDoc.get === 'function' ? snapDoc.get(orderField) : (snapDoc.data?.() || {})[orderField];
+                    return typeof v !== 'undefined';
+                  } catch { return false; }
+                });
+                try { console.debug('[Accueil][append][communes-slugs-coloc] docsWithField', { docsWithField: docsWithField.length, newLastId: docsWithField.length ? (docsWithField[docsWithField.length - 1].id) : null }); } catch {}
+                if (docsWithField.length > 0) setLastDoc(docsWithField[docsWithField.length - 1]);
+                if (snap.docs.length < PAGE_SIZE) setHasMore(false);
+                setLoadingMore(false);
+                }
+              } catch (e) {
+                console.error('[Accueil][loadAnnonces][append][communes-slugs-coloc]', e);
+                setLoadingMore(false);
+              }
+              if (skipBranch) break;
+            } else {
+              attachListener(qPaged as Query<DocumentData>, {
+                label: "communes-slugs-coloc",
+                clientFilter: clientFilterCombined,
+                fallback: qFilterOnly as Query<DocumentData>,
+                fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
+              });
+            }
           }
         } else {
           // Annonces: utiliser des requêtes Firestore fiables
@@ -769,13 +884,84 @@ export default function HomePage() {
             const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase, w);
             const qOrdered = qWithOrder(qFilterOnly);
             const qPaged = lastDoc && aDocHasOrderField(lastDoc) ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
-            attachListener(qPaged as Query<DocumentData>, {
-              label: "annonces-communeSlug-in",
-              // Sécurité: filtrage client additionnel (évite toute dérive si des données sont incohérentes)
-              clientFilter: annoncesClientFilter,
-              fallback: qFilterOnly as Query<DocumentData>,
-              fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
-            });
+            if (append) {
+              let skipBranch = false;
+              try {
+                let qForGet: Query<DocumentData> = qPaged as Query<DocumentData>;
+                try {
+                  if (lastDoc) qForGet = query(qOrdered, startAfter(lastDoc));
+                } catch (e) {
+                  try { console.debug('[Accueil][append][annonces-communeSlug-in] startAfter failed, disabling pagination for this branch', e); } catch {}
+                  setHasMore(false);
+                  setLoadingMore(false);
+                  skipBranch = true;
+                }
+                if (!skipBranch) {
+                const snap = await getDocs(qForGet as Query<DocumentData>);
+                try { console.debug('[Accueil][append][annonces-communeSlug-in] getDocs result', { snapLength: snap.docs.length }); } catch {}
+                const docsArr = snap.docs.filter((d: any) => {
+                  if (typeof annoncesClientFilter === 'function') return (annoncesClientFilter as any)(d.data());
+                  return true;
+                });
+                if (docsArr.length) {
+                  setAnnonces((prev) => {
+                    const ids = new Set(prev.map((x) => x.id));
+                    const items = docsArr.map((doc: any) => {
+                      const d = doc.data() as any;
+                      const prixNum = Number(d.prix);
+                      return {
+                        id: doc.id,
+                        titre: d.titre,
+                        ville: d.ville,
+                        prix: Number.isFinite(prixNum) ? prixNum : undefined,
+                        surface: d.surface,
+                        description: d.description,
+                        imageUrl: d.imageUrl || defaultAnnonceImg,
+                        createdAt: d.createdAt,
+                        parentSlug: getDocParentSlug(d),
+                        subCommunesLabel: selectedSubCommunesLabel || undefined,
+                      };
+                    });
+                    const merged = [...prev, ...items.filter(i => !ids.has(i.id))];
+                    const toMs = (x: any) => {
+                      const v = x?.createdAt;
+                      if (!v) return 0;
+                      if (typeof v === "number") return v;
+                      if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+                      const p = Date.parse(v);
+                      return isNaN(p) ? 0 : p;
+                    };
+                    if (sortBy === "date") merged.sort((a, b) => toMs(b) - toMs(a));
+                    else if (sortBy === "prix-desc") merged.sort((a, b) => (b.prix ?? 0) - (a.prix ?? 0));
+                    else merged.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
+                    return merged;
+                  });
+                }
+                const docsWithField = snap.docs.filter((snapDoc: any) => {
+                  try {
+                    const v = typeof snapDoc.get === 'function' ? snapDoc.get(orderField) : (snapDoc.data?.() || {})[orderField];
+                    return typeof v !== 'undefined';
+                  } catch { return false; }
+                });
+                try { console.debug('[Accueil][append][annonces-communeSlug-in] docsWithField', { docsWithField: docsWithField.length, newLastId: docsWithField.length ? (docsWithField[docsWithField.length - 1].id) : null }); } catch {}
+                if (docsWithField.length > 0) setLastDoc(docsWithField[docsWithField.length - 1]);
+                if (snap.docs.length < PAGE_SIZE) setHasMore(false);
+                setLoadingMore(false);
+                }
+              } catch (e) {
+                console.error('[Accueil][loadAnnonces][append][annonces-communeSlug-in]', e);
+                setLoadingMore(false);
+              }
+              if (skipBranch) break;
+            } else {
+              attachListener(qPaged as Query<DocumentData>, {
+                label: "annonces-communeSlug-in",
+                // Sécurité: filtrage client additionnel (évite toute dérive si des données sont incohérentes)
+                clientFilter: annoncesClientFilter,
+                fallback: qFilterOnly as Query<DocumentData>,
+                fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
+              });
+            }
           }
           // 2) ville IN [Noms…] (fallback pour anciennes annonces sans communeSlug)
           const selectedNames = normalizedSlugs
@@ -787,12 +973,83 @@ export default function HomePage() {
             const qFilterOnlyNoPrice = query(baseColRef, ...commonFiltersBase, w);
             const qOrdered = qWithOrder(qFilterOnly);
             const qPaged = lastDoc ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
-            attachListener(qPaged as Query<DocumentData>, {
-              label: "annonces-ville-in",
-              clientFilter: annoncesClientFilter,
-              fallback: qFilterOnly as Query<DocumentData>,
-              fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
-            });
+            if (append) {
+              let skipBranch = false;
+              try {
+                let qForGet: Query<DocumentData> = qPaged as Query<DocumentData>;
+                try {
+                  if (lastDoc) qForGet = query(qOrdered, startAfter(lastDoc));
+                } catch (e) {
+                  try { console.debug('[Accueil][append][annonces-communeSlug-in] startAfter failed (ville), disabling pagination for this branch', e); } catch {}
+                  setHasMore(false);
+                  setLoadingMore(false);
+                  skipBranch = true;
+                }
+                if (!skipBranch) {
+                const snap = await getDocs(qForGet as Query<DocumentData>);
+                try { console.debug('[Accueil][append][annonces-communeSlug-in] getDocs result (ville)', { snapLength: snap.docs.length }); } catch {}
+                const docsArr = snap.docs.filter((d: any) => {
+                  if (annoncesClientFilter) return annoncesClientFilter(d.data());
+                  return true;
+                });
+                if (docsArr.length) {
+                  setAnnonces((prev) => {
+                    const ids = new Set(prev.map((x) => x.id));
+                    const items = docsArr.map((doc: any) => {
+                      const d = doc.data() as any;
+                      const prixNum = Number(d.prix);
+                      return {
+                        id: doc.id,
+                        titre: d.titre,
+                        ville: d.ville,
+                        prix: Number.isFinite(prixNum) ? prixNum : undefined,
+                        surface: d.surface,
+                        description: d.description,
+                        imageUrl: d.imageUrl || defaultAnnonceImg,
+                        createdAt: d.createdAt,
+                        parentSlug: getDocParentSlug(d),
+                        subCommunesLabel: selectedSubCommunesLabel || undefined,
+                      };
+                    });
+                    const merged = [...prev, ...items.filter(i => !ids.has(i.id))];
+                    const toMs = (x: any) => {
+                      const v = x?.createdAt;
+                      if (!v) return 0;
+                      if (typeof v === "number") return v;
+                      if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+                      const p = Date.parse(v);
+                      return isNaN(p) ? 0 : p;
+                    };
+                    if (sortBy === "date") merged.sort((a, b) => toMs(b) - toMs(a));
+                    else if (sortBy === "prix-desc") merged.sort((a, b) => (b.prix ?? 0) - (a.prix ?? 0));
+                    else merged.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
+                    return merged;
+                  });
+                }
+                const docsWithField = snap.docs.filter((snapDoc: any) => {
+                  try {
+                    const v = typeof snapDoc.get === 'function' ? snapDoc.get(orderField) : (snapDoc.data?.() || {})[orderField];
+                    return typeof v !== 'undefined';
+                  } catch { return false; }
+                });
+                try { console.debug('[Accueil][append][annonces-ville-in] docsWithField', { docsWithField: docsWithField.length, newLastId: docsWithField.length ? (docsWithField[docsWithField.length - 1].id) : null }); } catch {}
+                if (docsWithField.length > 0) setLastDoc(docsWithField[docsWithField.length - 1]);
+                if (snap.docs.length < PAGE_SIZE) setHasMore(false);
+                setLoadingMore(false);
+                }
+              } catch (e) {
+                console.error('[Accueil][loadAnnonces][append][annonces-ville-in]', e);
+                setLoadingMore(false);
+              }
+              if (skipBranch) break;
+            } else {
+              attachListener(qPaged as Query<DocumentData>, {
+                label: "annonces-ville-in",
+                clientFilter: annoncesClientFilter,
+                fallback: qFilterOnly as Query<DocumentData>,
+                fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
+              });
+            }
           }
           // 3) Fallback client: pas de filtre Firestore, on filtre côté client par slugs normalisés
         }
@@ -807,11 +1064,74 @@ export default function HomePage() {
           : (!ville && !codePostal);
         const isDefaultAll = !hasCommuneFilter && prixMax === null && noExtraCriteria;
   const qPaged = (!isDefaultAll && lastDoc && aDocHasOrderField(lastDoc)) ? query(qOrdered, startAfter(lastDoc)) : qOrdered;
-        attachListener(qPaged as Query<DocumentData>, {
-          label: "page",
-          fallback: qFilterOnly as Query<DocumentData>,
-          fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
-        });
+    if (append) {
+      let skipBranch = false;
+      try {
+            let qForGet: Query<DocumentData> = qPaged as Query<DocumentData>;
+            try {
+              if (lastDoc) qForGet = query(qOrdered, startAfter(lastDoc));
+            } catch (e) {
+              try { console.debug('[Accueil][append][page] startAfter failed, disabling pagination for this branch', e); } catch {}
+                  setHasMore(false);
+                  setLoadingMore(false);
+          skipBranch = true;
+            }
+            const snap = await getDocs(qForGet as Query<DocumentData>);
+            try { console.debug('[Accueil][append][page] getDocs result', { snapLength: snap.docs.length }); } catch {}
+            if (snap.docs.length) {
+              setAnnonces((prev) => {
+                const ids = new Set(prev.map((x) => x.id));
+                const items = snap.docs.map((doc: any) => {
+                  const d = doc.data() as any;
+                  const prixNum = Number(d.prix);
+                  return {
+                    id: doc.id,
+                    titre: d.titre,
+                    ville: d.ville,
+                    prix: Number.isFinite(prixNum) ? prixNum : undefined,
+                    surface: d.surface,
+                    description: d.description,
+                    imageUrl: d.imageUrl || defaultAnnonceImg,
+                    createdAt: d.createdAt,
+                    parentSlug: getDocParentSlug(d),
+                    subCommunesLabel: selectedSubCommunesLabel || undefined,
+                  };
+                });
+                const merged = [...prev, ...items.filter(i => !ids.has(i.id))];
+                const toMs = (x: any) => {
+                  const v = x?.createdAt;
+                  if (!v) return 0;
+                  if (typeof v === "number") return v;
+                  if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+                  const p = Date.parse(v);
+                  return isNaN(p) ? 0 : p;
+                };
+                if (sortBy === "date") merged.sort((a, b) => toMs(b) - toMs(a));
+                else if (sortBy === "prix-desc") merged.sort((a, b) => (b.prix ?? 0) - (a.prix ?? 0));
+                else merged.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
+                return merged;
+              });
+            }
+            const docsWithField = snap.docs.filter((snapDoc: any) => {
+              try {
+                const v = typeof snapDoc.get === 'function' ? snapDoc.get(orderField) : (snapDoc.data?.() || {})[orderField];
+                return typeof v !== 'undefined';
+              } catch { return false; }
+            });
+            if (docsWithField.length > 0) setLastDoc(docsWithField[docsWithField.length - 1]);
+            if (snap.docs.length < PAGE_SIZE) setHasMore(false);
+            setLoadingMore(false);
+          } catch (e) {
+            console.error('[Accueil][loadAnnonces][append][page]', e);
+            setLoadingMore(false);
+          }
+        } else {
+          attachListener(qPaged as Query<DocumentData>, {
+            label: "page",
+            fallback: qFilterOnly as Query<DocumentData>,
+            fallbackNoPrice: qFilterOnlyNoPrice as Query<DocumentData>,
+          });
+        }
       }
     } catch (err: any) {
       console.error("Erreur chargement temps réel :", err);
@@ -1040,6 +1360,7 @@ export default function HomePage() {
     if (!el) return;
     const io = new IntersectionObserver((entries) => {
       const entry = entries[0];
+  try { console.debug('[Accueil] IntersectionObserver', { isIntersecting: entry?.isIntersecting, time: Date.now(), hasMore, loadingMore, filtering }); } catch {}
       if (!entry?.isIntersecting) return;
       // Throttle: au moins 400ms entre deux déclenchements
       const now = Date.now();
@@ -1699,11 +2020,56 @@ export default function HomePage() {
                 ) : (
                   <div className="flex flex-col gap-4">
                     <div className="flex gap-4 items-start">
-                      <img
-                        src={colocDetail.imageUrl || defaultColocImg}
-                        alt={colocDetail.nom || "Profil"}
-                        className="w-40 h-28 object-cover rounded-lg border"
-                      />
+                      <div className="flex-shrink-0 w-44">
+                        {/* Gallery: main image + thumbnails */}
+                        <div className="rounded-lg overflow-hidden bg-gray-100 w-44 h-44 relative group">
+                          <ExpandableImage
+                            src={
+                              Array.isArray(colocDetail.photos) && (colocDetail.photos as string[]).length
+                                ? (colocDetail.photos as string[])[galleryIndex] || colocDetail.imageUrl || defaultColocImg
+                                : colocDetail.imageUrl || defaultColocImg
+                            }
+                            images={Array.isArray(colocDetail.photos) && (colocDetail.photos as string[]).length ? (colocDetail.photos as string[]) : (colocDetail.imageUrl ? [colocDetail.imageUrl] : [defaultColocImg])}
+                            initialIndex={galleryIndex}
+                            className="w-full h-full object-cover"
+                            alt={colocDetail.nom || "Profil"}
+                          />
+                          {/* Hover/focus overlay: magnifier */}
+                          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 group-focus-within:bg-black/30 transition-colors" aria-hidden="true">
+                            <svg className="w-10 h-10 text-white opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="11" cy="11" r="6" />
+                              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                            </svg>
+                          </div>
+                          <button
+                            aria-label="Agrandir l'image"
+                            className="absolute right-2 top-2 bg-white/80 px-2 py-1 rounded text-sm text-slate-700"
+                            onClick={() => setLightboxOpen(true)}
+                          >
+                            Agrandir
+                          </button>
+                        </div>
+                        {Array.isArray(colocDetail.photos) && (colocDetail.photos as string[]).length > 1 && (
+                          <div className="mt-2 grid grid-cols-4 gap-2">
+                            {(colocDetail.photos as string[]).map((p: string, i: number) => (
+                              <button
+                                key={p + i}
+                                onClick={() => { setGalleryIndex(i); /* no modal open from thumbnail */ }}
+                                className={`w-10 h-10 overflow-hidden rounded-md border relative group ${i === galleryIndex ? 'border-blue-600' : 'border-slate-200'}`}
+                                aria-label={`Image ${i + 1}`}
+                              >
+                                <img src={p} className="w-full h-full object-cover" style={{ width: 40, height: 40, objectFit: 'cover' }} alt={`thumb-${i}`} />
+                                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors" aria-hidden="true">
+                                  <svg className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="11" cy="11" r="6" />
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                  </svg>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <div className="flex-1">
                         <div className="text-2xl font-bold">
                           {colocDetail.nom || "Recherche colocation"}
@@ -1732,6 +2098,13 @@ export default function HomePage() {
                         </div>
                       </div>
                     </div>
+                    {lightboxOpen && (
+                      <ImageLightbox
+                        images={Array.isArray(colocDetail.photos) && (colocDetail.photos as string[]).length ? (colocDetail.photos as string[]) : (colocDetail.imageUrl ? [colocDetail.imageUrl] : [defaultColocImg])}
+                        initialIndex={galleryIndex}
+                        onClose={() => setLightboxOpen(false)}
+                      />
+                    )}
 
                     {colocDetail.bioCourte && (
                       <div className="text-slate-700">{colocDetail.bioCourte}</div>

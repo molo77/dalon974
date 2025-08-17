@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import AdminUsers from "@/components/admin/AdminUsers";
+import ExpandableImage from "@/components/ExpandableImage"; // New import
 // import AdminAnnonces from "@/components/admin/AdminAnnonces"; // affichage remplacé par une liste intégrée
 import useAdminGate from "@/hooks/useAdminGate";
 import { db } from "@/lib/firebase";
@@ -24,10 +26,10 @@ import {
   setDoc,
 } from "firebase/firestore";
 import AnnonceModal from "@/components/AnnonceModal";
+const ColocPhotoSection = dynamic(() => import("@/components/ColocPhotoSection"), { ssr: false });
 import { updateAnnonce } from "@/lib/services/annonceService";
 import Link from "next/link"; // + import
 import { toast as appToast } from "@/components/Toast";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 // Helper: slug
 const slugify = (s: string) =>
@@ -94,7 +96,7 @@ export default function AdminPage() {
   const [colocNomEdit, setColocNomEdit] = useState("");
   const [colocVilleEdit, setColocVilleEdit] = useState("");
   const [colocBudgetEdit, setColocBudgetEdit] = useState<string>("");
-  const [colocImageUrlEdit, setColocImageUrlEdit] = useState("");
+  const [colocMainUrlEdit, setColocMainUrlEdit] = useState("");
   const [colocDescriptionEdit, setColocDescriptionEdit] = useState("");
   const [colocAgeEdit, setColocAgeEdit] = useState<string>("");
   const [colocProfessionEdit, setColocProfessionEdit] = useState("");
@@ -106,7 +108,7 @@ export default function AdminPage() {
   const [colocBioCourteEdit, setColocBioCourteEdit] = useState("");
   const [colocLanguesEdit, setColocLanguesEdit] = useState(""); // CSV
   const [colocInstagramEdit, setColocInstagramEdit] = useState("");
-  const [colocPhotosCsvEdit, setColocPhotosCsvEdit] = useState(""); // CSV
+  const [colocPhotosCsvEdit, setColocPhotosCsvEdit] = useState(""); // legacy CSV (not shown)
   // Préférences & style de vie
   const [prefGenreEdit, setPrefGenreEdit] = useState("");
   const [prefAgeMinEdit, setPrefAgeMinEdit] = useState<string>("");
@@ -498,7 +500,7 @@ export default function AdminPage() {
     setColocNomEdit(p?.nom || "");
     setColocVilleEdit(p?.ville || "");
     setColocBudgetEdit(typeof p?.budget === "number" ? String(p.budget) : "");
-    setColocImageUrlEdit(p?.imageUrl || "");
+  setColocMainUrlEdit(p?.imageUrl || "");
     setColocDescriptionEdit(p?.description || "");
     setColocAgeEdit(typeof p?.age === "number" ? String(p.age) : "");
     setColocProfessionEdit(p?.profession || "");
@@ -559,7 +561,7 @@ export default function AdminPage() {
         nom: colocNomEdit,
         ville: colocVilleEdit,
         budget: colocBudgetEdit ? Number(colocBudgetEdit) : null,
-        imageUrl: colocImageUrlEdit,
+  imageUrl: colocMainUrlEdit,
         description: colocDescriptionEdit,
         age: colocAgeEdit ? Number(colocAgeEdit) : null,
         profession: colocProfessionEdit,
@@ -572,11 +574,10 @@ export default function AdminPage() {
         langues: colocLanguesEdit
           ? colocLanguesEdit.split(",").map(s => s.trim()).filter(Boolean)
           : undefined,
-        instagram: colocInstagramEdit || undefined,
-        photos: colocPhotosCsvEdit
-          ? colocPhotosCsvEdit.split(",").map(s => s.trim()).filter(Boolean)
-          : undefined,
-        prefGenre: prefGenreEdit || undefined,
+  instagram: colocInstagramEdit || undefined,
+  // photos stored via uploader/metadata instead of CSV
+  photos: undefined,
+  prefGenre: prefGenreEdit || undefined,
         prefAgeMin: prefAgeMinEdit ? Number(prefAgeMinEdit) : undefined,
         prefAgeMax: prefAgeMaxEdit ? Number(prefAgeMaxEdit) : undefined,
         accepteFumeurs: !!accepteFumeursEdit,
@@ -1205,39 +1206,15 @@ export default function AdminPage() {
                   <input className="border rounded px-3 py-2" placeholder="Budget (€)" type="number" value={colocBudgetEdit} onChange={(e) => setColocBudgetEdit(e.target.value)} />
                   <input className="border rounded px-3 py-2" placeholder="Âge" type="number" value={colocAgeEdit} onChange={(e) => setColocAgeEdit(e.target.value)} />
                   <div className="sm:col-span-2">
-                    <input
-                      className="border rounded px-3 py-2 w-full"
-                      placeholder="Image (URL)"
-                      value={colocImageUrlEdit}
-                      onChange={(e) => setColocImageUrlEdit(e.target.value)}
+                    <label className="block text-sm font-medium mb-1">Photos</label>
+                    <ColocPhotoSection
+                      initialCsv={colocPhotosCsvEdit}
+                      initialMain={colocMainUrlEdit}
+                      onUpdate={(csv: string, main: string | undefined) => {
+                        setColocPhotosCsvEdit(csv);
+                        if (main) setColocMainUrlEdit(main);
+                      }}
                     />
-                    <div className="mt-2 flex items-center gap-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={async (e) => {
-                          const f = e.target.files?.[0];
-                          if (!f || !editColoc?.id) return;
-                          try {
-                            const storage = getStorage();
-                            const r = ref(storage, `colocProfiles/${editColoc.id}/${Date.now()}-${f.name}`);
-                            await uploadBytes(r, f);
-                            const url = await getDownloadURL(r);
-                            setColocImageUrlEdit(url);
-                            appToast.success("Photo de profil mise à jour");
-                          } catch {
-                            appToast.error("Échec de l’upload de la photo");
-                          }
-                        }}
-                      />
-                      {colocImageUrlEdit && (
-                        <img
-                          src={colocImageUrlEdit}
-                          alt="profil"
-                          className="w-16 h-12 object-cover rounded border"
-                        />
-                      )}
-                    </div>
                   </div>
                   <input className="border rounded px-3 py-2" placeholder="Profession" value={colocProfessionEdit} onChange={(e) => setColocProfessionEdit(e.target.value)} />
                   <input className="border rounded px-3 py-2" placeholder="Téléphone" value={colocTelephoneEdit} onChange={(e) => setColocTelephoneEdit(e.target.value)} />
@@ -1260,61 +1237,7 @@ export default function AdminPage() {
                   <input className="border rounded px-3 py-2 sm:col-span-2" placeholder="Bio courte" value={colocBioCourteEdit} onChange={e=>setColocBioCourteEdit(e.target.value)} />
                   <input className="border rounded px-3 py-2 sm:col-span-2" placeholder="Langues (CSV, ex: fr,en,es)" value={colocLanguesEdit} onChange={e=>setColocLanguesEdit(e.target.value)} />
                   <input className="border rounded px-3 py-2" placeholder="Instagram (@handle)" value={colocInstagramEdit} onChange={e=>setColocInstagramEdit(e.target.value)} />
-                  <div>
-                    <input
-                      className="border rounded px-3 py-2 w-full"
-                      placeholder="Photos (URLs, CSV)"
-                      value={colocPhotosCsvEdit}
-                      onChange={e => setColocPhotosCsvEdit(e.target.value)}
-                    />
-                    <div className="mt-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={async (e) => {
-                          const fl = e.target.files;
-                          if (!fl || !editColoc?.id) return;
-                          try {
-                            const storage = getStorage();
-                            const urls = await Promise.all(
-                              Array.from(fl).map(async (f) => {
-                                const r = ref(storage, `colocProfiles/${editColoc.id}/${Date.now()}-${f.name}`);
-                                await uploadBytes(r, f);
-                                return await getDownloadURL(r);
-                              })
-                            );
-                            const current = colocPhotosCsvEdit ? colocPhotosCsvEdit.split(",").map(s=>s.trim()).filter(Boolean) : [];
-                            const merged = [...current, ...urls];
-                            setColocPhotosCsvEdit(merged.join(", "));
-                            appToast.success(`${urls.length} photo(s) ajoutée(s)`);
-                          } catch {
-                            appToast.error("Échec de l’upload des photos");
-                          }
-                        }}
-                      />
-                      {(() => {
-                        const arr = colocPhotosCsvEdit ? colocPhotosCsvEdit.split(",").map(s=>s.trim()).filter(Boolean) : [];
-                        return arr.length ? (
-                          <div className="mt-2 grid grid-cols-3 gap-2">
-                            {arr.map((u) => (
-                              <div key={u} className="relative">
-                                <img src={u} alt="photo" className="w-full h-20 object-cover rounded border" />
-                                <button
-                                  type="button"
-                                  onClick={() => setColocPhotosCsvEdit(arr.filter(x=>x!==u).join(", "))}
-                                  className="absolute -top-2 -right-2 bg-black/60 text-white rounded-full w-6 h-6"
-                                  aria-label="Supprimer"
-                                >
-                                  ✖
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null;
-                      })()}
-                    </div>
-                  </div>
+                  {/* Photos preview/CSV UI removed; managed by ColocPhotoSection above */}
                   <select className="border rounded px-3 py-2" value={prefGenreEdit} onChange={e=>setPrefGenreEdit(e.target.value)}>
                     <option value="">Préférence colloc (genre)</option>
                     <option value="femme">Femme</option>
@@ -1362,11 +1285,9 @@ export default function AdminPage() {
                   <div className="flex flex-col gap-5">
                     {/* En-tête avec image et infos principales */}
                     <div className="flex gap-4 items-start">
-                      <img
-                        src={colocDetail.imageUrl || "/images/coloc-holder.svg"}
-                        alt={colocDetail.nom || "Profil"}
-                        className="w-40 h-28 object-cover rounded-lg border"
-                      />
+                      <div className="flex-shrink-0 w-28 h-28 rounded-lg overflow-hidden bg-gray-100">
+                        <ExpandableImage src={colocDetail.imageUrl || "/images/coloc-holder.svg"} images={Array.isArray(colocDetail.photos) && colocDetail.photos.length ? colocDetail.photos : (colocDetail.imageUrl ? [colocDetail.imageUrl] : ["/images/coloc-holder.svg"])} className="w-full h-full object-cover" alt={colocDetail.nom || "Profil"} />
+                      </div>
                       <div className="flex-1">
                         <div className="text-2xl font-bold">{colocDetail.nom || "Recherche colocation"}</div>
                         <div className="text-slate-700">
@@ -1533,7 +1454,7 @@ export default function AdminPage() {
                         <div className="text-sm font-medium text-slate-700 mb-1">Photos</div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                           {colocDetail.photos.map((u: string, idx: number) => (
-                            <img key={`${u}-${idx}`} src={u} alt={`photo-${idx}`} className="w-full h-28 object-cover rounded-md border" />
+                            <img key={`${u}-${idx}`} src={u} alt={`photo-${idx}`} className="w-28 h-28 object-cover rounded-md border" />
                           ))}
                         </div>
                       </div>
