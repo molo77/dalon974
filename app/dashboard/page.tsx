@@ -1,30 +1,29 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef, type MouseEvent } from "react";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { useRouter, useSearchParams } from "next/navigation";
-import { auth, db } from "@/lib/firebase";
-import { collection, query, where, orderBy, onSnapshot, doc, getDoc, serverTimestamp, setDoc, deleteDoc, getDocs } from "firebase/firestore";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { db } from "@/lib/firebase";
+import { collection, query, where, orderBy, onSnapshot, doc, serverTimestamp, setDoc, deleteDoc, getDocs } from "firebase/firestore";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import ExpandableImage from "@/components/ExpandableImage";
+// import ExpandableImage from "@/components/ExpandableImage";
 import PhotoUploader from "@/components/PhotoUploader";
 const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr: false });
 import AnnonceCard from "@/components/AnnonceCard";
 import AnnonceModal from "@/components/AnnonceModal";
 import ConfirmModal from "@/components/ConfirmModal";
-import Toast, { ToastMessage, toast as appToast } from "@/components/Toast";
-import { v4 as uuidv4 } from "uuid";
+import { toast as appToast } from "@/components/Toast";
+// import { v4 as uuidv4 } from "uuid";
 import MessageModal from "@/components/MessageModal";
-import { translateFirebaseError } from "@/lib/firebaseErrors";
 import { listUserAnnoncesPage, addAnnonce, updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/lib/services/annonceService";
-import { listMessagesForOwner } from "@/lib/services/messageService";
+// import { listMessagesForOwner } from "@/lib/services/messageService";
 import { getUserRole } from "@/lib/services/userService";
 import Link from "next/link";
 import useCommuneSelection from "@/hooks/useCommuneSelection";
 import useMessagesData from "@/hooks/useMessagesData";
 import CommuneZoneSelector from "@/components/CommuneZoneSelector";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+// import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 // Liste complète des communes de La Réunion
 const COMMUNES = [
@@ -210,16 +209,30 @@ function sameIds(a: string[], b: string[]) {
   return true;
 }
 
-// Helper upload vers Firebase Storage
-async function uploadToStorage(file: File, pathPrefix: string) {
-  const storage = getStorage();
-  const r = ref(storage, `${pathPrefix}/${Date.now()}-${file.name}`);
-  await uploadBytes(r, file);
-  return await getDownloadURL(r);
+// uploadToStorage helper removed (unused)
+
+// Helper to translate Firebase error codes to user-friendly messages
+function translateFirebaseError(code: string): string {
+  switch (code) {
+    case "permission-denied":
+      return "Accès refusé. Vous n'avez pas la permission d'effectuer cette action.";
+    case "unavailable":
+      return "Le service est temporairement indisponible. Veuillez réessayer plus tard.";
+    case "not-found":
+      return "Ressource introuvable.";
+    case "already-exists":
+      return "Cette ressource existe déjà.";
+    case "failed-precondition":
+      return "Condition préalable non remplie (index Firestore en cours de création ?)";
+    default:
+      return `Erreur : ${code}`;
+  }
 }
 
 export default function DashboardPage() {
-  const [user, loading] = useAuthState(auth);
+  const { data: session, status } = useSession();
+  const user = session?.user as any;
+  const loading = status === "loading";
   const router = useRouter();
   const [mesAnnonces, setMesAnnonces] = useState<any[]>([]);
   const [loadingAnnonces, setLoadingAnnonces] = useState(true);
@@ -227,10 +240,8 @@ export default function DashboardPage() {
   const [editAnnonce, setEditAnnonce] = useState<any | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [selectedAnnonceToDelete, setSelectedAnnonceToDelete] = useState<any | null>(null);
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  // local toasts state not used anymore; rely on global appToast
   const showToast = (type: "success" | "error" | "info", message: string) => {
-    const id = uuidv4();
-    setToasts((prev) => [...prev, { id, type, message }]);
     // Toaster global pour visibilité sur toute page
     appToast[type](message);
   };
@@ -323,7 +334,7 @@ export default function DashboardPage() {
   // Formulaire caché par défaut. Ouverture uniquement via actions (Créer/Modifier).
   // On ne force plus la fermeture automatique pendant la saisie.
 
-  const handleFirestoreError = (err: any, context: string) => {
+  const handleFirestoreError = useCallback((err: any, context: string) => {
     console.error(`[Dashboard][${context}]`, err);
     const code = err?.code;
     // Cas spécifique: index requis (en cours de build)
@@ -341,9 +352,9 @@ export default function DashboardPage() {
       showToast("error", msg);
       setHasMore(false);
     } else {
-      showToast("error", code ? translateFirebaseError(code) : "Erreur Firestore.");
+      
     }
-  };
+  }, [userRole]);
 
   const { overrideVille, setOverrideVille, MAIN_COMMUNES_SORTED, SUB_COMMUNES_SORTED } =
     useCommuneSelection({
@@ -362,7 +373,7 @@ export default function DashboardPage() {
     handleFirestoreError,
   });
 
-  const loadUserDoc = async (u: any) => {
+  const loadUserDoc = useCallback(async (u: any) => {
     try {
       if (!u) return;
       const role = await getUserRole(u.uid);
@@ -372,10 +383,10 @@ export default function DashboardPage() {
     } finally {
       setUserDocLoaded(true);
     }
-  };
+  }, []);
 
   // Helper pour comparer createdAt de manière robuste (Timestamp Firestore/Date/number/string)
-  const createdAtMs = (x: any) => {
+  const createdAtMs = useCallback((x: any) => {
     const v = x?.createdAt;
     if (!v) return 0;
     if (typeof v === "number") return v;
@@ -388,12 +399,12 @@ export default function DashboardPage() {
       return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
     }
     return 0;
-  };
+  }, []);
 
   // Liste triée par date desc pour l’affichage
   const sortedAnnonces = useMemo(
-    () => [...mesAnnonces].sort((a, b) => createdAtMs(b) - createdAtMs(a)),
-    [mesAnnonces]
+  () => [...mesAnnonces].sort((a, b) => createdAtMs(b) - createdAtMs(a)),
+  [mesAnnonces, createdAtMs]
   );
 
   // IDs visibles (pour tout sélectionner/désélectionner)
@@ -404,7 +415,7 @@ export default function DashboardPage() {
     setSelectedIds((prev) => prev.filter((id) => visibleIds.includes(id)));
   }, [visibleIds]);
 
-  const loadAnnonces = async () => {
+  const loadAnnonces = useCallback(async () => {
     if (!user || loadingMore || !hasMore || firestoreError) return;
 
     // Premier chargement: activer le spinner principal
@@ -433,7 +444,7 @@ export default function DashboardPage() {
       setLoadingMore(false);
       if (isInitial) setLoadingAnnonces(false);
     }
-  };
+  }, [user, loadingMore, hasMore, firestoreError, lastDoc, mesAnnonces, handleFirestoreError, createdAtMs]);
 
   // Chargement du profil coloc depuis Firestore
 
@@ -518,60 +529,18 @@ export default function DashboardPage() {
       try { unsub(); } catch {}
       setColocReady(false);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, user]);
 
   // NOUVEAU: autosave silencieux (création si besoin) avec debounce
   // track last saved payload to avoid redundant writes
   const lastSavedRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (!colocReady || activeTab !== "coloc" || !user) return;
-    const t = setTimeout(() => {
-      autoSaveColoc();
-    }, 2000); // increased debounce to reduce write frequency
-    return () => clearTimeout(t);
-  }, [
-    colocNom,
-  // ville supprimée du profil coloc
-    colocBudget,
-    colocImageUrl,
-    colocDescription,
-    colocAge,
-    colocProfession,
-    colocFumeur,
-    colocAnimaux,
-    colocDateDispo,
-    colocQuartiers,
-    colocTelephone,
-    colocZones,
-    colocCommunesSlugs,
-    colocGenre,
-    colocOrientation,
-    colocBioCourte,
-    colocLanguesCsv,
-    colocInstagram,
-    colocPhotosCsv,
-    prefGenre,
-    prefAgeMin,
-    prefAgeMax,
-    accepteFumeurs,
-    accepteAnimaux,
-    rythme,
-    proprete,
-    sportif,
-    vegetarien,
-    soirees,
-    musique,
-    colocReady,
-    activeTab,
-    user
-  ]);
-
   // NOUVEAU: sauvegarde silencieuse (pas de toast/UI), merge + createdAt au premier enregistrement
-  const autoSaveColoc = async () => {
+  const autoSaveColoc = useCallback(async () => {
     if (!user) return;
     try {
-      const ref = doc(db, "colocProfiles", user.uid);
+  // reference kept internal to API route
       const payload: any = {
         uid: user.uid,
         email: user.email || null,
@@ -628,33 +597,67 @@ export default function DashboardPage() {
         if (lastSavedRef.current === key) return;
         // retrieve current user's ID token to authenticate the request
         try {
-          // get current Firebase ID token from client SDK
-          // auth is imported at top of file
-          const currentUser = auth.currentUser;
-          if (!currentUser) {
-            console.warn('[autoSaveColoc] no currentUser');
-          } else {
-            const token = await currentUser.getIdToken(/* forceRefresh */ false);
-            await fetch('/api/coloc-autosave', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ payload }),
-            });
-            lastSavedRef.current = key;
-          }
-        } catch (e) {
-          console.warn('[autoSaveColoc] enqueue failed', e);
+          await fetch('/api/coloc-autosave', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payload }),
+          });
+          lastSavedRef.current = key;
+        } catch {
+          console.warn('[autoSaveColoc] enqueue failed');
         }
-      } catch (e) {
-        console.warn('[autoSaveColoc] payload serialisation failed', e);
+      } catch {
+        console.warn('[autoSaveColoc] payload serialisation failed');
       }
     } catch {
       // silencieux
     }
-  };
+  }, [user, colocNom, colocBudget, colocImageUrl, colocDescription, colocAge, colocProfession, colocFumeur, colocAnimaux, colocDateDispo, colocQuartiers, colocTelephone, colocZones, colocCommunesSlugs, colocGenre, colocOrientation, colocBioCourte, colocLanguesCsv, colocInstagram, prefGenre, prefAgeMin, prefAgeMax, accepteFumeurs, accepteAnimaux, rythme, proprete, sportif, vegetarien, soirees, musique, hasColocDoc]);
+
+  // Déclenchement auto-save avec debounce (après déclaration pour éviter TDZ)
+  useEffect(() => {
+    if (!colocReady || activeTab !== "coloc" || !user) return;
+    const t = setTimeout(() => {
+      autoSaveColoc();
+    }, 2000); // increased debounce to reduce write frequency
+    return () => clearTimeout(t);
+  }, [
+    colocNom,
+  // ville supprimée du profil coloc
+    colocBudget,
+    colocImageUrl,
+    colocDescription,
+    colocAge,
+    colocProfession,
+    colocFumeur,
+    colocAnimaux,
+    colocDateDispo,
+    colocQuartiers,
+    colocTelephone,
+    colocZones,
+    colocCommunesSlugs,
+    colocGenre,
+    colocOrientation,
+    colocBioCourte,
+    colocLanguesCsv,
+    colocInstagram,
+    colocPhotosCsv,
+    prefGenre,
+    prefAgeMin,
+    prefAgeMax,
+    accepteFumeurs,
+    accepteAnimaux,
+    rythme,
+    proprete,
+    sportif,
+    vegetarien,
+    soirees,
+    musique,
+    colocReady,
+    activeTab,
+    user,
+    autoSaveColoc
+  ]);
 
   const saveColocProfile = async () => {
     if (!user) return;
@@ -769,7 +772,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (user) loadUserDoc(user);
-  }, [user]);
+  }, [user, loadUserDoc]);
 
   useEffect(() => {
     if (loading || firestoreError) return;
@@ -781,7 +784,7 @@ export default function DashboardPage() {
     // Attendre d’avoir tenté de charger le doc user pour éviter permission-denied précoce
     if (!userDocLoaded) return;
     loadAnnonces();
-  }, [user, loading, lastDoc, firestoreError, userDocLoaded]);
+  }, [user, loading, lastDoc, firestoreError, userDocLoaded, router, loadAnnonces]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -795,7 +798,7 @@ export default function DashboardPage() {
 
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
-  });
+  }, [hasMore, loadingMore, loadAnnonces]);
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -829,11 +832,11 @@ export default function DashboardPage() {
     };
 
     fetchAnnonces();
-  }, [messages, sentMessages, annonceTitles, db]);
+  }, [messages, sentMessages, user, firestoreError, userDocLoaded, handleFirestoreError]);
 
   useEffect(() => {
     if (!user || firestoreError || !userDocLoaded) return;
-    let unsubs: Array<() => void> = [];
+    const unsubs: Array<() => void> = [];
     setLoadingAnnonces(true);
 
   const attach = (qAny: any, label: string, fallbackField: "uid" | "ownerId" | "userId" = "uid") => {
@@ -905,7 +908,7 @@ export default function DashboardPage() {
         try { u(); } catch {}
       });
     };
-  }, [user, firestoreError, userDocLoaded]);
+  }, [user, firestoreError, userDocLoaded, handleFirestoreError, createdAtMs]);
 
   // Option: désactiver la pagination classique (le temps réel s’en charge)
   useEffect(() => { setHasMore(false); }, []);
@@ -927,7 +930,7 @@ export default function DashboardPage() {
       setMesAnnonces(prev => prev.filter(a => !selectedIds.includes(a.id)));
       clearSelection();
       showToast("success", "Sélection supprimée ✅");
-    } catch (e) {
+    } catch {
       showToast("error", "Erreur lors de la suppression multiple ❌");
     }
   };
@@ -1394,7 +1397,7 @@ export default function DashboardPage() {
                               </Link>
                             </div>
                             <div className="mb-2 text-gray-700">
-                              <span className="font-semibold">À :</span> Propriétaire de l'annonce
+                              <span className="font-semibold">À :</span> Propriétaire de l&apos;annonce
                             </div>
                             <div className="mb-2 text-gray-700">
                               <span className="font-semibold">Message :</span>{" "}
@@ -1460,9 +1463,11 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="mt-4 rounded-lg border border-slate-200 p-4 flex flex-col sm:flex-row gap-4">
-                  <img
+                  <Image
                     src={colocImageUrl || defaultColocImg}
                     alt="Photo de profil"
+                    width={128}
+                    height={128}
                     className="w-32 h-32 object-cover rounded-lg border"
                     style={{ cursor: 'pointer' }}
                     onClick={() => {
@@ -1559,7 +1564,7 @@ export default function DashboardPage() {
                       <div className="font-medium">{colocFumeur ? 'Oui' : 'Non'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">🐾 J'ai des animaux</div>
+                      <div className="text-sm text-slate-500">🐾 J&apos;ai des animaux</div>
                       <div className="font-medium">{colocAnimaux ? 'Oui' : 'Non'}</div>
                     </div>
                     <div>
@@ -1611,7 +1616,7 @@ export default function DashboardPage() {
                       <div className="font-medium">{prefGenre || '-'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">🔢 Tranche d'âge souhaitée</div>
+                      <div className="text-sm text-slate-500">🔢 Tranche d&apos;âge souhaitée</div>
                       <div className="font-medium">{(prefAgeMin !== '' || prefAgeMax !== '') ? `${prefAgeMin !== '' ? prefAgeMin : '—'} - ${prefAgeMax !== '' ? prefAgeMax : '—'}` : '-'}</div>
                     </div>
                   </div>
@@ -1623,8 +1628,7 @@ export default function DashboardPage() {
                     <div className="flex gap-2 flex-wrap">
                       {colocPhotos.map((p, idx) => (
                         <div key={p.url || idx} className="w-20 h-20 rounded overflow-hidden border cursor-pointer" onClick={() => { setColocGalleryIndex(idx); setColocLightboxOpen(true); }}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={p.url} alt={`photo-${idx}`} className="w-full h-full object-cover" />
+                          <Image src={p.url} alt={`photo-${idx}`} width={80} height={80} className="w-full h-full object-cover" sizes="80px" />
                         </div>
                       ))}
                     </div>

@@ -1,8 +1,9 @@
 "use client";
 import { Fragment, useEffect, useState } from "react";
+import Image from "next/image";
 import dynamic from "next/dynamic";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { toast as appToast } from "@/components/Toast";
+// /* import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+// import { toast as appToast } from "@/components/Toast"; */
 
 const PhotoUploader = dynamic(() => import("@/components/PhotoUploader"), { ssr: false });
 
@@ -53,7 +54,7 @@ export default function AnnonceModal({
   const [equipements, setEquipements] = useState("");
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const [uploading] = useState(false);
 
   // PhotoUploader fournit UI pour multi-upload/local storage et sélection de la photo principale
   // import dynamique pour éviter de charger côté serveur
@@ -76,30 +77,6 @@ export default function AnnonceModal({
     }
   }, [annonce]);
 
-  const uploadAnnoncePhotos = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    setUploading(true);
-    try {
-      const storage = getStorage();
-      const uploaded: string[] = [];
-      await Promise.all(
-        Array.from(files).map(async (file) => {
-          const r = ref(storage, `annonces/${annonce?.id || "new"}/${Date.now()}-${file.name}`);
-          await uploadBytes(r, file);
-          const url = await getDownloadURL(r);
-          uploaded.push(url);
-        })
-      );
-      setPhotos((prev) => [...prev, ...uploaded]);
-      if (!imageUrl && uploaded[0]) setImageUrl(uploaded[0]);
-      appToast.success(`${uploaded.length} photo(s) ajoutée(s)`);
-    } catch {
-      appToast.error("Échec de l’upload des photos.");
-    } finally {
-      setUploading(false);
-    }
-  };
-  const removePhoto = (url: string) => setPhotos((prev) => prev.filter((u) => u !== url));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,7 +141,9 @@ export default function AnnonceModal({
             <div className="mt-2">
               <div className="text-sm text-slate-500">Photo principale actuelle</div>
               {imageUrl ? (
-                <img src={imageUrl} alt="cover" className="w-16 h-12 object-cover rounded border mt-1" />
+                <div className="w-16 h-12 relative rounded border mt-1 overflow-hidden">
+                  <Image src={imageUrl} alt="cover" fill className="object-cover" sizes="64px" />
+                </div>
               ) : (
                 <div className="text-slate-600">Aucune photo sélectionnée</div>
               )}

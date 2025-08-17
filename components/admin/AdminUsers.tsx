@@ -1,12 +1,13 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import PhotoUploader from "../PhotoUploader";
+import { useEffect, useState } from "react";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { translateFirebaseError } from "@/lib/firebaseErrors";
 import {
   listUsers,
-  sendResetTo,
+  updateUserDoc,
+  deleteUserDoc,
+  createUserDoc,
   normalizeUsers,
 } from "@/lib/services/userService";
 
@@ -17,33 +18,12 @@ export default function AdminUsers({
 }) {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  type EditedUser = { email: string; displayName: string; role: string; ville?: string; telephone?: string; photos?: string[] };
-  type UserRow = { id: string; email: string; displayName?: string; role?: string; ville?: string; telephone?: string; photos?: string[]; [key: string]: any };
+  type EditedUser = { email: string; displayName: string; role: string; ville?: string; telephone?: string };
   const [editedUsers, setEditedUsers] = useState<{ [userId: string]: EditedUser }>({});
   const [editing, setEditing] = useState<{ [userId: string]: boolean }>({});
   const [newUser, setNewUser] = useState({ email: "", displayName: "", role: "", ville: "", telephone: "" });
   const [confirmModal, setConfirmModal] = useState<string | null>(null);
   const [normalizing, setNormalizing] = useState(false);
-  const [sort, setSort] = useState<{ key: "email"|"displayName"|"role"|"type"; dir: "asc"|"desc" }>({ key: "email", dir: "asc" });
-
-  const computeType = (u: any) => (u.providerId === "google.com" || (u.email && u.email.endsWith("@gmail.com") && !u.passwordHash)) ? "Google" : "Email";
-  const sortedUsers = useMemo(() => {
-    const arr = [...users];
-    arr.sort((a: any, b: any) => {
-      const dirMul = sort.dir === "asc" ? 1 : -1;
-      let va: any, vb: any;
-      switch (sort.key) {
-        case "displayName": va = (a.displayName || "").toString().toLowerCase(); vb = (b.displayName || "").toString().toLowerCase(); break;
-        case "role": va = (a.role || "").toString().toLowerCase(); vb = (b.role || "").toString().toLowerCase(); break;
-        case "type": va = computeType(a).toLowerCase(); vb = computeType(b).toLowerCase(); break;
-        default: va = (a.email || "").toString().toLowerCase(); vb = (b.email || "").toString().toLowerCase();
-      }
-      if (va < vb) return -1 * dirMul;
-      if (va > vb) return 1 * dirMul;
-      return 0;
-    });
-    return arr;
-  }, [users, sort]);
 
   // Abonnement temps réel aux utilisateurs
   useEffect(() => {
@@ -81,7 +61,6 @@ export default function AdminUsers({
         role: u.role || "user",
         ville: u.ville || "",
         telephone: u.telephone || "",
-        photos: Array.isArray((u as UserRow).photos) ? (u as UserRow).photos : [],
       },
     }));
   };
@@ -97,20 +76,13 @@ export default function AdminUsers({
     const edited = editedUsers[userId];
     if (!edited) return;
     try {
-      const res = await fetch('/api/user/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: userId,
-          email: edited.email,
-          displayName: edited.displayName,
-          role: edited.role,
-          ville: edited.ville,
-          telephone: edited.telephone,
-          photos: edited.photos || [],
-        }),
+      await updateUserDoc(userId, {
+        email: edited.email,
+        displayName: edited.displayName,
+        role: edited.role,
+        ...(edited.ville !== undefined ? { ville: edited.ville || "" } : {}),
+        ...(edited.telephone !== undefined ? { telephone: edited.telephone || "" } : {}),
       });
-      if (!res.ok) throw new Error('Erreur API update user');
       setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...edited } : u)));
       setEditing((prev) => ({ ...prev, [userId]: false }));
       setEditedUsers((prev) => {
@@ -131,12 +103,7 @@ export default function AdminUsers({
   const confirmDelete = async () => {
     if (!confirmModal) return;
     try {
-      const res = await fetch('/api/user/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: confirmModal }),
-      });
-      if (!res.ok) throw new Error('Erreur API delete user');
+      await deleteUserDoc(confirmModal);
       setUsers((prev) => prev.filter((u) => u.id !== confirmModal));
       showToast("success", "Utilisateur supprimé avec succès !");
     } catch (e: any) {
@@ -152,8 +119,19 @@ export default function AdminUsers({
       return;
     }
     try {
-      await sendResetTo(email);
-      showToast("success", `Un email de réinitialisation a été envoyé à ${email}`);
+      const newPassword = prompt(`Nouveau mot de passe pour ${email} (min 8 caractères)`);
+      if (!newPassword) return;
+      if (newPassword.length < 8) {
+        showToast("error", "Mot de passe trop court (min 8).");
+        return;
+      }
+      const res = await fetch("/api/admin/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, newPassword }),
+      });
+      if (!res.ok) throw new Error("Erreur API set-password");
+      showToast("success", `Mot de passe mis à jour pour ${email}`);
     } catch (e: any) {
       console.error("[AdminUsers][ResetPassword]", e);
       showToast("error", translateFirebaseError(e?.code) || "Erreur lors de la réinitialisation.");
@@ -204,18 +182,13 @@ export default function AdminUsers({
               return;
             }
             try {
-              const res = await fetch('/api/user/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  email: newUser.email,
-                  displayName: newUser.displayName,
-                  role: newUser.role,
-                  ville: newUser.ville,
-                  telephone: newUser.telephone,
-                }),
+              await createUserDoc({
+                email: newUser.email,
+                displayName: newUser.displayName,
+                role: newUser.role,
+                ...(newUser.ville ? { ville: newUser.ville } : {}),
+                ...(newUser.telephone ? { telephone: newUser.telephone } : {}),
               });
-              if (!res.ok) throw new Error('Erreur API create user');
               showToast("success", `Utilisateur "${newUser.displayName || newUser.email}" créé !`);
               setNewUser({ email: "", displayName: "", role: "", ville: "", telephone: "" });
               fetchUsers();
@@ -295,7 +268,7 @@ export default function AdminUsers({
         ) : users.length === 0 ? (
           <p className="text-slate-500">Aucun utilisateur.</p>
         ) : (
-          sortedUsers.map((u) => {
+          users.map((u) => {
             const original = {
               email: u.email,
               displayName: u.displayName || "",
@@ -323,19 +296,7 @@ export default function AdminUsers({
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${typeCompte === "Google" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-700"}`}>
                     {typeCompte}
                   </span>
-                {/* Photos profil colocataire */}
-                <div className="mt-2">
-                  <label className="block text-xs text-slate-500 mb-1">Photos du profil colocataire</label>
-                  <PhotoUploader
-                    initial={Array.isArray((edited as EditedUser).photos) ? (edited as EditedUser).photos! : []}
-                    openOnClick={true}
-                    onChange={(list) => setEditedUsers(prev => ({
-                      ...prev,
-                      [u.id]: { ...(prev[u.id] || edited), photos: list.map(l => l.url) }
-                    }))}
-                  />
                 </div>
-              </div>
                 <div className="grid grid-cols-1 gap-2">
                   <input
                     type="email"
@@ -451,27 +412,30 @@ export default function AdminUsers({
           <table className="w-full text-sm">
             <thead className="bg-slate-50 sticky top-0">
               <tr>
-                <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => setSort(prev => prev.key === "email" ? { key: "email", dir: prev.dir === "asc" ? "desc" : "asc" } : { key: "email", dir: "asc" })}>Email <span className="text-xs opacity-60">{sort.key !== "email" ? "↕" : sort.dir === "asc" ? "▲" : "▼"}</span></th>
-                <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => setSort(prev => prev.key === "displayName" ? { key: "displayName", dir: prev.dir === "asc" ? "desc" : "asc" } : { key: "displayName", dir: "asc" })}>Nom <span className="text-xs opacity-60">{sort.key !== "displayName" ? "↕" : sort.dir === "asc" ? "▲" : "▼"}</span></th>
-                <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => setSort(prev => prev.key === "role" ? { key: "role", dir: prev.dir === "asc" ? "desc" : "asc" } : { key: "role", dir: "asc" })}>Rôle <span className="text-xs opacity-60">{sort.key !== "role" ? "↕" : sort.dir === "asc" ? "▲" : "▼"}</span></th>
-                <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => setSort(prev => prev.key === "type" ? { key: "type", dir: prev.dir === "asc" ? "desc" : "asc" } : { key: "type", dir: "asc" })}>Type de compte <span className="text-xs opacity-60">{sort.key !== "type" ? "↕" : sort.dir === "asc" ? "▲" : "▼"}</span></th>
+                <th className="py-2 px-3 text-left">Email</th>
+                <th className="py-2 px-3 text-left">Nom</th>
+                <th className="py-2 px-3 text-left">Rôle</th>
+                <th className="py-2 px-3 text-left">Type de compte</th>
                 <th className="py-2 px-3 text-left">Actions</th>
               </tr>
             </thead>
             <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50">
-              {sortedUsers.map((u) => {
+              {users.map((u) => {
                 const isEditing = !!editing[u.id];
-                const original: EditedUser = { email: u.email, displayName: u.displayName || "", role: u.role || "user", ville: u.ville || "", telephone: u.telephone || "", photos: Array.isArray((u as UserRow).photos) ? (u as UserRow).photos : [] };
+                const original = { email: u.email, displayName: u.displayName || "", role: u.role || "user", ville: u.ville || "", telephone: u.telephone || "" };
                 const edited = isEditing ? (editedUsers[u.id] || original) : original;
                 const noChange =
                   edited.email === original.email &&
                   (edited.displayName || "") === (original.displayName || "") &&
                   edited.role === original.role;
                 // Détection du type de compte
-                const typeCompte = computeType(u);
+                let typeCompte = "Email";
+                if (u.providerId === "google.com" || (u.email && u.email.endsWith("@gmail.com") && !u.passwordHash)) {
+                  typeCompte = "Google";
+                }
                 return (
                   <tr key={u.id} className="hover:bg-blue-50/50 transition">
-                    <td className="py-2 px-3 align-middle">
+                    <td className="py-2 px-3">
                       <input
                         type="email"
                         value={edited.email}
@@ -485,7 +449,7 @@ export default function AdminUsers({
                         disabled={!isEditing}
                       />
                     </td>
-                    <td className="py-2 px-3 align-middle">
+                    <td className="py-2 px-3">
                       <input
                         type="text"
                         value={edited.displayName}
@@ -499,7 +463,7 @@ export default function AdminUsers({
                         disabled={!isEditing}
                       />
                     </td>
-                    <td className="py-2 px-3 align-middle">
+                    <td className="py-2 px-3">
                       <select
                         value={edited.role}
                         onChange={e =>
@@ -515,23 +479,12 @@ export default function AdminUsers({
                         <option value="admin">admin</option>
                       </select>
                     </td>
-                    <td className="py-2 px-3 align-middle">
+                    <td className="py-2 px-3">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${typeCompte === "Google" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-700"}`}>
                         {typeCompte}
                       </span>
                     </td>
-                    <td className="py-2 px-3 align-middle flex items-center gap-2">
-                      {/* Photos profil colocataire */}
-                      <div className="min-w-[120px]">
-                        <PhotoUploader
-                          initial={Array.isArray((edited as EditedUser).photos) ? (edited as EditedUser).photos! : []}
-                          openOnClick={true}
-                          onChange={(list) => setEditedUsers((prev) => ({
-                            ...prev,
-                            [u.id]: { ...(prev[u.id] || edited), photos: list.map(l => l.url) }
-                          }))}
-                        />
-                      </div>
+                    <td className="py-2 px-3 flex items-center gap-2">
                       {!isEditing ? (
                         <button
                           type="button"

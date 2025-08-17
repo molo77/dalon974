@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { auth } from "@/lib/firebase";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import AdminUsers from "@/components/admin/AdminUsers";
 import ExpandableImage from "@/components/ExpandableImage"; // New import
@@ -29,6 +28,7 @@ import AnnonceModal from "@/components/AnnonceModal";
 const ColocPhotoSection = dynamic(() => import("@/components/ColocPhotoSection"), { ssr: false });
 import { updateAnnonce } from "@/lib/services/annonceService";
 import Link from "next/link"; // + import
+import Image from "next/image";
 import { toast as appToast } from "@/components/Toast";
 
 // Helper: slug
@@ -72,11 +72,13 @@ const SUB_COMMUNES: { name: string; cp: string; parent: string }[] = [
 ];
 
 export default function AdminPage() {
-  const [user, loading] = useAuthState(auth);
+  const { data: session, status } = useSession();
+  const user = session?.user as any;
+  const loading = status === "loading";
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"annonces" | "users" | "colocs">("annonces");
-  const [toast, setToast] = useState<{ type: "success" | "error"; message: string; id?: string } | null>(null);
-  const toastTimeout = useRef<NodeJS.Timeout | null>(null);
+  // toast state removed (unused)
+  // toastTimeout removed
   const [seeding, setSeeding] = useState(false);
   const [adminAnnonces, setAdminAnnonces] = useState<any[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
@@ -139,10 +141,6 @@ export default function AdminPage() {
   const showToast = (type: "success" | "error", message: string) => {
     // Toaster global
     appToast[type](message);
-    // (optionnel) conservation de l’ancien état local si réutilisé ailleurs
-    setToast({ type, message, id: Date.now().toString() });
-    if (toastTimeout.current) clearTimeout(toastTimeout.current);
-    toastTimeout.current = setTimeout(() => setToast(null), 3500);
   };
 
   // Utilitaire: formatage robuste d’un champ createdAt (Timestamp/Date/number/string)
@@ -612,7 +610,7 @@ export default function AdminPage() {
   };
 
   // Migration "colocataires" -> "colocProfiles"
-  const adminMigrateColocatairesToProfiles = async () => {
+  const _adminMigrateColocatairesToProfiles = async () => {
     try {
       setAdminLoading(true);
       // Tente d'abord une lecture en liste (peut être interdite par les règles)
@@ -1417,7 +1415,7 @@ export default function AdminPage() {
                     {/* Centres d'intérêt */}
                     {Array.isArray(colocDetail.interets) && colocDetail.interets.length > 0 && (
                       <div>
-                        <div className="text-sm font-medium text-slate-700 mb-1">Centres d'intérêt</div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Centres d&apos;intérêt</div>
                         <div className="flex flex-wrap gap-2">
                           {colocDetail.interets.map((i: string) => (
                             <span key={i} className="px-2 py-1 rounded-full text-xs bg-green-50 text-green-700 border border-green-200">
@@ -1454,7 +1452,7 @@ export default function AdminPage() {
                         <div className="text-sm font-medium text-slate-700 mb-1">Photos</div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                           {colocDetail.photos.map((u: string, idx: number) => (
-                            <img key={`${u}-${idx}`} src={u} alt={`photo-${idx}`} className="w-28 h-28 object-cover rounded-md border" />
+                            <Image key={`${u}-${idx}`} src={u} alt={`photo-${idx}`} width={112} height={112} className="w-28 h-28 object-cover rounded-md border" />
                           ))}
                         </div>
                       </div>

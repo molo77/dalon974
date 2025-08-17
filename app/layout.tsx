@@ -4,7 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "leaflet/dist/leaflet.css"; // + Leaflet CSS
 import Header from "@/components/Header"; 
-import { AuthProvider } from "@/components/AuthProvider";
+import ClientProviders from "@/components/ClientProviders";
 import { GlobalToast } from "@/components/Toast";
 
 const geistSans = Geist({
@@ -43,14 +43,14 @@ export default function RootLayout({
             } catch (_) {}
           `}
         </Script>
-        <AuthProvider>
+        <ClientProviders>
           <Header />
           <main className="mx-auto w-[85%] max-w-full px-4 sm:px-6 lg:px-8 py-6">
             {children}
           </main>
           {/* Toaster global pour toute l’application */}
           <GlobalToast />
-        </AuthProvider>
+        </ClientProviders>
       </body>
     </html>
   );

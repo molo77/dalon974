@@ -1,6 +1,7 @@
 "use client";
 
-import React, { Fragment, useEffect, useState } from "react";
+import React, { Fragment, useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import { Dialog, Transition } from "@headlessui/react";
 
 export default function ImageLightbox({
@@ -13,7 +14,9 @@ export default function ImageLightbox({
   onClose: () => void;
 }) {
   const [index, setIndex] = useState(initialIndex);
-  const [loaded, setLoaded] = useState(false);
+  const [, setLoaded] = useState(false);
+  const prev = useCallback(() => setIndex((i: number) => (i - 1 + images.length) % images.length), [images.length]);
+  const next = useCallback(() => setIndex((i: number) => (i + 1) % images.length), [images.length]);
 
   // ensure index follows initialIndex but stays within bounds when images change
   useEffect(() => {
@@ -24,21 +27,15 @@ export default function ImageLightbox({
   }, [initialIndex, images]);
 
   useEffect(() => {
-    function onKey(e: KeyboardEvent | KeyboardEventInit) {
-      // @ts-ignore
-      const key = (e as any).key || (e as any).code;
+    const handler = (e: KeyboardEvent) => {
+      const key = e.key || (e as any).code;
       if (key === "Escape") onClose();
       if (key === "ArrowLeft") prev();
       if (key === "ArrowRight") next();
-    }
-    const handler = (e: KeyboardEvent) => onKey(e);
+    };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, images]);
-
-  const prev = () => setIndex((i: number) => (i - 1 + images.length) % images.length);
-  const next = () => setIndex((i: number) => (i + 1) % images.length);
+  }, [index, images, onClose, prev, next]);
 
   if (!images || images.length === 0) return null;
 
@@ -78,10 +75,12 @@ export default function ImageLightbox({
               <button className="absolute top-4 right-4 text-white text-2xl z-60 pointer-events-auto" onClick={onClose} aria-label="Fermer">✖</button>
               <button className="absolute left-4 text-white text-3xl p-2 z-60 pointer-events-auto" onClick={prev} aria-label="Précédent">◀</button>
               <div className="flex items-center justify-center">
-                <img
+                <Image
                   src={images[index]}
                   alt={`img-${index + 1}`}
-                  className="max-w-full max-h-[80vh] rounded shadow-lg"
+                  width={1200}
+                  height={800}
+                  className="max-w-full max-h-[80vh] rounded shadow-lg object-contain"
                   onLoad={() => setLoaded(true)}
                 />
               </div>

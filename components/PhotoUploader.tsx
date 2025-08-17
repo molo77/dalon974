@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import ConfirmModal from "./ConfirmModal";
 import dynamic from "next/dynamic";
 // thumbnails should not open the global lightbox here
@@ -42,6 +43,7 @@ export default function PhotoUploader({
   const lastInitRef = useRef<string | null>(null);
 
   // Keep items in sync when `initial` prop changes (e.g. editing an annonce)
+  const initialKey = JSON.stringify(initial || []);
   useEffect(() => {
     // build items from initial URLs using stable ids (based on url)
     const initUrls = (initial || []).map((u) => String(u).trim()).filter(Boolean);
@@ -64,7 +66,7 @@ export default function PhotoUploader({
       lastInitRef.current = initKey;
     }
     // only re-run when the value of `initial` or `initialMain` changes
-  }, [JSON.stringify(initial || []), initialMain]);
+  }, [initialKey, initialMain, items, initial]);
 
   // optional site-wide lightbox for thumbnails
   const ImageLightbox = dynamic(() => import("./ImageLightbox"), { ssr: false });
@@ -164,7 +166,7 @@ export default function PhotoUploader({
     // abort upload if in progress
     const currentXhr = xhrs.current[id];
     if (currentXhr) {
-      try { currentXhr.abort(); } catch (e) { /* ignore */ }
+      try { currentXhr.abort(); } catch { /* ignore */ }
       xhrs.current[id] = null;
     }
 
@@ -275,10 +277,12 @@ export default function PhotoUploader({
               role={openOnClick ? "button" : undefined}
             >
             <div className="w-28 h-28 rounded-lg overflow-hidden bg-gray-100 border relative">
-              <img
+              <Image
                 src={it.previewUrl}
                 alt="photo"
-                className="w-full h-full object"
+                width={112}
+                height={112}
+                className="w-full h-full object-cover"
                 style={{ cursor: openOnClick ? 'pointer' : 'default' }}
                 tabIndex={0}
               />

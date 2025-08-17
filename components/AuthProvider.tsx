@@ -1,57 +1,26 @@
 "use client";
-import { ReactNode, useEffect, useState, createContext, useContext } from "react";
-import { getAuth, onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { ReactNode, createContext, useContext } from "react";
+import { useSession } from "next-auth/react";
+import type { User as NextAuthUser } from "next-auth";
 
 type AuthContextType = {
-  user: User | null;
+  user: { id: string; email?: string | null; name?: string | null } | null;
   loading: boolean;
   role?: string | null;
+  isAdmin?: boolean;
 };
 
 const AuthContext = createContext<AuthContextType>({ user: null, loading: true });
 
-// Désactive les logs par défaut
-const DEBUG_AUTH = false;
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [role, setRole] = useState<string | null>(null);
-
-  useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      setUser(u);
-      setLoading(false);
-
-      if (u) {
-        const userDoc = await getDoc(doc(db, "users", u.uid)); // Correction ici
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          // Supprimer l’affichage forcé :
-          // console.log("Données Firestore utilisateur :", data);
-
-          // Optionnel: log only en debug
-          if (DEBUG_AUTH && process.env.NODE_ENV !== "production") {
-            console.debug("[AuthProvider] Firestore user doc:", data);
-          }
-
-          setRole(data.role ?? null);
-        } else {
-          console.log("Aucun document utilisateur trouvé pour", u.uid); // Debug
-          setRole(null);
-        }
-      } else {
-        setRole(null);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+  const { data, status } = useSession();
+  const sessionUser = data?.user as (NextAuthUser & { id?: string; role?: string }) | undefined;
+  const role = (sessionUser as any)?.role || null;
+  const isAdmin = role === "admin";
+  const user = sessionUser ? { id: (sessionUser as any).id || "", uid: (sessionUser as any).id || "", email: sessionUser.email || null, name: sessionUser.name || null } : null;
 
   return (
-    <AuthContext.Provider value={{ user, loading, role }}>
+    <AuthContext.Provider value={{ user, loading: status === "loading", role, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );

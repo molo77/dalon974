@@ -1,27 +1,29 @@
 "use client";
 
-import { auth, db } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import MessageModal from "@/components/MessageModal";
 import AnnonceModal from "@/components/AnnonceModal";
 import { doc, getDoc } from "firebase/firestore";
-import { useAuthState } from "react-firebase-hooks/auth";
+import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import ExpandableImage from "@/components/ExpandableImage";
 
 const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr: false });
-import { getUserRole } from "@/lib/services/userService";
+import { useAuth } from "@/components/AuthProvider";
 import { updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/lib/services/annonceService";
 
 export default function AnnonceDetailPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
-  const [user] = useAuthState(auth);
+  const { data } = useSession();
+  const user = data?.user as any;
 
   const [annonce, setAnnonce] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const { isAdmin } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -41,20 +43,7 @@ export default function AnnonceDetailPage() {
     return () => { mounted = false; };
   }, [id]);
 
-  useEffect(() => {
-    const loadRole = async () => {
-      if (!user) { setUserRole(null); return; }
-      try {
-        const role = await getUserRole(user.uid);
-        setUserRole(role || null);
-      } catch {
-        setUserRole(null);
-      }
-    };
-    loadRole();
-  }, [user]);
-
-  const isAdmin = userRole === "admin";
+  // Rôle admin fourni par AuthProvider (temps réel)
   const isOwner = useMemo(() => {
     if (!user || !annonce) return false;
     return annonce.uid === user.uid || annonce.ownerId === user.uid;
@@ -236,8 +225,7 @@ function GalleryBlock({ images }: { images: string[] }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {images.map((u, i) => (
           <div key={i} className="block rounded-lg overflow-hidden border p-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={u} alt={`photo-${i+1}`} className="w-full h-28 object-cover" />
+            <Image src={u} alt={`photo-${i+1}`} width={224} height={112} className="w-full h-28 object-cover" sizes="(max-width: 640px) 50vw, 25vw" />
           </div>
         ))}
       </div>

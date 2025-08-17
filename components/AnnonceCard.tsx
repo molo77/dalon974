@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { useState } from "react";
+import Image from "next/image";
 import dynamic from "next/dynamic";
 
 const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr: false });
@@ -21,38 +21,27 @@ type AnnonceProps = {
   // NOUVEAU: sous-communes couvertes par les zones sélectionnées
   subCommunesLabel?: string;
 };
-
-export default function AnnonceCard({
-  id,
-  titre,
-  ville,
-  prix,
-  surface,
-  description,
-  createdAt,
-  userEmail,
-  onDelete,
-  onEdit,
-  imageUrl,
-  zonesLabel,
-  subCommunesLabel,
-}: AnnonceProps) {
+export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.MouseEvent<HTMLDivElement> | React.KeyboardEvent<HTMLDivElement>) => void }) {
+  const {
+  id: _id,
+    titre,
+    ville,
+    prix,
+    surface,
+    description,
+    createdAt,
+  userEmail: _userEmail,
+    onDelete,
+    onEdit,
+    imageUrl,
+    zonesLabel,
+    subCommunesLabel,
+    onClick,
+  } = props;
   const defaultAnnonceImg = "/images/annonce-holder.svg";
   const defaultColocImg = "/images/coloc-holder.svg";
   const thumbUrl = imageUrl || (zonesLabel ? defaultColocImg : defaultAnnonceImg);
-  // Détermine l'origine pour le retour (accueil ou dashboard)
-  const handleClick = () => {
-    if (typeof window !== "undefined") {
-      // Détecte la page d'origine
-      const origin =
-        window.location.pathname.startsWith("/dashboard")
-          ? "dashboard"
-          : "home";
-      document.cookie = `annonceOrigin=${origin};path=/`;
-    }
-  };
-
-  const [showMessageModal, setShowMessageModal] = useState(false);
+  
   const [openImg, setOpenImg] = useState(false);
 
   const formatDate = (v: any): string | null => {
@@ -76,16 +65,30 @@ export default function AnnonceCard({
   const dateLabel = formatDate(createdAt);
 
   return (
-    <Link
-      href={`/annonce/${id}`}
-      className="block w-full"
-      onClick={handleClick}
+    <div
+      className="block w-full cursor-pointer"
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick && onClick(e);
+        }
+      }}
     >
       <div className="relative border rounded-xl shadow p-4 w-full bg-white hover:bg-gray-50 transition">
         <div className="flex items-start gap-4">
           {/* miniature carrée */}
-          <div className="flex-shrink-0 w-28 h-28 rounded-lg overflow-hidden bg-gray-100">
-            <img src={thumbUrl} alt={titre || "annonce"} className="w-full h-full object-cover" onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); setOpenImg(true); }} />
+          <div className="flex-shrink-0 w-28 h-28 rounded-lg overflow-hidden bg-gray-100 relative">
+            <Image
+              src={thumbUrl}
+              alt={titre || "annonce"}
+              fill
+              className="object-cover"
+              sizes="112px"
+              onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); setOpenImg(true); }}
+            />
           </div>
 
           <div className="flex-1 min-w-0">
@@ -177,7 +180,7 @@ export default function AnnonceCard({
       {openImg && (
         <ImageLightbox images={[thumbUrl]} initialIndex={0} onClose={() => setOpenImg(false)} />
       )}
-    </Link>
+    </div>
   );
 }
 

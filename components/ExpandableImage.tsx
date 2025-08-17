@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import dynamic from "next/dynamic";
 
 const ImageLightbox = dynamic(() => import("./ImageLightbox"), { ssr: false });
@@ -29,10 +30,11 @@ export default function ExpandableImage({
 
   return (
     <div className={`relative inline-block group`}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src={src}
-        alt={alt}
+        alt={alt || ''}
+        width={800}
+        height={800}
         className={className}
         style={{ cursor: imgs.length ? 'zoom-in' : 'default' }}
         onClick={openLightbox}

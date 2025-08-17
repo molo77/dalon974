@@ -2,20 +2,20 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { auth } from "@/lib/firebase";
-import { useRouter, usePathname } from "next/navigation";
+import Image from "next/image";
+import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 
 export default function Header() {
-  const [user] = useAuthState(auth);
+  const { data } = useSession();
+  const user = data?.user as any;
   const [mobileOpen, setMobileOpen] = useState(false);
   const router = useRouter();
-  const pathname = usePathname();
-  const { role, loading } = useAuth();
+  const { isAdmin } = useAuth();
 
   const handleLogout = async () => {
-    await auth.signOut();
+  await signOut({ callbackUrl: "/" });
     router.push("/login");
   };
 
@@ -50,10 +50,12 @@ export default function Header() {
                 className="flex items-center gap-2 hover:underline"
               >
                 {user.photoURL ? (
-                  <img
+                  <Image
                     src={user.photoURL}
                     alt="Avatar"
-                    className="w-8 h-8 rounded-full border"
+                    width={32}
+                    height={32}
+                    className="w-8 h-8 rounded-full border object-cover"
                   />
                 ) : (
                   <span className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
@@ -71,12 +73,12 @@ export default function Header() {
                 Déconnexion
               </button>
               {/* Bouton accès admin après Déconnexion */}
-              {role === "admin" && (
+          {isAdmin && (
                 <Link
                   href="/admin"
                   className="bg-blue-700 text-white px-3 py-1.5 rounded hover:bg-blue-800 font-semibold text-sm ml-2"
                 >
-                  Accéder à l'administration
+            Accéder à l&apos;administration
                 </Link>
               )}
             </>
@@ -106,10 +108,12 @@ export default function Header() {
               >
                 <div className="flex items-center justify-center gap-2">
                   {user.photoURL ? (
-                    <img
+                    <Image
                       src={user.photoURL}
                       alt="Avatar"
-                      className="w-8 h-8 rounded-full border"
+                      width={32}
+                      height={32}
+                      className="w-8 h-8 rounded-full border object-cover"
                     />
                   ) : (
                     <span className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
@@ -131,13 +135,13 @@ export default function Header() {
                 Déconnexion
               </button>
               {/* Bouton accès admin après Déconnexion en mobile */}
-              {role === "admin" && (
+  {isAdmin && (
                 <Link
                   href="/admin"
                   className="bg-blue-700 text-white px-3 py-1.5 rounded hover:bg-blue-800 font-semibold text-sm text-center mt-1"
                   onClick={toggleMobile}
                 >
-                  Accéder à l'administration
+          Accéder à l&apos;administration
                 </Link>
               )}
             </>

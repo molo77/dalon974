@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { collection, getDocs, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-
+import { listMessagesForOwner } from "@/lib/services/messageService";
 
 export default function useMessagesData(params: {
   user: any;
@@ -18,12 +18,23 @@ export default function useMessagesData(params: {
     if (!user || firestoreError || !userDocLoaded) return;
     (async () => {
       try {
-        const res = await fetch(`/api/messages?owner=${encodeURIComponent(user.uid)}`);
-        if (!res.ok) throw new Error('Erreur API messages');
-        const data = await res.json();
-        setMessages(data.messages || []);
+        const msgs = await listMessagesForOwner(user.uid);
+        setMessages(msgs);
       } catch (err: any) {
-        handleFirestoreError(err, "messages-api");
+        if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
+          try {
+            const q = query(collection(db, "messages"), where("annonceOwnerId", "==", user.uid));
+            const snap = await getDocs(q);
+            const unsorted = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            unsorted.sort((a: any, b: any) => (b?.createdAt?.seconds || 0) - (a?.createdAt?.seconds || 0));
+            setMessages(unsorted);
+            showToast("info", "Index messages en cours de création. Tri appliqué côté client.");
+          } catch (fallbackErr: any) {
+            handleFirestoreError(fallbackErr, "messages-fallback");
+          }
+        } else {
+          handleFirestoreError(err, "messages");
+        }
       }
     })();
   }, [user, firestoreError, userDocLoaded]);
@@ -55,7 +66,7 @@ export default function useMessagesData(params: {
                 },
                 (e2) => handleFirestoreError(e2, "messages-fallback-snapshot")
               );
-              
+              showToast("info", "Index messages en cours de création. Tri appliqué côté client.");
             } catch (inner) {
               handleFirestoreError(inner, "messages-fallback-setup");
             }
@@ -97,7 +108,7 @@ export default function useMessagesData(params: {
                 },
                 (e2) => handleFirestoreError(e2, "sent-fallback-snapshot")
               );
-              
+              showToast("info", "Index messages envoyés en cours de création. Tri appliqué côté client.");
             } catch (inner) {
               handleFirestoreError(inner, "sent-fallback-setup");
             }

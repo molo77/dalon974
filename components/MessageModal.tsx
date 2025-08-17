@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { auth } from "@/lib/firebase";
+import { useSession } from "next-auth/react";
 
 export default function MessageModal({
   annonceId,
@@ -19,7 +18,8 @@ export default function MessageModal({
   onClose: () => void;
   onSent?: () => void;
 }) {
-  const [user] = useAuthState(auth);
+  const { data } = useSession();
+  const user = data?.user as any;
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
