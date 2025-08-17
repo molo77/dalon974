@@ -1,5 +1,4 @@
 import { getAuth, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, User } from "firebase/auth";
-import { ensureUserDoc } from "./userService";
 
 export async function signInEmail(email: string, password: string) {
   const auth = getAuth();
@@ -12,11 +11,17 @@ export async function signInGoogle() {
   const provider = new GoogleAuthProvider();
   const result = await signInWithPopup(auth, provider);
   const user = result.user;
-  await ensureUserDoc(user.uid, {
-    email: user.email || "",
-    displayName: user.displayName || "",
-    role: "user",
-    providerId: "google.com",
+  // Appel API côté serveur pour créer/mettre à jour l'utilisateur
+  await fetch('/api/user/ensure', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      uid: user.uid,
+      email: user.email || "",
+      displayName: user.displayName || "",
+      role: "user",
+      providerId: "google.com",
+    }),
   });
   return user;
 }

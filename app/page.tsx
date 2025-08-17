@@ -1,6 +1,10 @@
-"use client";
 
-import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+"use client";
+import ColocProfileModal from "@/components/ColocProfileModal";
+import AnnonceDetailModal from "@/components/AnnonceDetailModal";
+
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import type { JSX } from "react";
 import {
   collection,
   getDocs,
@@ -15,27 +19,51 @@ import {
   getCountFromServer,
 } from "firebase/firestore";
 import type { Query, QuerySnapshot, DocumentData } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import dynamic from "next/dynamic";
 import ExpandableImage from "@/components/ExpandableImage";
-const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr: false });
 import AnnonceCard from "@/components/AnnonceCard";
+import ConfirmModal from "@/components/ConfirmModal";
+import AnnonceModal from "@/components/AnnonceModal";
+import { getUserRole } from "@/lib/services/userService";
+import { showToast } from "@/lib/toast";
 import CommuneZoneSelector from "@/components/CommuneZoneSelector";
 import useCommuneCp from "@/hooks/useCommuneCp";
 import { preloadReunionFeatures } from "@/lib/reunionGeo";
+const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr: false });
 
-// Helper: compare deux listes de slugs sans tenir compte de l’ordre
-const sameIds = (a: string[], b: string[]) => {
-  if (a === b) return true;
-  if (!Array.isArray(a) || !Array.isArray(b)) return false;
-  if (a.length !== b.length) return false;
-  const sa = [...a].sort();
-  const sb = [...b].sort();
-  for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return false;
-  return true;
-};
 
 export default function HomePage() {
+  // Helper: compare deux listes de slugs sans tenir compte de l’ordre
+  function sameIds(a: string[], b: string[]): boolean {
+    if (a === b) return true;
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    const sa = [...a].sort();
+    const sb = [...b].sort();
+    for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return false;
+    return true;
+  }
+  // État admin (doit être dans le composant !)
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [editAnnonce, setEditAnnonce] = useState<any|null>(null);
+  const [annonceDetail, setAnnonceDetail] = useState<any|null>(null);
+  const [deleteAnnonceId, setDeleteAnnonceId] = useState<string|null>(null);
+  const [editColoc, setEditColoc] = useState<any|null>(null);
+  const [deleteColocId, setDeleteColocId] = useState<string|null>(null);
+
+  // Récupère le rôle utilisateur au chargement
+  useEffect(() => {
+    (async () => {
+      try {
+        const user = auth.currentUser;
+        if (user) {
+          const role = await getUserRole(user.uid);
+          setUserRole(role);
+        }
+      } catch {}
+    })();
+  }, []);
   const [annonces, setAnnonces] = useState<any[]>([]);
   const [galleryIndex, setGalleryIndex] = useState<number>(0);
   const [lightboxOpen, setLightboxOpen] = useState<boolean>(false);
@@ -45,8 +73,8 @@ export default function HomePage() {
     if (!lightboxOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setLightboxOpen(false);
-      if (e.key === 'ArrowLeft') setGalleryIndex((i) => Math.max(0, i - 1));
-      if (e.key === 'ArrowRight') setGalleryIndex((i) => {
+  if (e.key === 'ArrowLeft') setGalleryIndex((i: number) => Math.max(0, i - 1));
+  if (e.key === 'ArrowRight') setGalleryIndex((i: number) => {
         const len = Array.isArray((colocDetail as any)?.photos) ? ((colocDetail as any).photos as string[]).length : 0;
         return Math.min(len - 1, i + 1);
       });
@@ -100,7 +128,7 @@ export default function HomePage() {
     );
 
   // Utilitaires pour correspondance commune <-> CP
-  const slugify = (s: string) =>
+  const slugify = (s: string): string =>
     (s || "")
       .normalize("NFD").replace(/\p{Diacritic}/gu, "")
       .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -284,14 +312,14 @@ export default function HomePage() {
     const parent = nameToParentSlug[norm];
     if (!parent) return; // non reconnue
   setSelectionSource("input");
-    setCommunesSelected((prev) => {
+    setCommunesSelected((prev: string[]) => {
       const next = Array.from(new Set([...(prev || []), parent]));
       // recalcul zones sur la même base "next"
-      setZonesSelected((pz) => {
-        const zones = computeZonesFromSlugs(next);
-        return sameIds(pz || [], zones) ? pz : zones;
+      setZonesSelected((pz: string[]) => {
+        const zones = computeZonesFromSlugs(next as string[]);
+        return sameIds((pz || []) as string[], zones) ? pz : zones;
       });
-      return sameIds(prev || [], next) ? prev : next;
+      return sameIds((prev || []) as string[], next) ? prev : next;
     });
     // Réinitialise le champ libre et le CP
     setVille("");
@@ -308,7 +336,7 @@ export default function HomePage() {
     if (tokens.length === 0) return 0;
     let added = 0;
   setSelectionSource("input");
-    setCommunesSelected((prev) => {
+    setCommunesSelected((prev: string[]) => {
       const set = new Set(prev || []);
       for (const t of tokens) {
         const norm = slugify(t);
@@ -316,12 +344,12 @@ export default function HomePage() {
         if (parent) set.add(parent);
       }
       const next = Array.from(set);
-      if (!sameIds(prev || [], next)) added = next.length - (prev?.length || 0);
-      setZonesSelected((pz) => {
-        const zones = computeZonesFromSlugs(next);
-        return sameIds(pz || [], zones) ? pz : zones;
+      if (!sameIds((prev || []) as string[], next)) added = next.length - (prev?.length || 0);
+      setZonesSelected((pz: string[]) => {
+        const zones = computeZonesFromSlugs(next as string[]);
+        return sameIds((pz || []) as string[], zones) ? pz : zones;
       });
-      return sameIds(prev || [], next) ? prev : next;
+      return sameIds((prev || []) as string[], next) ? prev : next;
     });
     // on nettoie le champ
     setVille("");
@@ -358,7 +386,7 @@ export default function HomePage() {
   const [filterMenuModes, setFilterMenuModes] = useState<Array<"map" | "commune" | "budget" | "criteres">>([]);
   const hasMode = useCallback((m: "map" | "commune" | "budget" | "criteres") => filterMenuModes.includes(m), [filterMenuModes]);
   const toggleMode = useCallback((m: "map" | "commune" | "budget" | "criteres") => {
-    setFilterMenuModes((prev) => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]);
+    setFilterMenuModes((prev: Array<"map" | "commune" | "budget" | "criteres">) => prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]);
   }, []);
 
   // Critères (onglet colocataires)
@@ -372,7 +400,7 @@ export default function HomePage() {
   const [countFiltered, setCountFiltered] = useState<number | null>(null);
 
   const clearAllSubs = () => {
-    subsRef.current.forEach((u) => { try { u(); } catch {} });
+  subsRef.current.forEach((u: () => void) => { try { u(); } catch {} });
     subsRef.current = [];
     // IMPORTANT: libérer le blocage de loadAnnonces
     setLoadingMore(false);
@@ -393,7 +421,7 @@ export default function HomePage() {
     return Array.from(
       new Set(
         (communesSelected || [])
-          .map((s) => altSlugToCanonical[s] || s)
+          .map((s: string) => altSlugToCanonical[s] || s)
           .filter(Boolean)
       )
     );
@@ -403,6 +431,17 @@ export default function HomePage() {
   const defaultColocImg = "/images/coloc-holder.svg";
 
   const loadAnnonces = async (append: boolean = false) => {
+    // Ne rien charger si aucun choix n’a été fait
+    if (activeHomeTab === null) return;
+    if (loadingMore || !hasMore || firestoreError) return;
+    // Debug: trace des appels
+    try { console.debug('[Accueil] loadAnnonces called', { append, activeHomeTab, loadingMore, hasMore, firestoreError, filtering }); } catch {}
+  
+    setLoadingMore(true);
+    if (!append) {
+      setFiltering(true);
+      pendingStreamsRef.current = 0;
+    }
     // Ne rien charger si aucun choix n’a été fait
     if (activeHomeTab === null) return;
     if (loadingMore || !hasMore || firestoreError) return;
@@ -471,7 +510,7 @@ export default function HomePage() {
               const arr = Array.isArray(d?.communesSlugs) ? d.communesSlugs : [];
               if (arr.length === 0) return false;
               const set = new Set(arr);
-              return communesSelected.every((s) => set.has(s));
+              return communesSelected.every((s: string) => set.has(s));
             }
           : undefined;
 
@@ -578,7 +617,7 @@ export default function HomePage() {
                 subCommunesLabel: selectedSubCommunesLabel || undefined,
               };
             });
-            setAnnonces((prev) => {
+            setAnnonces((prev: any[]) => {
               // Premier snapshot après changement de filtres: remplacer entièrement
               let arr = resetOnFirstSnapshotRef.current ? [...mapped] : (() => {
                 const byId = new Map(prev.map((x) => [x.id, x]));
@@ -593,9 +632,9 @@ export default function HomePage() {
                 const p = Date.parse(v);
                 return isNaN(p) ? 0 : p;
               };
-              if (sortBy === "date") arr.sort((a, b) => toMs(b) - toMs(a));
-              else if (sortBy === "prix-desc") arr.sort((a, b) => (b.prix ?? 0) - (a.prix ?? 0));
-              else arr.sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0));
+              if (sortBy === "date") arr.sort((a: any, b: any) => toMs(b) - toMs(a));
+              else if (sortBy === "prix-desc") arr.sort((a: any, b: any) => (b.prix ?? 0) - (a.prix ?? 0));
+              else arr.sort((a: any, b: any) => (a.prix ?? 0) - (b.prix ?? 0));
               if (resetOnFirstSnapshotRef.current) resetOnFirstSnapshotRef.current = false;
               return arr;
             });
@@ -796,8 +835,8 @@ export default function HomePage() {
                   return true;
                 });
                 if (docsArr.length) {
-                  setAnnonces((prev) => {
-                    const ids = new Set(prev.map((x) => x.id));
+                  setAnnonces((prev: any[]) => {
+                    const ids = new Set(prev.map((x: any) => x.id));
                     const items = docsArr.map((doc: any) => {
                       const d = doc.data() as any;
                       const budgetNum = Number(d.budget);
@@ -1553,41 +1592,179 @@ export default function HomePage() {
                   <p className="text-slate-500 text-center mt-4 col-span-full">Aucune annonce trouvée.</p>
                 ) : (
                   displayedAnnonces.map((annonce: any) => {
+                    const isAdmin = userRole === "admin";
                     const card = (
-                      <AnnonceCard
-                        key={annonce.id}
-                        id={annonce.id}
-                        titre={annonce.titre}
-                        ville={annonce.ville}
-                        prix={annonce.prix}
-                        surface={annonce.surface}
-                        description={annonce.description}
-                        createdAt={annonce.createdAt}
-                        imageUrl={annonce.imageUrl || defaultAnnonceImg}
-                        zonesLabel={activeHomeTab === "colocataires" ? annonce.zonesLabel : undefined}
-                      />
-                    );
-                    return activeHomeTab === "colocataires" ? (
                       <div
                         key={annonce.id}
-                        role="button"
+                        style={activeHomeTab === "annonces" ? { cursor: 'pointer' } : {}}
                         tabIndex={0}
+                        role="button"
                         onClick={(e) => {
-                          const target = e.target as HTMLElement;
-                          const link = target.closest && target.closest("a");
-                          if (link) e.preventDefault();
-                          openColocDetail(annonce.id);
+                          if (activeHomeTab === "annonces") {
+                            e.preventDefault();
+                            setAnnonceDetail(annonce);
+                          }
                         }}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") openColocDetail(annonce.id);
+                          if (activeHomeTab === "annonces" && (e.key === "Enter" || e.key === " ")) {
+                            e.preventDefault();
+                            setAnnonceDetail(annonce);
+                          }
                         }}
-                        className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg select-none [&_a]:pointer-events-none"
                       >
-                        {card}
+                        <AnnonceCard
+                          id={annonce.id}
+                          titre={annonce.titre}
+                          ville={annonce.ville}
+                          prix={annonce.prix}
+                          surface={annonce.surface}
+                          description={annonce.description}
+                          createdAt={annonce.createdAt}
+                          imageUrl={annonce.imageUrl || defaultAnnonceImg}
+                          zonesLabel={activeHomeTab === "colocataires" ? annonce.zonesLabel : undefined}
+                          onEdit={userRole === "admin" ? () => {
+                            if (activeHomeTab === "annonces") setEditAnnonce(annonce);
+                            else setEditColoc(annonce);
+                          } : undefined}
+                          onDelete={userRole === "admin" ? () => {
+                            if (activeHomeTab === "annonces") setDeleteAnnonceId(annonce.id);
+                            else setDeleteColocId(annonce.id);
+                          } : undefined}
+                        />
                       </div>
-                    ) : (
-                      card
                     );
+      {/* Modal de confirmation suppression annonce */}
+      <ConfirmModal
+        isOpen={!!deleteAnnonceId}
+        onClose={() => setDeleteAnnonceId(null)}
+        onConfirm={async () => {
+          if (deleteAnnonceId) {
+            try {
+              const res = await fetch(`/api/annonce/${deleteAnnonceId}`, { method: 'DELETE' });
+              if (!res.ok) throw new Error('Erreur lors de la suppression');
+              showToast('success', "Annonce supprimée ✅");
+              setDeleteAnnonceId(null);
+              await loadAnnonces(false); // Rafraîchir la liste
+            } catch (e) {
+              showToast('error', "Erreur lors de la suppression ❌");
+              setDeleteAnnonceId(null);
+            }
+          } else {
+            setDeleteAnnonceId(null);
+          }
+        }}
+        title="Supprimer l'annonce ?"
+        description="Voulez-vous vraiment supprimer cette annonce ? Cette action est irréversible."
+      />
+      {/* Modal de confirmation suppression profil colocataire */}
+      <ConfirmModal
+        isOpen={!!deleteColocId}
+        onClose={() => setDeleteColocId(null)}
+        onConfirm={async () => {
+          if (deleteColocId) {
+            try {
+              const res = await fetch(`/api/coloc/${deleteColocId}`, { method: 'DELETE' });
+              if (!res.ok) throw new Error('Erreur lors de la suppression');
+              showToast('success', "Profil colocataire supprimé ✅");
+              setDeleteColocId(null);
+              await loadAnnonces(false); // Rafraîchir la liste
+            } catch (e) {
+              showToast('error', "Erreur lors de la suppression ❌");
+              setDeleteColocId(null);
+            }
+          } else {
+            setDeleteColocId(null);
+          }
+        }}
+        title="Supprimer le profil colocataire ?"
+        description="Voulez-vous vraiment supprimer ce profil ? Cette action est irréversible."
+      />
+      {/* Modal d'édition annonce */}
+      <AnnonceModal
+        isOpen={!!editAnnonce}
+        onClose={() => setEditAnnonce(null)}
+        onSubmit={async (data) => {
+          if (editAnnonce?.id) {
+            try {
+              const res = await fetch(`/api/annonce/${editAnnonce.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+              });
+              if (!res.ok) throw new Error('Erreur lors de la modification');
+              showToast('success', "Annonce modifiée ✅");
+              setEditAnnonce(null);
+              await loadAnnonces(false); // Rafraîchir la liste
+            } catch (e) {
+              showToast('error', "Erreur lors de la modification ❌");
+              setEditAnnonce(null);
+            }
+          } else {
+            setEditAnnonce(null);
+          }
+        }}
+        annonce={editAnnonce}
+      />
+      {/* Modal d'édition profil colocataire */}
+      <ColocProfileModal
+        open={!!editColoc}
+        onClose={() => setEditColoc(null)}
+        profile={editColoc}
+        onSubmit={async (data) => {
+          if (editColoc?.id) {
+            try {
+              const res = await fetch(`/api/coloc/${editColoc.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+              });
+              if (!res.ok) throw new Error('Erreur lors de la modification');
+              showToast('success', "Profil colocataire modifié ✅");
+              setEditColoc(null);
+              await loadAnnonces(false); // Rafraîchir la liste
+            } catch (e) {
+              showToast('error', "Erreur lors de la modification ❌");
+              setEditColoc(null);
+            }
+          } else {
+            setEditColoc(null);
+          }
+        }}
+      />
+                    if (activeHomeTab === "colocataires") {
+                      return (
+                        <div
+                          key={annonce.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            const target = e.target as HTMLElement;
+                            const link = target.closest && target.closest("a");
+                            if (link) e.preventDefault();
+                            openColocDetail(annonce.id);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") openColocDetail(annonce.id);
+                          }}
+                          className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg select-none [&_a]:pointer-events-none"
+                        >
+                          {card}
+                        </div>
+                      );
+                    } else {
+                      return card;
+                    }
+          {/* Modal détail annonce */}
+          {activeHomeTab === "annonces" && annonceDetail && (
+            <AnnonceDetailModal
+              open={!!annonceDetail}
+              onClose={() => setAnnonceDetail(null)}
+              annonce={annonceDetail}
+              isAdmin={userRole === "admin"}
+              onEdit={(a) => { setEditAnnonce(a); setAnnonceDetail(null); }}
+              onDelete={(id) => { setDeleteAnnonceId(id); setAnnonceDetail(null); }}
+            />
+          )}
                   })
                 )}
 
@@ -2031,7 +2208,7 @@ export default function HomePage() {
                             }
                             images={Array.isArray(colocDetail.photos) && (colocDetail.photos as string[]).length ? (colocDetail.photos as string[]) : (colocDetail.imageUrl ? [colocDetail.imageUrl] : [defaultColocImg])}
                             initialIndex={galleryIndex}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full"
                             alt={colocDetail.nom || "Profil"}
                           />
                           {/* Hover/focus overlay: magnifier */}
@@ -2058,7 +2235,7 @@ export default function HomePage() {
                                 className={`w-10 h-10 overflow-hidden rounded-md border relative group ${i === galleryIndex ? 'border-blue-600' : 'border-slate-200'}`}
                                 aria-label={`Image ${i + 1}`}
                               >
-                                <img src={p} className="w-full h-full object-cover" style={{ width: 40, height: 40, objectFit: 'cover' }} alt={`thumb-${i}`} />
+                                <img src={p} className="w-full h-full" style={{ width: 40, height: 40, objectFit: 'cover' }} alt={`thumb-${i}`} />
                                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors" aria-hidden="true">
                                   <svg className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                                     <circle cx="11" cy="11" r="6" />
@@ -2212,7 +2389,23 @@ export default function HomePage() {
                       </div>
                     )}
 
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-2">
+                      {userRole === "admin" && (
+                        <>
+                          <button
+                            onClick={() => { setEditColoc(colocDetail); closeColocDetail(); }}
+                            className="px-4 py-2 rounded bg-yellow-500 text-white hover:bg-yellow-600"
+                          >
+                            Modifier
+                          </button>
+                          <button
+                            onClick={() => { setDeleteColocId(colocDetail.id); closeColocDetail(); }}
+                            className="px-4 py-2 rounded bg-rose-600 text-white hover:bg-rose-700"
+                          >
+                            Supprimer
+                          </button>
+                        </>
+                      )}
                       <button
                         onClick={closeColocDetail}
                         className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"

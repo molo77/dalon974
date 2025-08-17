@@ -1,13 +1,11 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import PhotoUploader from "../PhotoUploader";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { translateFirebaseError } from "@/lib/firebaseErrors";
 import {
   listUsers,
-  updateUserDoc,
-  deleteUserDoc,
-  createUserDoc,
   sendResetTo,
   normalizeUsers,
 } from "@/lib/services/userService";
@@ -19,7 +17,8 @@ export default function AdminUsers({
 }) {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  type EditedUser = { email: string; displayName: string; role: string; ville?: string; telephone?: string };
+  type EditedUser = { email: string; displayName: string; role: string; ville?: string; telephone?: string; photos?: string[] };
+  type UserRow = { id: string; email: string; displayName?: string; role?: string; ville?: string; telephone?: string; photos?: string[]; [key: string]: any };
   const [editedUsers, setEditedUsers] = useState<{ [userId: string]: EditedUser }>({});
   const [editing, setEditing] = useState<{ [userId: string]: boolean }>({});
   const [newUser, setNewUser] = useState({ email: "", displayName: "", role: "", ville: "", telephone: "" });
@@ -82,6 +81,7 @@ export default function AdminUsers({
         role: u.role || "user",
         ville: u.ville || "",
         telephone: u.telephone || "",
+        photos: Array.isArray((u as UserRow).photos) ? (u as UserRow).photos : [],
       },
     }));
   };
@@ -97,13 +97,20 @@ export default function AdminUsers({
     const edited = editedUsers[userId];
     if (!edited) return;
     try {
-      await updateUserDoc(userId, {
-        email: edited.email,
-        displayName: edited.displayName,
-        role: edited.role,
-        ...(edited.ville !== undefined ? { ville: edited.ville || "" } : {}),
-        ...(edited.telephone !== undefined ? { telephone: edited.telephone || "" } : {}),
+      const res = await fetch('/api/user/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: userId,
+          email: edited.email,
+          displayName: edited.displayName,
+          role: edited.role,
+          ville: edited.ville,
+          telephone: edited.telephone,
+          photos: edited.photos || [],
+        }),
       });
+      if (!res.ok) throw new Error('Erreur API update user');
       setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...edited } : u)));
       setEditing((prev) => ({ ...prev, [userId]: false }));
       setEditedUsers((prev) => {
@@ -124,7 +131,12 @@ export default function AdminUsers({
   const confirmDelete = async () => {
     if (!confirmModal) return;
     try {
-      await deleteUserDoc(confirmModal);
+      const res = await fetch('/api/user/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: confirmModal }),
+      });
+      if (!res.ok) throw new Error('Erreur API delete user');
       setUsers((prev) => prev.filter((u) => u.id !== confirmModal));
       showToast("success", "Utilisateur supprimé avec succès !");
     } catch (e: any) {
@@ -192,13 +204,18 @@ export default function AdminUsers({
               return;
             }
             try {
-              await createUserDoc({
-                email: newUser.email,
-                displayName: newUser.displayName,
-                role: newUser.role,
-                ...(newUser.ville ? { ville: newUser.ville } : {}),
-                ...(newUser.telephone ? { telephone: newUser.telephone } : {}),
+              const res = await fetch('/api/user/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: newUser.email,
+                  displayName: newUser.displayName,
+                  role: newUser.role,
+                  ville: newUser.ville,
+                  telephone: newUser.telephone,
+                }),
               });
+              if (!res.ok) throw new Error('Erreur API create user');
               showToast("success", `Utilisateur "${newUser.displayName || newUser.email}" créé !`);
               setNewUser({ email: "", displayName: "", role: "", ville: "", telephone: "" });
               fetchUsers();
@@ -306,7 +323,19 @@ export default function AdminUsers({
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${typeCompte === "Google" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-700"}`}>
                     {typeCompte}
                   </span>
+                {/* Photos profil colocataire */}
+                <div className="mt-2">
+                  <label className="block text-xs text-slate-500 mb-1">Photos du profil colocataire</label>
+                  <PhotoUploader
+                    initial={Array.isArray((edited as EditedUser).photos) ? (edited as EditedUser).photos! : []}
+                    openOnClick={true}
+                    onChange={(list) => setEditedUsers(prev => ({
+                      ...prev,
+                      [u.id]: { ...(prev[u.id] || edited), photos: list.map(l => l.url) }
+                    }))}
+                  />
                 </div>
+              </div>
                 <div className="grid grid-cols-1 gap-2">
                   <input
                     type="email"
@@ -432,7 +461,7 @@ export default function AdminUsers({
             <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50">
               {sortedUsers.map((u) => {
                 const isEditing = !!editing[u.id];
-                const original = { email: u.email, displayName: u.displayName || "", role: u.role || "user", ville: u.ville || "", telephone: u.telephone || "" };
+                const original: EditedUser = { email: u.email, displayName: u.displayName || "", role: u.role || "user", ville: u.ville || "", telephone: u.telephone || "", photos: Array.isArray((u as UserRow).photos) ? (u as UserRow).photos : [] };
                 const edited = isEditing ? (editedUsers[u.id] || original) : original;
                 const noChange =
                   edited.email === original.email &&
@@ -492,6 +521,17 @@ export default function AdminUsers({
                       </span>
                     </td>
                     <td className="py-2 px-3 align-middle flex items-center gap-2">
+                      {/* Photos profil colocataire */}
+                      <div className="min-w-[120px]">
+                        <PhotoUploader
+                          initial={Array.isArray((edited as EditedUser).photos) ? (edited as EditedUser).photos! : []}
+                          openOnClick={true}
+                          onChange={(list) => setEditedUsers((prev) => ({
+                            ...prev,
+                            [u.id]: { ...(prev[u.id] || edited), photos: list.map(l => l.url) }
+                          }))}
+                        />
+                      </div>
                       {!isEditing ? (
                         <button
                           type="button"

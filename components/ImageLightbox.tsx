@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Fragment, useEffect, useState, type KeyboardEvent } from "react";
+import React, { Fragment, useEffect, useState } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 
 export default function ImageLightbox({
@@ -26,19 +26,19 @@ export default function ImageLightbox({
   useEffect(() => {
     function onKey(e: KeyboardEvent | KeyboardEventInit) {
       // @ts-ignore
-      const key = e.key || (e as any).code;
+      const key = (e as any).key || (e as any).code;
       if (key === "Escape") onClose();
       if (key === "ArrowLeft") prev();
       if (key === "ArrowRight") next();
     }
     const handler = (e: KeyboardEvent) => onKey(e);
-    window.addEventListener("keydown", handler as any);
-    return () => window.removeEventListener("keydown", handler as any);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, images]);
 
-  const prev = () => setIndex((i) => (i - 1 + images.length) % images.length);
-  const next = () => setIndex((i) => (i + 1) % images.length);
+  const prev = () => setIndex((i: number) => (i - 1 + images.length) % images.length);
+  const next = () => setIndex((i: number) => (i + 1) % images.length);
 
   if (!images || images.length === 0) return null;
 

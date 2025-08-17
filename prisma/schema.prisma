@@ -1,0 +1,94 @@
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String?
+  name      String?
+  role      String?  // e.g. 'admin', 'user', etc.
+  providerId String?
+  displayName String?
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime? @db.Timestamp(6)
+}
+model Message {
+  id            String   @id @default(uuid())
+  annonceId     String?
+  annonceOwnerId String?
+  senderId      String?
+  senderEmail   String?
+  content       String   @db.Text
+  createdAt     DateTime @default(now()) @db.Timestamp(6)
+  updatedAt     DateTime? @db.Timestamp(6)
+}
+// Prisma schema for migrating Firestore data to MySQL
+// Run with: DATABASE_URL="mysql://user:pass@localhost:3306/dalon974" npx prisma migrate dev --name init
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model ColocProfile {
+  id           String        @id
+  userId       String?
+  title        String?       // example field
+  description  String?       @db.Text
+  imageUrl     String?       
+  photos       Json?         // keep photos array as JSON for compatibility
+  mainPhotoIdx Int?
+  createdAt    DateTime?     @db.Timestamp(6)
+  updatedAt    DateTime?     @db.Timestamp(6)
+  images       ColocImage[]  @relation("coloc_images")
+}
+
+model ColocImage {
+  id             Int          @id @default(autoincrement())
+  url            String       @db.Text
+  filename       String?
+  createdAt      DateTime?    @db.Timestamp(6)
+  uploadedBy     String?
+  isMain         Boolean      @default(false)
+  size           Int?
+  type           String?
+  storagePath    String?
+  colocProfileId String
+  colocProfile   ColocProfile @relation(fields: [colocProfileId], references: [id], name: "coloc_images")
+}
+
+model Annonce {
+  id          String       @id
+  userId      String?
+  title       String?
+  description String?      @db.Text
+  imageUrl    String?
+  photos      Json?
+  mainPhotoIdx Int?
+  createdAt   DateTime?    @db.Timestamp(6)
+  updatedAt   DateTime?    @db.Timestamp(6)
+  images      AnnonceImage[]
+}
+
+model AnnonceImage {
+  id         Int      @id @default(autoincrement())
+  url        String   @db.Text
+  filename   String?
+  createdAt  DateTime? @db.Timestamp(6)
+  uploadedBy String?
+  isMain     Boolean  @default(false)
+  size       Int?
+  type       String?
+  storagePath String?
+  annonceId  String
+  annonce    Annonce  @relation(fields: [annonceId], references: [id])
+}
+
+model ColocAutosaveQueue {
+  id        Int      @id @default(autoincrement())
+  uid       String
+  payload   Json
+  createdAt DateTime @default(now())
+  // processed flag could be added if you prefer soft-delete
+}

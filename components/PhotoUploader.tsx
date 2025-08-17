@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import ConfirmModal from "./ConfirmModal";
 import dynamic from "next/dynamic";
 // thumbnails should not open the global lightbox here
 
@@ -54,7 +55,7 @@ export default function PhotoUploader({
 
     // compare current uploaded URLs to incoming initial URLs to avoid unnecessary updates
     const currentUrls = items.filter((it) => it.uploadedUrl).map((it) => String(it.uploadedUrl));
-    const same = currentUrls.length === initUrls.length && currentUrls.every((v, idx) => v === initUrls[idx]);
+  const same = currentUrls.length === initUrls.length && currentUrls.every((v: string, idx: number) => v === initUrls[idx]);
     if (!same) {
       setItems(init);
       lastInitRef.current = initKey;
@@ -128,7 +129,6 @@ export default function PhotoUploader({
           if (resourceType && resourceId) {
             import("@/lib/photoService").then(async (svc) => {
               try {
-                if (resourceType === "coloc") await svc.addColocImageMeta(resourceId, { url: uploaded, filename: item.file?.name });
                 if (resourceType === "annonce") await svc.addAnnonceImageMeta(resourceId, { url: uploaded, filename: item.file?.name });
               } catch (e) {
                 console.warn('persist image meta failed', e);
@@ -152,7 +152,12 @@ export default function PhotoUploader({
     xhr.send(fd);
   }
 
-  async function removeItem(id: string) {
+  // Gestion du modal de confirmation
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingRemoveId, setPendingRemoveId] = useState<string|null>(null);
+
+  async function doRemoveItem(id: string) {
+
     const it = items.find((x) => x.id === id);
     if (!it) return;
 
@@ -190,6 +195,11 @@ export default function PhotoUploader({
     } catch (e) {
       console.warn('delete meta failed', e);
     }
+  }
+
+  function removeItem(id: string) {
+    setPendingRemoveId(id);
+    setConfirmOpen(true);
   }
 
   function setMain(id: string) {
@@ -268,10 +278,55 @@ export default function PhotoUploader({
               <img
                 src={it.previewUrl}
                 alt="photo"
-                  className="w-full h-full object-cover"
-                  style={{ cursor: openOnClick ? 'pointer' : 'default' }}
+                className="w-full h-full object"
+                style={{ cursor: openOnClick ? 'pointer' : 'default' }}
                 tabIndex={0}
               />
+              {/* Overlay icônes */}
+              <div className="absolute top-1 right-1 flex flex-col gap-1 z-10">
+                {/* Coche principale */}
+                <button
+                  type="button"
+                  className={`w-6 h-6 flex items-center justify-center rounded-full border ${it.isMain ? "bg-blue-600 border-blue-600" : "bg-white border-slate-300"} shadow transition-all duration-100`}
+                  onClick={e => { e.stopPropagation(); setMain(it.id); }}
+                  title={it.isMain ? undefined : "Définir comme principale"}
+                  style={{ marginBottom: 0 }}
+                >
+                  {it.isMain ? (
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  ) : (
+                    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" fill="white" /></svg>
+                  )}
+                </button>
+                {/* Poubelle */}
+                <button
+                  type="button"
+                  className="w-6 h-6 flex items-center justify-center rounded-full bg-rose-100 text-rose-700 border border-rose-200 hover:bg-rose-200 shadow transition-all duration-100"
+                  onClick={e => { e.stopPropagation(); removeItem(it.id); }}
+                  title="Supprimer la photo"
+                  style={{ marginBottom: 0 }}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+      {/* Modal de confirmation de suppression */}
+      <ConfirmModal
+        isOpen={confirmOpen}
+        onClose={() => { setConfirmOpen(false); setPendingRemoveId(null); }}
+        onConfirm={() => {
+          if (pendingRemoveId) doRemoveItem(pendingRemoveId);
+          setConfirmOpen(false);
+          setPendingRemoveId(null);
+        }}
+        title="Supprimer la photo ?"
+        description="Voulez-vous vraiment supprimer cette photo ? Cette action est irréversible."
+      />
+              </div>
+              {/* Étoile sur la photo principale */}
+              {it.isMain && (
+                <div className="absolute bottom-1 left-1 bg-yellow-400 rounded-full p-0.5 shadow text-white flex items-center justify-center z-10">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.122-6.545L.488 6.91l6.561-.955L10 0l2.951 5.955 6.561.955-4.756 4.635 1.122 6.545z"/></svg>
+                </div>
+              )}
               {/* Hover/focus overlay: magnifier (visual only) */}
               <div
                 className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 group-focus-within:bg-black/30 transition-colors"
@@ -283,22 +338,7 @@ export default function PhotoUploader({
                 </svg>
               </div>
             </div>
-            <div className="mt-1 flex gap-1">
-              <button
-                type="button"
-                className={`px-2 py-1 text-sm rounded-md ${it.isMain ? "bg-blue-600 text-white" : "bg-white border"}`}
-                onClick={() => setMain(it.id)}
-              >
-                {it.isMain ? "Principale" : "Définir principale"}
-              </button>
-              <button
-                type="button"
-                className="px-2 py-1 text-sm rounded-md bg-rose-100 text-rose-700 border"
-                onClick={() => removeItem(it.id)}
-              >
-                Supprimer
-              </button>
-            </div>
+
 
             {it.uploading && (
               <div className="absolute left-0 right-0 bottom-0 px-1 pb-1">

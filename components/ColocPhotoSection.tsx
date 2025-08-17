@@ -19,6 +19,7 @@ export default function ColocPhotoSection({
       <PhotoUploader
         initial={initial}
         initialMain={initialMain || undefined}
+        openOnClick={true}
         onChange={(list) => {
           const csv = list.map(l => l.url).join(",");
           const main = list.find(l => l.isMain)?.url;

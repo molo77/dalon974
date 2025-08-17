@@ -1713,6 +1713,7 @@ export default function DashboardPage() {
                     initialMain={colocPhotos.find(p=>p.isMain)?.url}
                     resourceType="coloc"
                     resourceId={user?.uid}
+                    openOnClick={true}
                     onChange={(photos) => {
                       // photos: {url,isMain}[]
                       setColocPhotos(photos.map(p=>({ url: p.url, isMain: !!p.isMain })));

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { collection, getDocs, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { listMessagesForOwner } from "@/lib/services/messageService";
+
 
 export default function useMessagesData(params: {
   user: any;
@@ -18,22 +18,12 @@ export default function useMessagesData(params: {
     if (!user || firestoreError || !userDocLoaded) return;
     (async () => {
       try {
-        const msgs = await listMessagesForOwner(user.uid);
-        setMessages(msgs);
+        const res = await fetch(`/api/messages?owner=${encodeURIComponent(user.uid)}`);
+        if (!res.ok) throw new Error('Erreur API messages');
+        const data = await res.json();
+        setMessages(data.messages || []);
       } catch (err: any) {
-        if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
-          try {
-            const q = query(collection(db, "messages"), where("annonceOwnerId", "==", user.uid));
-            const snap = await getDocs(q);
-            const unsorted = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            unsorted.sort((a: any, b: any) => (b?.createdAt?.seconds || 0) - (a?.createdAt?.seconds || 0));
-            setMessages(unsorted);
-          } catch (fallbackErr: any) {
-            handleFirestoreError(fallbackErr, "messages-fallback");
-          }
-        } else {
-          handleFirestoreError(err, "messages");
-        }
+        handleFirestoreError(err, "messages-api");
       }
     })();
   }, [user, firestoreError, userDocLoaded]);
