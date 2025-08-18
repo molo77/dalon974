@@ -5,14 +5,13 @@ import Link from "next/link";
 import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/components/AuthProvider";
 
 export default function Header() {
   const { data } = useSession();
   const user = data?.user as any;
   const [mobileOpen, setMobileOpen] = useState(false);
   const router = useRouter();
-  const { isAdmin } = useAuth();
+  const isAdmin = (user?.role || (user as any)?.role) === "admin";
 
   const handleLogout = async () => {
   await signOut({ callbackUrl: "/" });

@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "@/components/AuthProvider";
 import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
 export default function useAdminGate(params: {
@@ -8,7 +7,8 @@ export default function useAdminGate(params: {
   router: AppRouterInstance;
 }) {
   const { router } = params;
-  const { user, loading: authLoading, isAdmin: ctxIsAdmin } = useAuth();
+  const user = params.user as any;
+  const authLoading = params.loading;
   const [isAdmin, setIsAdmin] = useState(false);
   const [checkingAdmin, setCheckingAdmin] = useState(true);
 
@@ -18,10 +18,11 @@ export default function useAdminGate(params: {
       router.push("/login");
       return;
     }
-    // Le rôle vient du contexte AuthProvider (suivi temps réel)
-    setIsAdmin(!!ctxIsAdmin);
+    // Rôle depuis la session NextAuth
+    const role = (user as any)?.role;
+    setIsAdmin(role === "admin");
     setCheckingAdmin(false);
-  }, [user, authLoading, ctxIsAdmin, router]);
+  }, [user, authLoading, router]);
 
   useEffect(() => {
     if (checkingAdmin) return;

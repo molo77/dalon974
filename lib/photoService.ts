@@ -22,12 +22,24 @@ export async function deleteColocPhotoWithMeta(_userId: string, url: string) {
 
 // Marquer une image coloc comme principale via URL (prochaine étape: côté API/DB)
 export async function setColocImageMainByUrl(_uid: string, _url: string) {
-  // À implémenter via une route API quand le modèle ColocProfile sera migré de Firestore
+  // Met à jour imageUrl du profil coloc côté API
+  try {
+    await fetch(`/api/coloc/${encodeURIComponent(_uid)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageUrl: _url }),
+    });
+  } catch {}
 }
 
 export async function rebuildColocPhotosArray(_uid: string) {
-  // À implémenter quand on aura les routes coloc en base
-  return [] as string[];
+  try {
+    const cur = await fetch(`/api/coloc/${encodeURIComponent(_uid)}`).then(r => r.ok ? r.json() : null).catch(() => null);
+    const curPhotos: string[] = Array.isArray(cur?.photos) ? cur.photos : [];
+    return curPhotos;
+  } catch {
+    return [] as string[];
+  }
 }
 
 // Annonce: ajouter une image (meta) après upload. On met à jour l'annonce via PATCH pour pousser l'URL dans photos[]

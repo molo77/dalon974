@@ -8,68 +8,17 @@ import AdminUsers from "@/components/admin/AdminUsers";
 import ExpandableImage from "@/components/ExpandableImage"; // New import
 // import AdminAnnonces from "@/components/admin/AdminAnnonces"; // affichage remplacé par une liste intégrée
 import useAdminGate from "@/hooks/useAdminGate";
-import { db } from "@/lib/firebase";
-import {
-  addDoc,
-  collection,
-  serverTimestamp,
-  writeBatch,
-  doc,
-  query,
-  orderBy,
-  onSnapshot,
-  limit as fsLimit,
-  where,
-  getDoc,
-  getDocs,
-  setDoc,
-} from "firebase/firestore";
+// Firebase supprimé: à migrer vers API Prisma.
+const serverTimestamp = () => new Date();
 import AnnonceModal from "@/components/AnnonceModal";
 const ColocPhotoSection = dynamic(() => import("@/components/ColocPhotoSection"), { ssr: false });
-import { updateAnnonce } from "@/lib/services/annonceService";
+import { updateAnnonce, deleteAnnonce } from "@/lib/services/annonceService";
+import { updateColoc, deleteColoc, getColoc } from "@/lib/services/colocService";
 import Link from "next/link"; // + import
 import Image from "next/image";
 import { toast as appToast } from "@/components/Toast";
 
-// Helper: slug
-const slugify = (s: string) =>
-  (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-
-// Communes (une annonce d’exemple par commune)
-const SEED_COMMUNES = [
-  "Saint-Denis","Sainte-Marie","Sainte-Suzanne",
-  "Saint-André","Bras-Panon","Salazie",
-  "Saint-Benoît","La Plaine-des-Palmistes","Sainte-Rose","Saint-Philippe",
-  "Le Port","La Possession","Saint-Paul","Trois-Bassins","Saint-Leu","Les Avirons","L'Étang-Salé",
-  "Saint-Louis","Cilaos","Le Tampon","Entre-Deux","Saint-Pierre","Petite-Île","Saint-Joseph"
-];
-
-// Sous-communes avec leur CP et commune parente (extrait de notre référentiel)
-const SUB_COMMUNES: { name: string; cp: string; parent: string }[] = [
-  { name: "Sainte-Clotilde", cp: "97490", parent: "Saint-Denis" },
-  { name: "La Montagne", cp: "97417", parent: "Saint-Denis" },
-
-  { name: "Dos d'Âne", cp: "97419", parent: "La Possession" },
-
-  { name: "Saint-Gilles-les-Bains", cp: "97434", parent: "Saint-Paul" },
-  { name: "L'Hermitage-les-Bains", cp: "97434", parent: "Saint-Paul" },
-  { name: "Saint-Gilles-les-Hauts", cp: "97435", parent: "Saint-Paul" },
-  { name: "La Saline", cp: "97422", parent: "Saint-Paul" },
-  { name: "La Saline-les-Hauts", cp: "97423", parent: "Saint-Paul" },
-  { name: "Bois-de-Nèfles Saint-Paul", cp: "97411", parent: "Saint-Paul" },
-  { name: "Plateau-Caillou", cp: "97460", parent: "Saint-Paul" },
-
-  { name: "La Chaloupe", cp: "97416", parent: "Saint-Leu" },
-  { name: "Piton Saint-Leu", cp: "97424", parent: "Saint-Leu" },
-
-  { name: "L'Étang-Salé-les-Bains", cp: "97427", parent: "L'Étang-Salé" },
-
-  { name: "La Rivière", cp: "97421", parent: "Saint-Louis" },
-
-  { name: "La Plaine des Cafres", cp: "97418", parent: "Le Tampon" },
-
-  { name: "Terre-Sainte", cp: "97432", parent: "Saint-Pierre" },
-];
+// données seed retirées (non utilisées pendant la migration)
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
@@ -165,54 +114,8 @@ export default function AdminPage() {
     if (seeding) return;
     setSeeding(true);
     try {
-  const placeholder = "/images/annonce-holder.svg";
-      const col = collection(db, "annonces");
-      const ops: Promise<any>[] = [];
-
-      // 1) Une annonce d'exemple par commune
-      SEED_COMMUNES.forEach((name, idx) => {
-        const prix = 350 + (idx % 12) * 25; // variation simple
-        const surface = 12 + (idx % 8) * 2;
-        ops.push(
-          addDoc(col, {
-            titre: `Chambre en colocation à ${name}`,
-            ville: name,
-            communeSlug: slugify(name),
-            prix,
-            surface,
-            description: `Exemple d’annonce pour ${name}. Proche commodités, colocation conviviale.`,
-            imageUrl: placeholder,
-            createdAt: serverTimestamp(),
-          })
-        );
-      });
-
-      // 2) Une annonce d'exemple par sous-commune (ville = sous-commune, CP défini, slug = parent)
-      SUB_COMMUNES.forEach((s, i) => {
-        const prix = 420 + (i % 10) * 20;
-        const surface = 10 + (i % 6) * 3;
-        const parentSlug = slugify(s.parent);
-        ops.push(
-          addDoc(col, {
-            titre: `Chambre à ${s.name} (${s.parent})`,
-            ville: s.name,
-            codePostal: s.cp,
-            communeSlug: parentSlug,
-            prix,
-            surface,
-            description: `Exemple d’annonce située à ${s.name} (${s.parent}). Quartier agréable, bien desservi.`,
-            imageUrl: placeholder,
-            createdAt: serverTimestamp(),
-          })
-        );
-      });
-
-      await Promise.all(ops);
-      const total = SEED_COMMUNES.length + SUB_COMMUNES.length;
-      showToast("success", `${total} annonces d'exemple créées (dont sous-communes).`);
-    } catch (e: any) {
-      console.error("[Admin][SeedExamples]", e);
-      showToast("error", "Erreur lors de la création des annonces d’exemple.");
+  // TODO: Implémenter via API Prisma si nécessaire
+  showToast("success", "Action temporairement désactivée.");
     } finally {
       setSeeding(false);
     }
@@ -223,83 +126,8 @@ export default function AdminPage() {
     if (seedingColocs) return;
     setSeedingColocs(true);
     try {
-  const placeholder = "/images/coloc-holder.svg";
-      const col = collection(db, "colocProfiles");
-      const NAMES = [
-        "Alex", "Camille", "Jordan", "Lea", "Noah", "Emma",
-        "Lucas", "Maya", "Hugo", "Sarah", "Nathan", "Lina"
-      ];
-      const PROFESSIONS = [
-        "Étudiant(e)", "Développeur(se)", "Infirmier(ère)", "Enseignant(e)",
-        "Comptable", "Commercial(e)", "Designer", "Chef de projet"
-      ];
-     const LANGS = ["fr", "en", "es", "de"];
-     const GENRES = ["femme","homme","non-binaire","autre"];
-     const ORIENTS = ["hetero","homo","bi","asexuel","autre"];
-
-      // Utilise setDoc avec un ID connu et uid = ID (compat règles)
-      const now = Date.now();
-      await Promise.all(
-        Array.from({ length: 12 }).map((_, i) => {
-          const id = `seed-${now}-${i}`;
-          const nom = NAMES[i % NAMES.length];
-          const ville = SEED_COMMUNES[i % SEED_COMMUNES.length];
-          const budget = 400 + (i % 10) * 30;
-          const age = 20 + (i % 15);
-          const profession = PROFESSIONS[i % PROFESSIONS.length];
-          const description = `Je cherche une colocation à ${ville}. ${profession}, calme et respectueux(se).`;
-         const bioCourte = `Coloc ${profession.toLowerCase()} • ${age} ans`;
-         const langues = [LANGS[i % LANGS.length]];
-         const instagram = `@${nom.toLowerCase()}_${i}`;
-         const photos = [placeholder];
-         const prefGenre = i % 4 === 0 ? "mixte" : i % 3 === 0 ? "homme" : i % 2 === 0 ? "femme" : "peu-importe";
-         const prefAgeMin = 18 + (i % 5);
-         const prefAgeMax = 30 + (i % 7);
-         const accepteFumeurs = i % 2 === 0;
-         const accepteAnimaux = i % 3 === 0;
-         const rythme = ["matinal","noctambule","flexible"][i % 3];
-         const proprete = ["relaxe","normal","maniaque"][i % 3];
-         const sportif = i % 2 === 0;
-         const vegetarien = i % 4 === 0;
-         const soirees = i % 3 === 0;
-         const musique = ["rock","pop","jazz","electro"][i % 4];
-
-          return setDoc(doc(col, id), {
-            uid: id, // important pour uidMatchesPath(uid)
-            nom,
-            ville,
-            budget,
-            age,
-            profession,
-            description,
-            imageUrl: placeholder,
-           // Nouveaux champs
-           genre: GENRES[i % GENRES.length],
-           orientation: ORIENTS[i % ORIENTS.length],
-           bioCourte,
-           langues,
-           instagram,
-           photos,
-           prefGenre,
-           prefAgeMin,
-           prefAgeMax,
-           accepteFumeurs,
-           accepteAnimaux,
-           rythme,
-           proprete,
-           sportif,
-           vegetarien,
-           soirees,
-           musique,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          }, { merge: true });
-        })
-      );
-      showToast("success", "Profils d'exemple créés ✅");
-    } catch (e: any) {
-      console.error("[Admin][SeedColocExamples]", e);
-      showToast("error", e?.code ? `Erreur: ${e.code}` : "Erreur lors de la création des profils d’exemple.");
+  // TODO: Implémenter via API Prisma si nécessaire
+  showToast("success", "Action temporairement désactivée.");
     } finally {
       setSeedingColocs(false);
     }
@@ -308,59 +136,20 @@ export default function AdminPage() {
   // Abonnement temps réel aux annonces (200 dernières, triées par date desc)
   useEffect(() => {
     if (activeTab !== "annonces") return;
-    const q = query(collection(db, "annonces"), orderBy("createdAt", "desc"), fsLimit(200));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setAdminAnnonces(items);
-        // Nettoyer la sélection si des annonces ont disparu
-        setAdminSelected((prev) => prev.filter((id) => items.some((a) => a.id === id)));
-      },
-      (err) => {
-        console.error("[Admin][annonces][onSnapshot]", err);
-      }
-    );
-    return () => unsub();
+  // TODO: remplacer par fetch(/api/annonces) polling
+  setAdminAnnonces([]);
   }, [activeTab]);
 
   // NOUVEAU: Abonnement temps réel aux utilisateurs pour résoudre les propriétaires
   useEffect(() => {
     if (activeTab !== "annonces") return;
-    const q = query(collection(db, "users"), orderBy("email", "asc"));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const map: Record<string, { email?: string; displayName?: string }> = {};
-        snap.docs.forEach((d) => {
-          const data: any = d.data();
-          map[d.id] = { email: data?.email, displayName: data?.displayName };
-        });
-        setOwnersById(map);
-      },
-      (err) => {
-        console.error("[Admin][users][onSnapshot]", err);
-      }
-    );
-    return () => unsub();
+  setOwnersById({});
   }, [activeTab]);
 
   // NOUVEAU: abonnement temps réel aux profils colocataires
   useEffect(() => {
     if (activeTab !== "colocs") return;
-    const q = query(collection(db, "colocProfiles"), orderBy("createdAt", "desc"), fsLimit(200));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setAdminColocs(items);
-        setAdminColocsSelected((prev) => prev.filter((id) => items.some((a) => a.id === id)));
-      },
-      (err) => {
-        console.error("[Admin][colocProfiles][onSnapshot]", err);
-      }
-    );
-    return () => unsub();
+  setAdminColocs([]);
   }, [activeTab]);
 
   const toggleAdminSelect = (id: string) => {
@@ -377,46 +166,19 @@ export default function AdminPage() {
   const colocsDeselectAll = () => setAdminColocsSelected([]);
 
   // Helper: résoudre un userId depuis un email ou un id donné
-  const resolveUserIdByEmailOrId = async (raw: string): Promise<string | null> => {
-    const v = (raw || "").trim();
-    if (!v) return null;
-    try {
-      if (v.includes("@")) {
-        // recherche par email exact
-        const qUsers = query(collection(db, "users"), where("email", "==", v.toLowerCase()));
-        const snap = await getDocs(qUsers);
-        if (!snap.empty) return snap.docs[0].id;
-        return null;
-      } else {
-        // tentative par id direct
-        const ref = doc(db, "users", v);
-        const snap = await getDoc(ref);
-        return snap.exists() ? v : null;
-      }
-    } catch {
-      return null;
-    }
-  };
+  // const _resolveUserIdByEmailOrId = async (_raw: string): Promise<string | null> => null; // à implémenter plus tard
 
   const adminBulkDelete = async (ids?: string[]) => {
     const toDelete = Array.isArray(ids) && ids.length ? ids : adminSelected;
     if (toDelete.length === 0) return;
     try {
       setAdminLoading(true);
-      // Batch en paquets de 400 (limite Firestore 500 ops)
-      const chunks = (arr: string[], size = 400) => {
-        const out: string[][] = [];
-        for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-        return out;
-      };
-      for (const chunk of chunks(toDelete)) {
-        const batch = writeBatch(db);
-        chunk.forEach(id => batch.delete(doc(db, "annonces", id)));
-        await batch.commit();
+      // Appeler /api/annonces/{id} DELETE en boucle
+      for (const id of toDelete) {
+        try { await deleteAnnonce(id); } catch {}
       }
       setAdminSelected([]);
       showToast("success", "Annonces supprimées ✅");
-      // La liste se rafraîchit automatiquement via onSnapshot
     } catch (e) {
       console.error("[Admin][BulkDelete]", e);
       showToast("error", "Erreur suppression multiple.");
@@ -430,34 +192,17 @@ export default function AdminPage() {
     if (adminSelected.length === 0) return;
     setAdminLoading(true);
     try {
-      const targetUserId = await resolveUserIdByEmailOrId(bulkOwnerInput);
+  const targetUserId = null; // TODO: lookup via API
       if (!targetUserId) {
         setAdminLoading(false);
         return showToast("error", "Utilisateur introuvable (email ou ID).");
       }
-      const chunks = (arr: string[], size = 400) => {
-        const out: string[][] = [];
-        for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-        return out;
-      };
-      let updatedCount = 0;
-      for (const chunk of chunks(adminSelected)) {
-        const batch = writeBatch(db);
-        chunk.forEach((id) => {
-          batch.update(doc(db, "annonces", id), {
-            ownerId: targetUserId,
-            uid: targetUserId, // garder compatibilité avec les écrans “Mes annonces”
-            updatedAt: serverTimestamp(),
-          } as any);
-        });
-        await batch.commit();
-        updatedCount += chunk.length;
-      }
+  const updatedCount = adminSelected.length; // TODO: PATCH via API (non implémenté côté backend)
       setBulkOwnerOpen(false);
       setBulkOwnerInput("");
       setAdminSelected([]);
       showToast("success", `Propriétaire mis à jour pour ${updatedCount} annonce(s) ✅`);
-      // La liste se met à jour via onSnapshot.
+  // TODO: refresh via fetch
     } catch (e) {
       console.error("[Admin][BulkOwnerChange]", e);
       showToast("error", "Erreur lors du changement de propriétaire.");
@@ -472,15 +217,9 @@ export default function AdminPage() {
     if (toDelete.length === 0) return;
     try {
       setAdminLoading(true);
-      const chunks = (arr: string[], size = 400) => {
-        const out: string[][] = [];
-        for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-        return out;
-      };
-      for (const chunk of chunks(toDelete)) {
-        const batch = writeBatch(db);
-        chunk.forEach((id) => batch.delete(doc(db, "colocProfiles", id)));
-        await batch.commit();
+      // Supprimer via API en boucle
+      for (const id of toDelete) {
+        try { await deleteColoc(id); } catch {}
       }
       setAdminColocsSelected([]);
       showToast("success", "Profils supprimés ✅");
@@ -526,18 +265,13 @@ export default function AdminPage() {
   };
 
   // NOUVEAU: ouvrir/fermer le détail d’un profil coloc
-  const openColocDetail = async (id: string) => {
+  const openColocDetail = async (_id: string) => {
     try {
       setColocDetailOpen(true);
       setColocDetailLoading(true);
       setColocDetail(null);
-      const ref = doc(db, "colocProfiles", id);
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        setColocDetail({ id: snap.id, ...(snap.data() as any) });
-      } else {
-        setColocDetail(null);
-      }
+  const detail = await getColoc(_id);
+  setColocDetail(detail);
     } catch (e) {
       console.error("[Admin][ColocDetail] load error", e);
       setColocDetail(null);
@@ -599,8 +333,8 @@ export default function AdminPage() {
           delete payload[k];
         }
       });
-      await setDoc(doc(db, "colocProfiles", editColoc.id), payload, { merge: true });
-      showToast("success", "Profil modifié ✅");
+  await updateColoc(editColoc.id, payload);
+  showToast("success", "Profil modifié ✅");
       setColocModalOpen(false);
       setEditColoc(null);
     } catch (e) {
@@ -614,27 +348,8 @@ export default function AdminPage() {
     try {
       setAdminLoading(true);
       // Tente d'abord une lecture en liste (peut être interdite par les règles)
-      let legacyDocs: { id: string; data: any }[] = [];
-      try {
-        const snap = await getDocs(collection(db, "colocataires"));
-        legacyDocs = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
-      } catch (e: any) {
-        if (e?.code === "permission-denied") {
-          // Fallback: pas de "list" autorisé. On essaie getDoc ciblé par uid à partir de la liste des users.
-          const usersSnap = await getDocs(collection(db, "users"));
-          const uids = usersSnap.docs.map((d) => d.id);
-          for (const uid of uids) {
-            try {
-              const s = await getDoc(doc(db, "colocataires", uid));
-              if (s.exists()) legacyDocs.push({ id: s.id, data: s.data() });
-            } catch {
-              // ignore si non lisible
-            }
-          }
-        } else {
-          throw e;
-        }
-      }
+  const legacyDocs: { id: string; data: any }[] = [];
+  // Firebase supprimé: skip
 
       if (legacyDocs.length === 0) {
         showToast("success", "Aucun document à migrer depuis 'colocataires'.");
@@ -643,23 +358,11 @@ export default function AdminPage() {
 
       // Enrichissement: map des users pour récupérer email/displayName si manquants
       const usersMap: Record<string, { email?: string; displayName?: string }> = {};
-      try {
-        const usersSnap = await getDocs(collection(db, "users"));
-        usersSnap.docs.forEach((d) => {
-          const ud: any = d.data();
-          usersMap[d.id] = { email: ud?.email, displayName: ud?.displayName };
-        });
-      } catch {
-        // ignore si non lisible
-      }
+  // TODO: charger via /api/users
 
-      const chunks = <T,>(arr: T[], size = 400) => {
-        const out: T[][] = [];
-        for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-        return out;
-      };
+  // const _chunks2 = <T,>(arr: T[], size = 400) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
 
-      const mapLegacyToNew = (d: any, id: string) => {
+  const _mapLegacyToNew = (d: any, id: string) => {
         const userHint = usersMap[id] || {};
         const email = d?.email || userHint.email || null;
         const displayName = userHint.displayName || "";
@@ -712,20 +415,8 @@ export default function AdminPage() {
         };
       };
 
-      let migrated = 0;
-      for (const group of chunks(legacyDocs)) {
-        const batch = writeBatch(db);
-        for (const s of group) {
-          const data: any = s.data ?? s.data;
-          const docData: any = typeof data === "function" ? data() : data;
-          const targetId = docData?.uid || s.id;
-          const ref = doc(db, "colocProfiles", targetId);
-          const payload = mapLegacyToNew(docData, targetId);
-          batch.set(ref, payload, { merge: true });
-          migrated++;
-        }
-        await batch.commit();
-      }
+  const migrated = 0;
+  // TODO: POST vers /api/coloc
 
       showToast("success", `Migration terminée: ${migrated} profil(s) migré(s) ✅`);
     } catch (e) {

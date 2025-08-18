@@ -1,11 +1,11 @@
-// ESLint Flat config compatible ESLint 8.x
-const next = require('eslint-config-next');
+import next from 'eslint-config-next';
 
-const nextArray = Array.isArray(next) ? next : [next];
-
-module.exports = [
+export default [
+  // Ignorés
   { ignores: ['**/.next/**', 'node_modules/**', 'dist/**', 'out/**', 'coverage/**', 'build/**'] },
-  ...nextArray,
+  // Config Next.js (flat). eslint-config-next exporte un tableau de configs.
+  ...next,
+  // Règles projet légères
   {
     rules: {
       'react/react-in-jsx-scope': 'off',

@@ -75,11 +75,18 @@ model VerificationToken {
 model ColocProfile {
   id           String        @id
   userId       String?
-  title        String?       // example field
+  title        String?       // titre générique (fallback)
+  nom          String?
+  ville        String?
+  budget       Int?
+  age          Int?
+  profession   String?
   description  String?       @db.Text
   imageUrl     String?       
   photos       Json?         // keep photos array as JSON for compatibility
   mainPhotoIdx Int?
+  communesSlugs Json?
+  zones        Json?
   createdAt    DateTime?     @db.Timestamp(6)
   updatedAt    DateTime?     @db.Timestamp(6)
   images       ColocImage[]  @relation("coloc_images")

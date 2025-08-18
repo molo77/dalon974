@@ -1,4 +1,3 @@
-import NextAuth from "next-auth"
-import { authConfig } from "./auth.config"
-
-export const { auth, signIn, signOut } = NextAuth(authConfig)
+// NextAuth v4: la configuration et les handlers résident dans app/api/auth/[...nextauth].
+// Ce fichier est intentionnellement vide pour éviter les imports cassés.
+export {};

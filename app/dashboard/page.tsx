@@ -3,8 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, type MouseEvent } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { db } from "@/lib/firebase";
-import { collection, query, where, orderBy, onSnapshot, doc, serverTimestamp, setDoc, deleteDoc, getDocs } from "firebase/firestore";
+import { db, collection, query, where, orderBy, onSnapshot, doc, serverTimestamp, setDoc, deleteDoc, getDocs } from "@/lib/firebaseShim";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 // import ExpandableImage from "@/components/ExpandableImage";
@@ -424,7 +423,7 @@ export default function DashboardPage() {
 
     setLoadingMore(true);
     try {
-      const { items, lastDoc: newLast } = await listUserAnnoncesPage(user.uid, { lastDoc, pageSize: 10 });
+  const { items, lastId: newLast } = await listUserAnnoncesPage(user.uid, { lastId: lastDoc ?? undefined, pageSize: 10 });
 
       if (items.length) {
         setLastDoc(newLast);
@@ -817,11 +816,11 @@ export default function DashboardPage() {
           collection(db, "annonces"),
           where("id", "in", annonceIds),
         );
-        const snap = await getDocs(q);
+        const snap: any = await getDocs(q as any);
         const titles: Record<string, string> = {};
-        snap.docs.forEach((d) => {
-          const data = d.data();
-          if (data.titre) {
+        (snap.docs || []).forEach((d: any) => {
+          const data = d?.data ? d.data() : {};
+          if (data && data.titre) {
             titles[d.id] = data.titre;
           }
         });

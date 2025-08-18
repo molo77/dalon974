@@ -1,0 +1,59 @@
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prismaClient";
+
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    // filtres: ville, prixMax(budget), ageMin, ageMax, communesSlugs (CSV)
+    const ville = searchParams.get("ville");
+    const prixMax = searchParams.get("prixMax");
+    const ageMin = searchParams.get("ageMin");
+    const ageMax = searchParams.get("ageMax");
+    const slugsCsv = searchParams.get("slugs");
+    const limit = Math.min(parseInt(searchParams.get("limit") || "20", 10) || 20, 100);
+    const offset = Math.max(parseInt(searchParams.get("offset") || "0", 10) || 0, 0);
+    const where: any = {};
+    if (ville) where.ville = ville;
+    if (prixMax) where.budget = { lte: Number(prixMax) };
+    if (ageMin) where.age = { ...(where.age || {}), gte: Number(ageMin) };
+    if (ageMax) where.age = { ...(where.age || {}), lte: Number(ageMax) };
+    let list = await prisma.colocProfile.findMany({ where, orderBy: { createdAt: "desc" }, take: limit, skip: offset });
+    // communesSlugs array-contains-any (fallback: filtrage en mémoire)
+    if (slugsCsv) {
+      const want = slugsCsv.split(",").map(s => s.trim()).filter(Boolean);
+      if (want.length) {
+        list = list.filter((p: any) => {
+          const arr = Array.isArray(p.communesSlugs) ? (p.communesSlugs as any[]) : Array.isArray((p as any).communesSlugs?.set) ? (p as any).communesSlugs.set : [];
+          // Prisma/JSON peut renvoyer l'array natif; au besoin, normalise
+          const sl = Array.isArray(arr) ? arr.map(String) : [];
+          return sl.some(s => want.includes(s));
+        });
+      }
+    }
+    // compat: pour l'UI, on renvoie quelques alias attendus
+    const mapped = list.map((p: any) => ({
+      ...p,
+      nom: p.nom ?? p.title ?? null,
+    }));
+    return NextResponse.json(mapped);
+  } catch (e) {
+    console.error("[API][coloc][GET]", e);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const data: any = { ...body };
+    if (typeof data.photos !== "undefined" && !Array.isArray(data.photos)) {
+      // s'assurer que c'est un tableau côté JSON
+      data.photos = Array.isArray(data.photos) ? data.photos : [];
+    }
+    const created = await prisma.colocProfile.create({ data });
+    return NextResponse.json(created, { status: 201 });
+  } catch (e) {
+    console.error("[API][coloc][POST]", e);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}

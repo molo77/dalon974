@@ -1,8 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { translateFirebaseError } from "@/lib/firebaseErrors";
+// Firebase supprimé: on bascule sur fetch côté serveur via services Prisma
 import {
   listUsers,
   updateUserDoc,
@@ -25,24 +23,10 @@ export default function AdminUsers({
   const [confirmModal, setConfirmModal] = useState<string | null>(null);
   const [normalizing, setNormalizing] = useState(false);
 
-  // Abonnement temps réel aux utilisateurs
+  // Chargement initial via API/services
   useEffect(() => {
-    const qUsers = query(collection(db, "users"), orderBy("email", "asc"));
-    const unsub = onSnapshot(
-      qUsers,
-      (snap) => {
-        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setUsers(data as any[]);
-        setLoading(false);
-      },
-      (err) => {
-        console.error("[AdminUsers][onSnapshot]", err);
-        setLoading(false);
-        showToast("error", translateFirebaseError((err as any)?.code) || "Erreur chargement temps réel.");
-      }
-    );
-    return () => unsub();
-  }, [showToast]);
+    fetchUsers();
+  }, []);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -92,7 +76,7 @@ export default function AdminUsers({
       showToast("success", "Utilisateur modifié !");
     } catch (e: any) {
       console.error("[AdminUsers][Save]", e);
-      showToast("error", translateFirebaseError(e?.code) || "Erreur lors de la modification.");
+  showToast("error", e?.message || "Erreur lors de la modification.");
     }
   };
 
@@ -108,7 +92,7 @@ export default function AdminUsers({
       showToast("success", "Utilisateur supprimé avec succès !");
     } catch (e: any) {
       console.error("[AdminUsers][Delete]", e);
-      showToast("error", translateFirebaseError(e?.code) || "Erreur lors de la suppression.");
+  showToast("error", e?.message || "Erreur lors de la suppression.");
     }
     setConfirmModal(null);
   };
@@ -125,7 +109,7 @@ export default function AdminUsers({
         showToast("error", "Mot de passe trop court (min 8).");
         return;
       }
-      const res = await fetch("/api/admin/set-password", {
+  const res = await fetch("/api/admin/set-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, newPassword }),
@@ -134,7 +118,7 @@ export default function AdminUsers({
       showToast("success", `Mot de passe mis à jour pour ${email}`);
     } catch (e: any) {
       console.error("[AdminUsers][ResetPassword]", e);
-      showToast("error", translateFirebaseError(e?.code) || "Erreur lors de la réinitialisation.");
+  showToast("error", e?.message || "Erreur lors de la réinitialisation.");
     }
   };
 
@@ -147,7 +131,7 @@ export default function AdminUsers({
       fetchUsers();
     } catch (e:any) {
       console.error("[AdminUsers][Normalize]", e);
-      showToast("error", translateFirebaseError(e?.code) || "Erreur normalisation.");
+  showToast("error", e?.message || "Erreur normalisation.");
     } finally {
       setNormalizing(false);
     }
@@ -194,7 +178,7 @@ export default function AdminUsers({
               fetchUsers();
             } catch (e: any) {
               console.error("[AdminUsers][Create]", e);
-              showToast("error", translateFirebaseError(e?.code) || "Erreur lors de la création.");
+              showToast("error", e?.message || "Erreur lors de la création.");
             }
           }}
           className="grid grid-cols-1 md:grid-cols-6 gap-3 w-full"
