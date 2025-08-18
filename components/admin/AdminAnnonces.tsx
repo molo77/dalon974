@@ -45,10 +45,13 @@ export default function AdminAnnonces({
 
   const fetchAnnonces = async () => {
     setLoading(true);
-    const annoncesSnap = await getDocs(
-      collection(db, "annonces")
-    );
-    setAnnonces(annoncesSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    try {
+      const res = await fetch("/api/annonces", { cache: "no-store" });
+      const data = await res.json();
+      setAnnonces(Array.isArray(data) ? data : []);
+    } catch {
+      setAnnonces([]);
+    }
     setLoading(false);
   };
 
@@ -73,21 +76,25 @@ export default function AdminAnnonces({
 
   const handleSaveAnnonce = async (id: string) => {
     try {
-      await updateDoc(doc(db, "annonces", id), {
+      const payload: any = {
         titre: editAnnonceData.titre,
         ville: editAnnonceData.ville,
-        prix: editAnnonceData.prix,
-        surface: editAnnonceData.surface,
-        chambres: editAnnonceData.chambres,
+        prix: editAnnonceData.prix ? Number(editAnnonceData.prix) : null,
+        surface: editAnnonceData.surface ? Number(editAnnonceData.surface) : null,
+        nbChambres: editAnnonceData.chambres ? Number(editAnnonceData.chambres) : null,
         description: editAnnonceData.description,
+      };
+      Object.keys(payload).forEach((k) => (payload[k] === null || payload[k] === "") && delete payload[k]);
+      const res = await fetch(`/api/annonces/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
-      setAnnonces((prev) =>
-        prev.map((a) =>
-          a.id === id ? { ...a, ...editAnnonceData } : a
-        )
-      );
+      if (!res.ok) throw new Error("bad");
+      const updated = await res.json();
+      setAnnonces((prev) => prev.map((a) => (a.id === id ? updated : a)));
       showToast("success", "Annonce modifiée avec succès !");
-    } catch (e) {
+  } catch {
       showToast("error", "Erreur lors de la modification.");
     }
     setEditAnnonceId(null);
@@ -106,10 +113,11 @@ export default function AdminAnnonces({
   const confirmDelete = async () => {
     if (!confirmModal) return;
     try {
-      await deleteDoc(doc(db, "annonces", confirmModal));
+      const res = await fetch(`/api/annonces/${confirmModal}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("bad");
       setAnnonces((prev) => prev.filter((a) => a.id !== confirmModal));
       showToast("success", "Annonce supprimée avec succès !");
-    } catch (e) {
+  } catch {
       showToast("error", "Erreur lors de la suppression.");
     }
     setConfirmModal(null);
@@ -118,13 +126,21 @@ export default function AdminAnnonces({
   const handleCreateAnnonce = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await addDoc(collection(db, "annonces"), {
-        ...newAnnonce,
-        prix: Number(newAnnonce.prix),
-        surface: Number(newAnnonce.surface),
-        chambres: Number(newAnnonce.chambres),
-        createdAt: Timestamp.now(),
+      const payload: any = {
+        titre: newAnnonce.titre,
+        ville: newAnnonce.ville,
+        prix: newAnnonce.prix ? Number(newAnnonce.prix) : null,
+        surface: newAnnonce.surface ? Number(newAnnonce.surface) : null,
+        nbChambres: newAnnonce.chambres ? Number(newAnnonce.chambres) : null,
+        description: newAnnonce.description,
+      };
+      Object.keys(payload).forEach((k) => (payload[k] === null || payload[k] === "") && delete payload[k]);
+      const res = await fetch(`/api/annonces`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
+      if (!res.ok) throw new Error("bad");
       showToast("success", "Annonce créée !");
       setShowCreateAnnonce(false);
       setNewAnnonce({
@@ -136,7 +152,7 @@ export default function AdminAnnonces({
         description: "",
       });
       fetchAnnonces();
-    } catch (e) {
+  } catch {
       showToast("error", "Erreur lors de la création de l'annonce.");
     }
   };
@@ -387,7 +403,7 @@ export default function AdminAnnonces({
                         <td className="py-2 px-3 align-middle">{a.ville}</td>
                         <td className="py-2 px-3 align-middle">{a.prix}</td>
                         <td className="py-2 px-3 align-middle">{a.surface ?? "-"}</td>
-                        <td className="py-2 px-3 align-middle">{a.chambres ?? "-"}</td>
+                        <td className="py-2 px-3 align-middle">{a.nbChambres ?? a.chambres ?? "-"}</td>
                         <td className="py-2 px-3 align-middle">{a.description ?? "-"}</td>
                         <td className="py-2 px-3 align-middle">
                           {a.createdAt

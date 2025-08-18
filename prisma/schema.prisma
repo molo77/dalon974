@@ -107,6 +107,12 @@ model Annonce {
   imageUrl    String?
   photos      Json?
   mainPhotoIdx Int?
+  // Champs supplémentaires pour l'app
+  ville       String?
+  prix        Int?
+  surface     Int?
+  nbChambres  Int?
+  equipements String?
   createdAt   DateTime?    @db.Timestamp(6)
   updatedAt   DateTime?    @db.Timestamp(6)
   images      AnnonceImage[]

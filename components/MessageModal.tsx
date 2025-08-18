@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { db } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { useSession } from "next-auth/react";
+import { useState } from "react";
 
 export default function MessageModal({
   annonceId,
@@ -37,64 +35,47 @@ export default function MessageModal({
       setError("Le message ne peut pas être vide.");
       return;
     }
-    // Vérification simple pour éviter l'envoi de mots de passe dans le message
     if (/password|mot de passe|mdp/i.test(message)) {
       setError("Le message ne doit pas contenir de mot de passe ou d'informations sensibles.");
       return;
     }
     setSending(true);
     try {
-      await addDoc(collection(db, "messages"), {
-        annonceId,
-        annonceOwnerId,
-        fromUserId: user.uid,
-        fromEmail: user.email,
-        content: message,
-        createdAt: serverTimestamp(),
-        read: false,
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ annonceId, annonceOwnerId, content: message }),
       });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || "Erreur API");
+      }
       setMessage("");
-      if (onSent) onSent();
+      onSent?.();
       onClose();
     } catch (err: any) {
-      setError(
-        err?.message
-          ? `Erreur lors de l'envoi du message : ${err.message}`
-          : "Erreur lors de l'envoi du message."
-      );
+      setError(err?.message || "Erreur lors de l'envoi du message.");
     }
     setSending(false);
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-      <form
-        onSubmit={handleSend}
-        className="bg-white rounded shadow p-6 w-full max-w-md flex flex-col gap-4"
-      >
-        <h2 className="text-xl font-bold mb-2 text-center">Envoyer un message</h2>
+      <form onSubmit={handleSend} className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm flex flex-col gap-4">
+        <h2 className="text-lg font-semibold">Envoyer un message</h2>
         <textarea
           value={message}
-          onChange={e => setMessage(e.target.value)}
+          onChange={(e) => setMessage(e.target.value)}
           className="border rounded px-3 py-2 min-h-[100px]"
           placeholder="Votre message..."
           required
         />
-        {error && <div className="text-red-600 text-sm">{error}</div>}
+        {error && <div className="text-sm text-red-600">{error}</div>}
         <div className="flex gap-2">
-          <button
-            type="submit"
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex-1"
-            disabled={sending}
-          >
+          <button type="submit" disabled={sending} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex-1">
             Envoyer
           </button>
-          <button
-            type="button"
-            className="bg-gray-300 text-gray-700 px-4 py-2 rounded flex-1"
-            onClick={onClose}
-            disabled={sending}
-          >
+          <button type="button" onClick={onClose} disabled={sending} className="bg-gray-200 text-gray-800 px-4 py-2 rounded flex-1">
             Annuler
           </button>
         </div>

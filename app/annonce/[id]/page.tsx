@@ -1,9 +1,7 @@
 "use client";
 
-import { db } from "@/lib/firebase";
 import MessageModal from "@/components/MessageModal";
 import AnnonceModal from "@/components/AnnonceModal";
-import { doc, getDoc } from "firebase/firestore";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
@@ -12,7 +10,6 @@ import dynamic from "next/dynamic";
 import ExpandableImage from "@/components/ExpandableImage";
 
 const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr: false });
-import { useAuth } from "@/components/AuthProvider";
 import { updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/lib/services/annonceService";
 
 export default function AnnonceDetailPage() {
@@ -23,7 +20,7 @@ export default function AnnonceDetailPage() {
 
   const [annonce, setAnnonce] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const { isAdmin } = useAuth();
+  const isAdmin = (user as any)?.role === "admin";
   const [modalOpen, setModalOpen] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -31,22 +28,23 @@ export default function AnnonceDetailPage() {
 
   useEffect(() => {
     let mounted = true;
-    const run = async () => {
+    (async () => {
       try {
-        const snap = await getDoc(doc(db, "annonces", id));
-        if (mounted) setAnnonce(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+        const res = await fetch(`/api/annonces/${id}`, { cache: "no-store" });
+        const data = await res.json();
+        if (!mounted) return;
+        setAnnonce(res.ok ? data : null);
       } finally {
         if (mounted) setLoading(false);
       }
-    };
-    run();
+    })();
     return () => { mounted = false; };
   }, [id]);
 
   // Rôle admin fourni par AuthProvider (temps réel)
   const isOwner = useMemo(() => {
     if (!user || !annonce) return false;
-    return annonce.uid === user.uid || annonce.ownerId === user.uid;
+  return annonce.userId === user.id || annonce.uid === user.uid || annonce.ownerId === user.uid;
   }, [user, annonce]);
 
   const canEdit = isAdmin || isOwner;
@@ -112,9 +110,7 @@ export default function AnnonceDetailPage() {
             {annonce?.createdAt && (
               <p className="text-gray-500 text-sm">
                 <span className="font-semibold">Créée le :</span>{" "}
-                {annonce.createdAt.toDate
-                  ? annonce.createdAt.toDate().toLocaleString()
-                  : annonce.createdAt}
+                {new Date(annonce.createdAt).toLocaleString()}
               </p>
             )}
           </div>

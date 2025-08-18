@@ -123,3 +123,13 @@ export async function setAnnonceMainPhoto(annonceId: string, idx: number) {
     data: { updatedAt: new Date() },
   });
 }
+
+// Upload générique vers l'API Next.js
+export async function uploadPhoto(file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch("/api/uploads", { method: "POST", body: fd });
+  if (!res.ok) throw new Error("Upload échoué");
+  const data = (await res.json()) as { url: string };
+  return data.url;
+}

@@ -71,4 +71,4 @@ functions/serviceAccount*.json
 
 # Upload Image 
 
-public/uploads/
+/public/uploads

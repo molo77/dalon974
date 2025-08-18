@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import ConfirmModal from "./ConfirmModal";
 import dynamic from "next/dynamic";
+import { uploadPhoto } from "../lib/photoService";
 // thumbnails should not open the global lightbox here
 
 type PhotoItem = {
@@ -242,6 +243,25 @@ export default function PhotoUploader({
       copy.splice(tgtIdx, 0, moved);
       return copy;
     });
+  }
+
+  // Upload d'une seule photo
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const url = await uploadPhoto(file);
+      props.onUploaded?.(url);
+    } catch (err: any) {
+      setError(err?.message ?? "Erreur d'upload");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

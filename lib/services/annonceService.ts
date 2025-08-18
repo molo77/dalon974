@@ -1,33 +1,57 @@
-import { db } from "@/lib/firebase";
-import { addDoc, collection, deleteDoc, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, startAfter, updateDoc, where } from "firebase/firestore";
+// Services basés sur les routes API Next.js (Prisma en backend)
 
-export async function listUserAnnoncesPage(userId: string, opts?: { lastDoc?: any; pageSize?: number }) {
-  const base = query(collection(db, "annonces"), where("userId", "==", userId), limit(opts?.pageSize ?? 10));
-  const q = opts?.lastDoc ? query(base, startAfter(opts.lastDoc)) : base;
-  const snap = await getDocs(q);
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const newLast = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
-  return { items, lastDoc: newLast };
+export async function listUserAnnoncesPage(userId: string, opts?: { lastId?: string; pageSize?: number }) {
+  const res = await fetch(`/api/annonces`, { cache: "no-store" });
+  if (!res.ok) throw new Error("Erreur de récupération des annonces");
+  const items: any[] = await res.json();
+  const filtered = items.filter(a => a.userId === userId);
+  // Simple pagination côté client par id (à améliorer côté serveur si nécessaire)
+  const pageSize = opts?.pageSize ?? 10;
+  const startIndex = opts?.lastId ? filtered.findIndex(a => a.id === opts!.lastId) + 1 : 0;
+  const slice = filtered.slice(startIndex, startIndex + pageSize);
+  const newLast = slice.length ? slice[slice.length - 1].id : undefined;
+  return { items: slice, lastId: newLast };
 }
 
-export function subscribeUserAnnonces(userId: string, cb: (items: any[]) => void, onErr: (e: any) => void) {
-  const q = query(collection(db, "annonces"), where("userId", "==", userId), orderBy("createdAt", "desc"));
-  return onSnapshot(q, snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onErr);
+// Fallback d'abonnement: simple polling toutes les 10s
+export function subscribeUserAnnonces(userId: string, cb: (items: any[]) => void, _onErr: (e: any) => void) {
+  let stopped = false;
+  const poll = async () => {
+    if (stopped) return;
+    try {
+      const { items } = await listUserAnnoncesPage(userId, { pageSize: 100 });
+      cb(items);
+    } catch {
+      // silencieux
+    }
+    setTimeout(poll, 10000);
+  };
+  poll();
+  return () => { stopped = true; };
 }
 
-export async function addAnnonce(user: { uid: string; email: string | null }, data: any) {
-  return addDoc(collection(db, "annonces"), {
-    ...data,
-    createdAt: serverTimestamp(),
-    userId: user.uid,
-    userEmail: user.email,
+export async function addAnnonce(_user: { uid: string; email: string | null }, data: any) {
+  const res = await fetch(`/api/annonces`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
   });
+  if (!res.ok) throw new Error("Erreur de création de l'annonce");
+  return res.json();
 }
 
 export async function updateAnnonce(id: string, patch: any) {
-  await updateDoc(doc(db, "annonces", id), patch);
+  const res = await fetch(`/api/annonces/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error("Erreur de mise à jour de l'annonce");
+  return res.json();
 }
 
 export async function deleteAnnonce(id: string) {
-  await deleteDoc(doc(db, "annonces", id));
+  const res = await fetch(`/api/annonces/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Erreur de suppression de l'annonce");
+  return res.json();
 }
