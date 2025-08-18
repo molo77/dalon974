@@ -1,135 +1,100 @@
 export {};
-import prisma from './prismaClient';
 
-// Upload un fichier et crée une entrée ColocImage en base
-export async function uploadColocPhotoWithMeta(file: File, userId: string) {
-  if (!file) throw new Error('Aucun fichier sélectionné');
-  const formData = new FormData();
-  formData.append('file', file);
-  const res = await fetch('/api/upload', { method: 'POST', body: formData });
-  if (!res.ok) throw new Error('Erreur upload local');
-  const data = await res.json();
-  const url = data.url;
-  // Créer une ligne ColocImage
-  const img = await prisma.colocImage.create({
-    data: {
-      url,
-      filename: file.name,
-      createdAt: new Date(),
-      size: file.size,
-      type: file.type,
-      storagePath: url,
-      colocProfileId: userId,
-    }
-  });
-  return { url, id: img.id };
-}
+// NOTE: Ce module est exécuté côté client. On utilise l'API Next.js, pas Prisma directement.
 
-// Supprime la ligne ColocImage et le fichier associé
-export async function deleteColocPhotoWithMeta(userId: string, url: string) {
-  try {
-    await prisma.colocImage.deleteMany({ where: { colocProfileId: userId, url } });
-  } catch (e) {
-    console.warn('Erreur suppression ColocImage (Prisma)', e);
-  }
-  try {
-    await fetch('/api/delete-upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    });
-  } catch (e) {}
-}
-
-// Upload un fichier et crée une entrée AnnonceImage en base
-export async function uploadAnnoncePhotoWithMeta(file: File, annonceId: string) {
-  if (!file) throw new Error('Aucun fichier sélectionné');
-  const formData = new FormData();
-  formData.append('file', file);
-  const res = await fetch('/api/upload', { method: 'POST', body: formData });
-  if (!res.ok) throw new Error('Erreur upload local');
-  const data = await res.json();
-  const url = data.url;
-  const img = await prisma.annonceImage.create({
-    data: {
-      url,
-      filename: file.name,
-      createdAt: new Date(),
-      size: file.size,
-      type: file.type,
-      storagePath: url,
-      annonceId: annonceId,
-    }
-  });
-  return { url, id: img.id };
-}
-
-export async function deleteAnnoncePhotoWithMeta(annonceId: string, url: string) {
-  try {
-    await prisma.annonceImage.deleteMany({ where: { annonceId, url } });
-  } catch (e) {
-    console.warn('Erreur suppression AnnonceImage (Prisma)', e);
-  }
-  try {
-    await fetch('/api/delete-upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
-  } catch (e) {}
-}
-
-// Toutes les fonctions Firestore supprimées. Utiliser uniquement les fonctions Prisma et API Next.js définies plus haut dans ce fichier.
-
-// Mark the image doc with given URL as main (search by url), unset others
-export async function setColocImageMainByUrl(uid: string, url: string) {
-}
-
-export async function rebuildColocPhotosArray(uid: string) {
-  // Firestore: supprimé, à réimplémenter avec Prisma si besoin
-  return [];
-}
-
-// Create an image doc for an annonce (annonces/{id}/images) from an URL
-export async function addAnnonceImageMeta(annonceId: string, opts: { url: string; filename?: string; isMain?: boolean; uploadedBy?: string }) {
-  const { url, filename = "", isMain = false } = opts;
-}
-
-export async function rebuildAnnoncePhotosArray(annonceId: string) {
-  // Reconstruit le tableau des URLs des images pour une annonce
-  const images = await prisma.annonceImage.findMany({
-    where: { annonceId },
-    orderBy: { id: 'asc' },
-  });
-  const urls = images.map((img: any) => img.url);
-  await prisma.annonce.update({
-    where: { id: annonceId },
-    data: { photos: urls },
-  });
-  return urls;
-}
-
-// Set main photo index for a coloc profile
-export async function setColocMainPhoto(userId: string, idx: number) {
-  if (!userId) throw new Error('userId required');
-  // Met à jour le champ mainPhotoIdx du profil coloc
-  await prisma.colocProfile.update({
-    where: { id: userId },
-    data: { mainPhotoIdx: idx, updatedAt: new Date() },
-  });
-}
-// Set main photo index for an annonce
-export async function setAnnonceMainPhoto(annonceId: string, idx: number) {
-  if (!annonceId) throw new Error('annonceId required');
-  // Met à jour le champ mainPhotoIdx de l'annonce
-  await prisma.annonce.update({
-    where: { id: annonceId },
-    data: { updatedAt: new Date() },
-  });
-}
-
-// Upload générique vers l'API Next.js
+// Upload générique (fichier unique) vers /api/uploads -> retourne l'URL publique
 export async function uploadPhoto(file: File): Promise<string> {
   const fd = new FormData();
   fd.append("file", file);
   const res = await fetch("/api/uploads", { method: "POST", body: fd });
   if (!res.ok) throw new Error("Upload échoué");
-  const data = (await res.json()) as { url: string };
-  return data.url;
+  const data = (await res.json()) as { url?: string; files?: string[] };
+  return data.url || (data.files && data.files[0]) || "";
+}
+
+// Gestion Coloc: suppression d'une photo (métadonnée + fichier)
+// TODO: créer des routes API spécifiques coloc si besoin. Pour l'instant, on supprime uniquement le fichier.
+export async function deleteColocPhotoWithMeta(_userId: string, url: string) {
+  try {
+    await fetch(`/api/uploads?path=${encodeURIComponent(url)}`, { method: "DELETE" });
+  } catch {}
+}
+
+// Marquer une image coloc comme principale via URL (prochaine étape: côté API/DB)
+export async function setColocImageMainByUrl(_uid: string, _url: string) {
+  // À implémenter via une route API quand le modèle ColocProfile sera migré de Firestore
+}
+
+export async function rebuildColocPhotosArray(_uid: string) {
+  // À implémenter quand on aura les routes coloc en base
+  return [] as string[];
+}
+
+// Annonce: ajouter une image (meta) après upload. On met à jour l'annonce via PATCH pour pousser l'URL dans photos[]
+export async function addAnnonceImageMeta(annonceId: string, opts: { url: string; filename?: string; isMain?: boolean; uploadedBy?: string }) {
+  const { url, isMain = false } = opts;
+  if (!annonceId || !url) return;
+  try {
+    // Récupère l'annonce actuelle pour fusionner les photos
+    const cur = await fetch(`/api/annonces/${encodeURIComponent(annonceId)}`).then(r => r.ok ? r.json() : null).catch(() => null);
+    const curPhotos: string[] = Array.isArray(cur?.photos) ? cur.photos : [];
+    const nextPhotos = Array.from(new Set([...curPhotos, url]));
+    const patch: any = { photos: nextPhotos };
+    if (isMain || !cur?.imageUrl) patch.imageUrl = url;
+    await fetch(`/api/annonces/${encodeURIComponent(annonceId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+  } catch {}
+}
+
+// Reconstruire l'array photos côté annonce: best-effort en lisant l'annonce (pas d'images séparées en DB pour l'instant)
+export async function rebuildAnnoncePhotosArray(annonceId: string) {
+  const cur = await fetch(`/api/annonces/${encodeURIComponent(annonceId)}`).then(r => r.ok ? r.json() : null).catch(() => null);
+  const curPhotos: string[] = Array.isArray(cur?.photos) ? cur.photos : [];
+  return curPhotos;
+}
+
+// Définir la photo principale d'une annonce par index: ici on se contente de mettre imageUrl = photos[idx]
+export async function setAnnonceMainPhoto(annonceId: string, idx: number) {
+  try {
+    const cur = await fetch(`/api/annonces/${encodeURIComponent(annonceId)}`).then(r => r.ok ? r.json() : null).catch(() => null);
+    const curPhotos: string[] = Array.isArray(cur?.photos) ? cur.photos : [];
+    if (!curPhotos.length) return;
+    const i = Math.max(0, Math.min(idx, curPhotos.length - 1));
+    const main = curPhotos[i];
+    await fetch(`/api/annonces/${encodeURIComponent(annonceId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageUrl: main }),
+    });
+  } catch {}
+}
+
+// Pour compat: upload + métadonnées d'une annonce en une fois (côté client)
+export async function uploadAnnoncePhotoWithMeta(file: File, annonceId: string) {
+  const url = await uploadPhoto(file);
+  await addAnnonceImageMeta(annonceId, { url });
+  return { url } as { url: string; id?: number };
+}
+
+// Supprimer une image d'annonce: met à jour photos[]/imageUrl et supprime le fichier
+export async function deleteAnnoncePhotoWithMeta(annonceId: string, url: string) {
+  if (!annonceId || !url) return;
+  try {
+    const cur = await fetch(`/api/annonces/${encodeURIComponent(annonceId)}`).then(r => r.ok ? r.json() : null).catch(() => null);
+    const curPhotos: string[] = Array.isArray(cur?.photos) ? cur.photos : [];
+    const nextPhotos = curPhotos.filter((u) => u !== url);
+    const patch: any = { photos: nextPhotos };
+    if (cur?.imageUrl === url) patch.imageUrl = nextPhotos[0] || null;
+    await fetch(`/api/annonces/${encodeURIComponent(annonceId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+  } catch {}
+  try {
+    await fetch(`/api/uploads?path=${encodeURIComponent(url)}`, { method: 'DELETE' });
+  } catch {}
 }
