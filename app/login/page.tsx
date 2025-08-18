@@ -4,12 +4,11 @@ import { useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { signInEmail } from "@/lib/services/authService";
-import useAuthRedirect from "@/hooks/useAuthRedirect";
 import { toast as appToast } from "@/components/Toast";
 
 export default function LoginPage() {
   const router = useRouter();
-  useAuthRedirect(router);
+  // Pas de redirection automatique ici; on laisse NextAuth gérer via callbackUrl.
 
   const params = useSearchParams();
   const oauthError = params?.get("error");

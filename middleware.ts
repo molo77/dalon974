@@ -1,5 +1,9 @@
 export { default } from "next-auth/middleware";
 
+// Ne protège que les routes privées. Laisser /login et les pages publiques accessibles.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/auth).*)"],
+  matcher: [
+    "/dashboard/:path*",
+    "/admin/:path*",
+  ],
 };
