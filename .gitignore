@@ -69,6 +69,4 @@ functions/serviceAccount*.json
 !yarn.lock
 !pnpm-lock.yaml
 
-# Upload Image 
 
-/public/uploads
