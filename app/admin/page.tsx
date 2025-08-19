@@ -114,8 +114,21 @@ export default function AdminPage() {
     if (seeding) return;
     setSeeding(true);
     try {
-  // TODO: Implémenter via API Prisma si nécessaire
-  showToast("success", "Action temporairement désactivée.");
+      const res = await fetch("/api/admin/seed-annonces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ perCommune: false, count: 12 }),
+      });
+      if (!res.ok) throw new Error("seed annonces failed");
+      const { created } = await res.json();
+      showToast("success", `${created} annonce(s) d'exemple créées ✅`);
+      // refresh liste
+      if (activeTab === "annonces") {
+        const r = await fetch("/api/annonces?limit=200", { cache: "no-store" });
+        if (r.ok) setAdminAnnonces(await r.json());
+      }
+    } catch (e: any) {
+      showToast("error", e?.message || "Erreur création d'exemples");
     } finally {
       setSeeding(false);
     }
@@ -126,8 +139,20 @@ export default function AdminPage() {
     if (seedingColocs) return;
     setSeedingColocs(true);
     try {
-  // TODO: Implémenter via API Prisma si nécessaire
-  showToast("success", "Action temporairement désactivée.");
+      const res = await fetch("/api/admin/seed-colocs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: 12 }),
+      });
+      if (!res.ok) throw new Error("seed colocs failed");
+      const { created } = await res.json();
+      showToast("success", `${created} profil(s) d'exemple créés ✅`);
+      if (activeTab === "colocs") {
+        const items = await listColoc({ limit: 200 });
+        setAdminColocs(items);
+      }
+    } catch (e: any) {
+      showToast("error", e?.message || "Erreur création profils d'exemple");
     } finally {
       setSeedingColocs(false);
     }

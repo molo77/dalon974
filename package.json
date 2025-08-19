@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0 -p 3000 --turbopack",
+  "dev:raw": "next dev -H 0.0.0.0 -p 3000 --turbopack",
+  "dev": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$p=(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess); if($p){Write-Host 'Killing PID' $p 'on :3000'; Stop-Process -Id $p -Force; Start-Sleep -Seconds 1}; npm run dev:raw\"",
     "prisma:generate": "prisma generate",
     "migrate:prisma": "prisma migrate dev",
     "migrate:firestore-to-mysql": "ts-node --transpile-only scripts/migrateFirestoreToMySQL.ts --apply",

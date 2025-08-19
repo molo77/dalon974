@@ -1,0 +1,57 @@
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import type { Session } from "next-auth";
+import { authOptions } from "../../auth/[...nextauth]/authOptions";
+import prisma from "@/lib/prismaClient";
+
+type SeedBody = {
+  count?: number;
+};
+
+export async function POST(req: Request) {
+  try {
+    const session = (await getServerSession(authOptions as any)) as Session | null;
+    const isAdmin = (session?.user as any)?.role === "admin";
+    if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    const body = (await req.json().catch(() => ({}))) as SeedBody;
+    const n = Math.min(Math.max(body.count ?? 10, 1), 200);
+
+    const now = new Date();
+    const userId = (session?.user as any)?.id || null;
+    const pick = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
+
+    const prenoms = ["Alex", "Marie", "Lucas", "Emma", "Tom", "Chloé", "Noah", "Léa"]; 
+    const villes = ["Saint-Denis", "Saint-Paul", "Le Tampon", "Saint-Pierre", "Saint-André", "Le Port"]; 
+    const jobs = ["Étudiant(e)", "Développeur", "Infirmier(ère)", "Commercial(e)", "Artisan", "Enseignant(e)"];
+
+    const toCreate: any[] = [];
+    for (let i = 0; i < n; i++) {
+      const nom = `${pick(prenoms)} ${Math.floor(18 + Math.random() * 20)}`;
+      const ville = pick(villes);
+      const budget = 400 + Math.floor(Math.random() * 800);
+      toCreate.push({
+        id: globalThis.crypto?.randomUUID?.() ?? require("crypto").randomUUID(),
+        userId,
+        title: nom,
+        description: `Je cherche une colocation à ${ville}. Budget environ ${budget} €.`,
+        imageUrl: "/images/coloc-placeholder.png",
+        photos: [],
+        mainPhotoIdx: 0,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    const chunks = (arr: any[], size = 50) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
+    let created = 0;
+    for (const batch of chunks(toCreate, 50)) {
+      await prisma.$transaction(batch.map((data) => prisma.colocProfile.create({ data })));
+      created += batch.length;
+    }
+    return NextResponse.json({ created });
+  } catch (e) {
+    console.error("[API][admin][seed-colocs]", e);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
