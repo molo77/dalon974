@@ -112,6 +112,34 @@ export default function HomePage() {
   }, [SLUG_TO_NAME, SUB_COMMUNES]);
   const altSlugToCanonical = nameToParentSlug;
 
+  // Sous-communes par commune parente (clé: parentSlug -> liste de noms de sous-communes)
+  const SUBS_BY_PARENT = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    SUB_COMMUNES.forEach(({ name, parent }) => {
+      const ps = slugify(parent);
+      if (!map[ps]) map[ps] = [];
+      map[ps].push(name);
+    });
+    return map;
+  }, [SUB_COMMUNES]);
+
+  // Extrait un label de sous-communes détectées dans les textes fournis, limité à quelques occurrences
+  const extractSubCommunesLabel = useCallback((texts: Array<string | null | undefined>, parentSlug?: string) => {
+    if (!parentSlug) return undefined;
+    const names = SUBS_BY_PARENT[parentSlug];
+    if (!names || names.length === 0) return undefined;
+    const found = new Set<string>();
+    for (const t of texts) {
+      const s = (t || '').toString();
+      if (!s) continue;
+      for (const n of names) {
+        if (s.includes(n)) found.add(n);
+      }
+    }
+    if (found.size === 0) return undefined;
+    return Array.from(found).slice(0, 3).join(', ');
+  }, [SUBS_BY_PARENT]);
+
   // Etats UI et filtres
   const [activeHomeTab, setActiveHomeTab] = useState<null | "annonces" | "colocataires">(null);
   const [filtering, setFiltering] = useState(false);
@@ -258,9 +286,11 @@ export default function HomePage() {
           const zonesFromSlugs = slugsArr.length ? computeZonesFromSlugs(slugsArr) : [];
           const zonesArr: string[] = Array.isArray(p.zones) && p.zones.length ? (p.zones as string[]) : zonesFromSlugs;
           const zonesLabel = zonesArr && zonesArr.length ? zonesArr.join(', ') : (p.ville || '-');
+          const subLabel = extractSubCommunesLabel([p.nom, p.description, p.ville], parentSlug);
           return {
             id: p.id,
             titre: p.nom || 'Recherche colocation',
+            nom: p.nom || 'Recherche colocation',
             ville: zonesLabel,
             prix: Number.isFinite(budgetNum) ? budgetNum : undefined,
             surface: undefined,
@@ -269,7 +299,7 @@ export default function HomePage() {
             createdAt: p.createdAt,
             parentSlug,
             zonesLabel,
-            subCommunesLabel: selectedSubCommunesLabel || undefined,
+            subCommunesLabel: subLabel,
             age: p.age,
             profession: p.profession,
           };
@@ -299,18 +329,22 @@ export default function HomePage() {
           if (prixMax !== null && typeof d.prix === 'number' && d.prix > prixMax) return false;
           return true;
         });
-        const mapped = filtered.map((d: any) => ({
-          id: d.id,
-          titre: d.titre ?? d.title ?? '',
-          ville: d.ville ?? null,
-          prix: typeof d.prix === 'number' ? d.prix : undefined,
-          surface: d.surface ?? null,
-          description: d.description ?? null,
-          imageUrl: d.imageUrl || defaultAnnonceImg,
-          createdAt: d.createdAt,
-          parentSlug: getDocParentSlug(d),
-          subCommunesLabel: selectedSubCommunesLabel || undefined,
-        }));
+        const mapped = filtered.map((d: any) => {
+          const parentSlug = getDocParentSlug(d);
+          const subLabel = extractSubCommunesLabel([d.titre ?? d.title, d.description, d.ville], parentSlug);
+          return {
+            id: d.id,
+            titre: d.titre ?? d.title ?? '',
+            ville: d.ville ?? null,
+            prix: typeof d.prix === 'number' ? d.prix : undefined,
+            surface: d.surface ?? null,
+            description: d.description ?? null,
+            imageUrl: d.imageUrl || defaultAnnonceImg,
+            createdAt: d.createdAt,
+            parentSlug,
+            subCommunesLabel: subLabel,
+          };
+        });
         const toMs = (x: any) => {
           const v = x?.createdAt; if (!v) return 0; if (typeof v === 'number') return v;
           if ((v as any)?.seconds) return (v as any).seconds * 1000 + ((v as any).nanoseconds ? Math.floor((v as any).nanoseconds / 1e6) : 0);
@@ -768,6 +802,7 @@ export default function HomePage() {
                             description={annonce.description}
                             createdAt={annonce.createdAt}
                             imageUrl={annonce.imageUrl}
+                            subCommunesLabel={annonce.subCommunesLabel}
                             onClick={() => {
                               setColocDetail(annonce);
                               setColocDetailOpen(true);
@@ -784,6 +819,7 @@ export default function HomePage() {
                             createdAt={annonce.createdAt}
                             imageUrl={annonce.imageUrl || defaultAnnonceImg}
                             zonesLabel={annonce.zonesLabel}
+                            subCommunesLabel={annonce.subCommunesLabel}
                             onEdit={isAdmin ? () => setEditAnnonce(annonce) : undefined}
                             onDelete={isAdmin ? () => setDeleteAnnonceId(annonce.id) : undefined}
                           />

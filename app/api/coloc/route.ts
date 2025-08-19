@@ -17,29 +17,50 @@ export async function GET(req: Request) {
     if (prixMax) where.budget = { lte: Number(prixMax) };
     if (ageMin) where.age = { ...(where.age || {}), gte: Number(ageMin) };
     if (ageMax) where.age = { ...(where.age || {}), lte: Number(ageMax) };
-    // IMPORTANT: sélectionner uniquement les colonnes existantes en base pour éviter P2022
-  let list = await prisma.colocProfile.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: limit,
-      skip: offset,
-      select: {
-        id: true,
-        userId: true,
-        title: true,
-        description: true,
-        imageUrl: true,
-        photos: true,
-        mainPhotoIdx: true,
-    ville: true,
-    budget: true,
-    age: true,
-    communesSlugs: true,
-    zones: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    // Essayer une sélection étendue; en cas de P2022 (colonne manquante), fallback minimal
+    let list: any[] = [];
+    try {
+      list = await prisma.colocProfile.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip: offset,
+        select: {
+          id: true,
+          userId: true,
+          title: true,
+          description: true,
+          imageUrl: true,
+          photos: true,
+          mainPhotoIdx: true,
+          ville: true,
+          budget: true,
+          age: true,
+          communesSlugs: true,
+          zones: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+    } catch (e: any) {
+      // Fallback: colonnes pas encore migrées -> sélection minimale sans where avancé
+      list = await prisma.colocProfile.findMany({
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip: offset,
+        select: {
+          id: true,
+          userId: true,
+          title: true,
+          description: true,
+          imageUrl: true,
+          photos: true,
+          mainPhotoIdx: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+    }
     // communesSlugs array-contains-any (fallback: filtrage en mémoire)
     if (slugsCsv) {
       const want = slugsCsv.split(",").map(s => s.trim()).filter(Boolean);
@@ -53,7 +74,7 @@ export async function GET(req: Request) {
       }
     }
     // compat: pour l'UI, on renvoie quelques alias attendus
-  const mapped = list.map((p: any) => ({
+    const mapped = list.map((p: any) => ({
       ...p,
       // alias attendu par l'UI
       nom: (p as any).nom ?? p.title ?? null,

@@ -1,0 +1,9 @@
+.next/
+node_modules/
+.next*
+*.log
+public/
+coverage/
+dist/
+build/
+.prisma/
