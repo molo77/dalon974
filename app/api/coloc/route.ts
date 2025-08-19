@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     if (ageMin) where.age = { ...(where.age || {}), gte: Number(ageMin) };
     if (ageMax) where.age = { ...(where.age || {}), lte: Number(ageMax) };
     // IMPORTANT: sélectionner uniquement les colonnes existantes en base pour éviter P2022
-    let list = await prisma.colocProfile.findMany({
+  let list = await prisma.colocProfile.findMany({
       where,
       orderBy: { createdAt: "desc" },
       take: limit,
@@ -31,6 +31,11 @@ export async function GET(req: Request) {
         imageUrl: true,
         photos: true,
         mainPhotoIdx: true,
+    ville: true,
+    budget: true,
+    age: true,
+    communesSlugs: true,
+    zones: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -48,7 +53,7 @@ export async function GET(req: Request) {
       }
     }
     // compat: pour l'UI, on renvoie quelques alias attendus
-    const mapped = list.map((p: any) => ({
+  const mapped = list.map((p: any) => ({
       ...p,
       // alias attendu par l'UI
       nom: (p as any).nom ?? p.title ?? null,

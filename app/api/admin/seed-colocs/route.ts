@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import type { Session } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/authOptions";
 import prisma from "@/lib/prismaClient";
+import { COMMUNES, SUB_COMMUNES, slugify, computeZonesFromSlugs } from "@/lib/communes";
 
 type SeedBody = {
   count?: number;
@@ -21,23 +22,35 @@ export async function POST(req: Request) {
     const userId = (session?.user as any)?.id || null;
     const pick = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
 
-    const prenoms = ["Alex", "Marie", "Lucas", "Emma", "Tom", "Chloé", "Noah", "Léa"]; 
-    const villes = ["Saint-Denis", "Saint-Paul", "Le Tampon", "Saint-Pierre", "Saint-André", "Le Port"]; 
+  const prenoms = ["Alex", "Marie", "Lucas", "Emma", "Tom", "Chloé", "Noah", "Léa"]; 
+  const villes = COMMUNES; 
     const jobs = ["Étudiant(e)", "Développeur", "Infirmier(ère)", "Commercial(e)", "Artisan", "Enseignant(e)"];
 
     const toCreate: any[] = [];
     for (let i = 0; i < n; i++) {
       const nom = `${pick(prenoms)} ${Math.floor(18 + Math.random() * 20)}`;
-      const ville = pick(villes);
+      // 60% des cas: utiliser une sous-commune, sinon la commune principale
+      const useSub = SUB_COMMUNES.length && Math.random() < 0.6;
+      const sc = useSub ? SUB_COMMUNES[Math.floor(Math.random() * SUB_COMMUNES.length)] : null;
+      const ville = sc ? sc.parent : pick(villes);
+      const subLabel = sc ? ` (${sc.name})` : "";
+      const slug = slugify(ville);
+      const communesSlugs = [slug];
+      const zones = computeZonesFromSlugs(communesSlugs);
       const budget = 400 + Math.floor(Math.random() * 800);
       toCreate.push({
         id: globalThis.crypto?.randomUUID?.() ?? require("crypto").randomUUID(),
         userId,
         title: nom,
-        description: `Je cherche une colocation à ${ville}. Budget environ ${budget} €.`,
+        description: `Je cherche une colocation à ${ville}${subLabel}. Budget environ ${budget} €.`,
         imageUrl: "/images/coloc-placeholder.png",
         photos: [],
         mainPhotoIdx: 0,
+        // champs additionnels si présents dans le schéma
+        ville,
+        budget,
+        communesSlugs,
+        zones,
         createdAt: now,
         updatedAt: now,
       });

@@ -3,8 +3,7 @@ import { getServerSession } from "next-auth";
 import type { Session } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/authOptions";
 import prisma from "@/lib/prismaClient";
-import fs from "fs";
-import path from "path";
+import { COMMUNES, SUB_COMMUNES } from "@/lib/communes";
 
 type SeedBody = {
   perCommune?: boolean;
@@ -21,16 +20,9 @@ export async function POST(req: Request) {
     const perCommune = !!body.perCommune;
     const max = Math.min(Math.max(body.count ?? 0, 0), 200);
 
-    // Charger la liste des communes depuis public/data
-    let communes: string[] = [];
-    try {
-      const filePath = path.join(process.cwd(), "public", "data", "reunion-communes.json");
-      const raw = fs.readFileSync(filePath, "utf8");
-      const arr = JSON.parse(raw);
-      communes = Array.isArray(arr) ? arr.map((c: any) => c?.nom || c?.name || c).filter(Boolean) : [];
-    } catch {
-      communes = [];
-    }
+  // Liste interne des communes et sous-communes
+  const communes = COMMUNES;
+  const subCommunes = SUB_COMMUNES;
 
     const now = new Date();
     const userId = (session?.user as any)?.id || null;
@@ -43,6 +35,7 @@ export async function POST(req: Request) {
 
     const toCreate: any[] = [];
     if (perCommune && communes.length) {
+      // Une annonce par commune principale
       for (const commune of communes) {
         toCreate.push({
           id: globalThis.crypto?.randomUUID?.() ?? require("crypto").randomUUID(),
@@ -61,20 +54,17 @@ export async function POST(req: Request) {
           updatedAt: now,
         });
       }
-    } else {
-      const n = max || 10;
-      const baseCommunes = communes.length ? communes : ["Saint-Denis", "Saint-Paul", "Le Tampon", "Saint-Pierre"];
-      for (let i = 0; i < n; i++) {
-        const commune = pick(baseCommunes);
+      // Et une annonce par sous-commune (ville = commune parente)
+      for (const sc of subCommunes) {
         toCreate.push({
           id: globalThis.crypto?.randomUUID?.() ?? require("crypto").randomUUID(),
           userId,
-          title: `Annonce d’exemple #${i + 1} - ${commune}`,
-          description: `Annonce de démo #${i + 1} située à ${commune}.`,
+          title: `Annonce d’exemple - ${sc.name} (${sc.parent})`,
+          description: `Logement d’exemple situé à ${sc.name} (${sc.parent}). Quartier agréable, bien desservi.`,
           imageUrl: pick(images),
           photos: [],
           mainPhotoIdx: 0,
-          ville: commune,
+          ville: sc.parent,
           prix: 500 + Math.floor(Math.random() * 1200),
           surface: 20 + Math.floor(Math.random() * 80),
           nbChambres: 1 + Math.floor(Math.random() * 4),
@@ -82,6 +72,50 @@ export async function POST(req: Request) {
           createdAt: now,
           updatedAt: now,
         });
+      }
+    } else {
+      const n = max || 10;
+      const baseCommunes = communes.length ? communes : ["Saint-Denis", "Saint-Paul", "Le Tampon", "Saint-Pierre"];
+      for (let i = 0; i < n; i++) {
+        // 50% sous-commune, sinon commune principale
+        const useSub = subCommunes.length && Math.random() < 0.5;
+        if (useSub) {
+          const sc = subCommunes[Math.floor(Math.random() * subCommunes.length)];
+          toCreate.push({
+            id: globalThis.crypto?.randomUUID?.() ?? require("crypto").randomUUID(),
+            userId,
+            title: `Annonce d’exemple #${i + 1} - ${sc.name} (${sc.parent})`,
+            description: `Annonce de démo #${i + 1} située à ${sc.name} (${sc.parent}).`,
+            imageUrl: pick(images),
+            photos: [],
+            mainPhotoIdx: 0,
+            ville: sc.parent,
+            prix: 500 + Math.floor(Math.random() * 1200),
+            surface: 20 + Math.floor(Math.random() * 80),
+            nbChambres: 1 + Math.floor(Math.random() * 4),
+            equipements: "Wifi, Meublé",
+            createdAt: now,
+            updatedAt: now,
+          });
+        } else {
+          const commune = pick(baseCommunes);
+          toCreate.push({
+            id: globalThis.crypto?.randomUUID?.() ?? require("crypto").randomUUID(),
+            userId,
+            title: `Annonce d’exemple #${i + 1} - ${commune}`,
+            description: `Annonce de démo #${i + 1} située à ${commune}.`,
+            imageUrl: pick(images),
+            photos: [],
+            mainPhotoIdx: 0,
+            ville: commune,
+            prix: 500 + Math.floor(Math.random() * 1200),
+            surface: 20 + Math.floor(Math.random() * 80),
+            nbChambres: 1 + Math.floor(Math.random() * 4),
+            equipements: "Wifi, Meublé",
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
       }
     }
 
