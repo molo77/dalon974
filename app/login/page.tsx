@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { signInEmail } from "@/lib/services/authService";
 import { toast as appToast } from "@/components/Toast";
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   // Pas de redirection automatique ici; on laisse NextAuth gérer via callbackUrl.
 
@@ -109,6 +109,14 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginContent />
+    </Suspense>
   );
 }
 

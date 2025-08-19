@@ -34,11 +34,17 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
   const isOwner = a.userId && ((session.user as any)?.id ? a.userId === (session.user as any).id : false);
   const isAdmin = (session.user as any)?.role === "admin";
     if (!isOwner && !isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const data: any = { ...body };
-    if (typeof data.titre !== "undefined") {
-      data.title = data.titre;
-      delete data.titre;
+    const input: any = { ...body };
+    if (typeof input.titre !== "undefined") {
+      input.title = input.titre;
+      delete input.titre;
     }
+    const allowed = [
+      'title', 'description', 'imageUrl', 'photos', 'mainPhotoIdx',
+      'ville', 'prix', 'surface', 'nbChambres', 'equipements',
+    ];
+    const data: any = {};
+    for (const k of allowed) if (k in input) data[k] = input[k];
   const updated = await prisma.annonce.update({ where: { id }, data });
     return NextResponse.json(updated);
   } catch (e) {

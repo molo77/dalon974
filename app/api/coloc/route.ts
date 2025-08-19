@@ -17,7 +17,24 @@ export async function GET(req: Request) {
     if (prixMax) where.budget = { lte: Number(prixMax) };
     if (ageMin) where.age = { ...(where.age || {}), gte: Number(ageMin) };
     if (ageMax) where.age = { ...(where.age || {}), lte: Number(ageMax) };
-    let list = await prisma.colocProfile.findMany({ where, orderBy: { createdAt: "desc" }, take: limit, skip: offset });
+    // IMPORTANT: sélectionner uniquement les colonnes existantes en base pour éviter P2022
+    let list = await prisma.colocProfile.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      skip: offset,
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        description: true,
+        imageUrl: true,
+        photos: true,
+        mainPhotoIdx: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
     // communesSlugs array-contains-any (fallback: filtrage en mémoire)
     if (slugsCsv) {
       const want = slugsCsv.split(",").map(s => s.trim()).filter(Boolean);
@@ -33,7 +50,8 @@ export async function GET(req: Request) {
     // compat: pour l'UI, on renvoie quelques alias attendus
     const mapped = list.map((p: any) => ({
       ...p,
-      nom: p.nom ?? p.title ?? null,
+      // alias attendu par l'UI
+      nom: (p as any).nom ?? p.title ?? null,
     }));
     return NextResponse.json(mapped);
   } catch (e) {

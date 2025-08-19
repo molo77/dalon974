@@ -105,6 +105,15 @@ export const authOptions: NextAuthOptions = {
         if (verified !== true) return false;
       }
 
+      // Option: promouvoir automatiquement certains emails en admin (liste séparée par des virgules)
+      try {
+        const admins = (process.env.ADMIN_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+        const emailLower = email.toLowerCase();
+        if (admins.includes(emailLower)) {
+          await prisma.user.update({ where: { email: emailLower }, data: { role: "admin" } });
+          (user as any).role = "admin";
+        }
+      } catch {}
       return true;
     },
     async session({ session, token, user }) {
@@ -115,7 +124,17 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
     async jwt({ token, user }) {
-      if (user) token.role = (user as any).role || null;
+      // Toujours resynchroniser le rôle depuis la DB pour refléter les changements récents
+      if (token.sub) {
+        try {
+          const u = await prisma.user.findUnique({ where: { id: token.sub }, select: { role: true } });
+          token.role = (u?.role as any) ?? ((user as any)?.role ?? token.role ?? null);
+        } catch {
+          token.role = (user as any)?.role ?? token.role ?? null;
+        }
+      } else if (user) {
+        token.role = (user as any).role ?? token.role ?? null;
+      }
       return token as any;
     },
   },

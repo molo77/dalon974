@@ -71,7 +71,7 @@ export default function Header() {
               >
                 Déconnexion
               </button>
-              {/* Bouton accès admin après Déconnexion */}
+              {/* Bouton accès admin (role basé sur session) */}
           {isAdmin && (
                 <Link
                   href="/admin"

@@ -1,9 +1,19 @@
-export { default } from "next-auth/middleware";
+import { withAuth } from "next-auth/middleware";
 
-// Ne protège que les routes privées. Laisser /login et les pages publiques accessibles.
+export default withAuth({
+  callbacks: {
+    authorized: ({ token, req }) => {
+      const path = req.nextUrl.pathname || "";
+      // Admin uniquement pour /admin
+      if (path.startsWith("/admin")) return token?.role === "admin";
+      // Auth requis pour /dashboard
+      if (path.startsWith("/dashboard")) return !!token;
+      return true;
+    },
+  },
+});
+
+// Protéger uniquement les routes privées.
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/admin/:path*",
-  ],
+  matcher: ["/dashboard/:path*", "/admin/:path*"],
 };

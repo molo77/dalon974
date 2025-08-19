@@ -13,7 +13,7 @@ const serverTimestamp = () => new Date();
 import AnnonceModal from "@/components/AnnonceModal";
 const ColocPhotoSection = dynamic(() => import("@/components/ColocPhotoSection"), { ssr: false });
 import { updateAnnonce, deleteAnnonce } from "@/lib/services/annonceService";
-import { updateColoc, deleteColoc, getColoc } from "@/lib/services/colocService";
+import { updateColoc, deleteColoc, getColoc, listColoc } from "@/lib/services/colocService";
 import Link from "next/link"; // + import
 import Image from "next/image";
 import { toast as appToast } from "@/components/Toast";
@@ -133,11 +133,24 @@ export default function AdminPage() {
     }
   };
 
-  // Abonnement temps réel aux annonces (200 dernières, triées par date desc)
+  // Chargement des annonces
   useEffect(() => {
     if (activeTab !== "annonces") return;
-  // TODO: remplacer par fetch(/api/annonces) polling
-  setAdminAnnonces([]);
+    let stop = false;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/annonces?limit=200", { cache: "no-store" });
+        if (!res.ok) throw new Error("annonces fetch failed");
+        const items = await res.json();
+        // assurer la compat UI
+        const mapped = (Array.isArray(items) ? items : []).map((a: any) => ({ ...a, titre: a.titre ?? a.title ?? "" }));
+        if (!stop) setAdminAnnonces(mapped);
+      } catch (e) {
+        if (!stop) setAdminAnnonces([]);
+      }
+    };
+    load();
+    return () => { stop = true; };
   }, [activeTab]);
 
   // NOUVEAU: Abonnement temps réel aux utilisateurs pour résoudre les propriétaires
@@ -146,10 +159,20 @@ export default function AdminPage() {
   setOwnersById({});
   }, [activeTab]);
 
-  // NOUVEAU: abonnement temps réel aux profils colocataires
+  // Chargement des profils colocataires
   useEffect(() => {
     if (activeTab !== "colocs") return;
-  setAdminColocs([]);
+    let stop = false;
+    const load = async () => {
+      try {
+        const items = await listColoc({ limit: 200 });
+        if (!stop) setAdminColocs(items);
+      } catch (e) {
+        if (!stop) setAdminColocs([]);
+      }
+    };
+    load();
+    return () => { stop = true; };
   }, [activeTab]);
 
   const toggleAdminSelect = (id: string) => {

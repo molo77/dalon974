@@ -7,9 +7,23 @@ import { authOptions } from "../../auth/[...nextauth]/authOptions";
 export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
   try {
   const { id } = await context.params;
-  const p = await prisma.colocProfile.findUnique({ where: { id } });
-    if (!p) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json(p);
+  const p = await prisma.colocProfile.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        description: true,
+        imageUrl: true,
+        photos: true,
+        mainPhotoIdx: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  if (!p) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const mapped: any = { ...p, nom: (p as any).nom ?? p.title ?? null };
+  return NextResponse.json(mapped);
   } catch (e) {
     console.error("[API][coloc][id][GET]", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

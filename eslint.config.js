@@ -1,15 +1,2 @@
-// ESLint Flat config compatible ESLint 8.x
-const next = require('eslint-config-next');
-
-const nextArray = Array.isArray(next) ? next : [next];
-
-module.exports = [
-  { ignores: ['**/.next/**', 'node_modules/**', 'dist/**', 'out/**', 'coverage/**', 'build/**'] },
-  ...nextArray,
-  {
-    rules: {
-      'react/react-in-jsx-scope': 'off',
-      '@next/next/no-img-element': 'warn',
-    },
-  },
-];
+// Intentionally empty to let .eslintrc.json drive config
+module.exports = [{}];

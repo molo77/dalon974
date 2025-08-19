@@ -30,17 +30,27 @@ export async function POST(req: Request) {
     if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const body = await req.json();
     const userId = (session.user as any)?.id || null;
-    const data: any = { ...body };
-    if (typeof data.titre !== "undefined") {
-      data.title = data.titre;
-      delete data.titre;
+    const input: any = { ...body };
+    // Map UI -> Prisma
+    if (typeof input.titre !== "undefined") {
+      input.title = input.titre;
+      delete input.titre;
     }
-    const created = await prisma.annonce.create({
-      data: {
-        ...data,
-    userId,
-      } as any,
-    });
+    // Garder uniquement les champs supportés par le modèle Prisma
+    const allowed = [
+      'id', 'title', 'description', 'imageUrl', 'photos', 'mainPhotoIdx',
+      'ville', 'prix', 'surface', 'nbChambres', 'equipements',
+    ];
+    const data: any = {};
+    for (const k of allowed) if (k in input) data[k] = input[k];
+    // Générer un id si manquant
+    if (!data.id) data.id = (globalThis.crypto?.randomUUID?.() || require('crypto').randomUUID());
+    // Attribuer l'utilisateur
+    data.userId = userId;
+    // Timestamp de création si pas fourni
+    if (!data.createdAt) data.createdAt = new Date();
+
+    const created = await prisma.annonce.create({ data });
     return NextResponse.json(created, { status: 201 });
   } catch (e) {
     console.error("[API][annonces][POST]", e);
