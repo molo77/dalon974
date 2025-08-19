@@ -23,7 +23,8 @@ function getIpFromHeaders(h: Record<string, string | string[] | undefined>) {
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
-  session: { strategy: "database" },
+  // Utiliser JWT pour que le middleware next-auth fonctionne côté Edge
+  session: { strategy: "jwt" },
   providers: [
     CredentialsProvider({
       name: "Email",
@@ -106,10 +107,10 @@ export const authOptions: NextAuthOptions = {
 
       return true;
     },
-    async session({ session, user, token }) {
+    async session({ session, token, user }) {
       if (session.user) {
-        (session.user as any).id = user?.id || (token as any)?.sub;
-        (session.user as any).role = (user as any)?.role || (token as any)?.role || null;
+        (session.user as any).id = (token as any)?.sub || user?.id;
+        (session.user as any).role = (token as any)?.role || (user as any)?.role || null;
       }
       return session;
     },
