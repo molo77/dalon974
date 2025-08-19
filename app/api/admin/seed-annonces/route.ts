@@ -86,11 +86,11 @@ export async function POST(req: Request) {
     }
 
     if (!toCreate.length) return NextResponse.json({ created: 0 });
-    const chunks = (arr: any[], size = 50) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
+    const chunks = (arr: any[], size = 100) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
     let created = 0;
-    for (const batch of chunks(toCreate, 50)) {
-      await prisma.$transaction(batch.map((data) => prisma.annonce.create({ data })));
-      created += batch.length;
+    for (const batch of chunks(toCreate, 100)) {
+      const res = await prisma.annonce.createMany({ data: batch, skipDuplicates: true });
+      created += res.count;
     }
     return NextResponse.json({ created });
   } catch (e) {

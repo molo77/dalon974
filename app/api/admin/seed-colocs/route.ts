@@ -45,9 +45,9 @@ export async function POST(req: Request) {
 
     const chunks = (arr: any[], size = 50) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
     let created = 0;
-    for (const batch of chunks(toCreate, 50)) {
-      await prisma.$transaction(batch.map((data) => prisma.colocProfile.create({ data })));
-      created += batch.length;
+    for (const batch of chunks(toCreate, 100)) {
+      const res = await prisma.colocProfile.createMany({ data: batch, skipDuplicates: true });
+      created += res.count;
     }
     return NextResponse.json({ created });
   } catch (e) {
