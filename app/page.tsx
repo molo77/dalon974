@@ -1,9 +1,9 @@
-
 "use client";
 import ColocProfileModal from "@/components/ColocProfileModal";
 import AnnonceDetailModal from "@/components/AnnonceDetailModal";
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import Image from "next/image";
 // Firestore shim uniquement pour la branche coloc (temporaire)
 // Firestore supprimé: tout passe par les APIs internes
@@ -19,7 +19,6 @@ import AnnonceModal from "@/components/AnnonceModal";
 // AuthProvider n'exporte pas useAuth dans ce projet; on neutralise l'usage pour déverrouiller la build
 import { showToast } from "@/lib/toast";
 import CommuneZoneSelector from "@/components/CommuneZoneSelector";
-import useCommuneCp from "@/hooks/useCommuneCp";
 import { preloadReunionFeatures } from "@/lib/reunionGeo";
 const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr: false });
 
@@ -35,8 +34,9 @@ export default function HomePage() {
     for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return false;
     return true;
   }
-  // Admin depuis AuthProvider (suivi temps réel Firestore)
-  const isAdmin = false; // TODO: remplacer par un vrai rôle admin via session
+  // Rôle admin depuis la session NextAuth
+  const { data: session } = useSession();
+  const isAdmin = (session as any)?.user?.role === 'admin';
   const [editAnnonce, setEditAnnonce] = useState<any|null>(null);
   const [annonceDetail, setAnnonceDetail] = useState<any|null>(null);
   const [deleteAnnonceId, setDeleteAnnonceId] = useState<string|null>(null);
@@ -112,7 +112,7 @@ export default function HomePage() {
   }, [SLUG_TO_NAME, SUB_COMMUNES]);
   const altSlugToCanonical = nameToParentSlug;
 
-  // Sous-communes par commune parente (clé: parentSlug -> liste de noms de sous-communes)
+  // Index des sous-communes par commune parente (clé: parentSlug -> liste de noms de sous-communes)
   const SUBS_BY_PARENT = useMemo(() => {
     const map: Record<string, string[]> = {};
     SUB_COMMUNES.forEach(({ name, parent }) => {
@@ -137,7 +137,9 @@ export default function HomePage() {
       }
     }
     if (found.size === 0) return undefined;
-    return Array.from(found).slice(0, 3).join(', ');
+    const arr = Array.from(found);
+    arr.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+    return arr.slice(0, 3).join(', ');
   }, [SUBS_BY_PARENT]);
 
   // Etats UI et filtres
@@ -185,8 +187,7 @@ export default function HomePage() {
   const selectedSubCommunesLabel = "";
   const showCommuneMap = true;
 
-  // Hook villes/CP
-  const { COMMUNES_CP_SORTED, onVilleChange } = useCommuneCp({ setVille, setCodePostal });
+  // Saisie par commune désactivée: sélection via carte et zones uniquement
 
   const computeZonesFromSlugs = useCallback((slugs: string[]): string[] => {
     const names = slugs.map((s) => parentSlugToName[s]).filter(Boolean) as string[];
@@ -202,50 +203,14 @@ export default function HomePage() {
     return nameToParentSlug[s] || s;
   }, [nameToParentSlug]);
 
-  // Modes UI
-  const [uiModes, setUiModes] = useState<string[]>(["map", "budget"]);
-  const hasMode = useCallback((m: string) => uiModes.includes(m), [uiModes]);
-  const toggleMode = useCallback((m: string) => {
-    setUiModes((prev) => prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]);
-  }, []);
-
-  // Ajout communes depuis l'input
-  const addTypedCommune = useCallback(() => {
-    const val = (ville || "").trim();
-    if (!val) return;
-    const slug = slugify(val);
-    const parent = nameToParentSlug[slug] || slug;
-    setSelectionSource("input");
-    setCommunesSelected((prev) => {
-      if (prev.includes(parent)) return prev;
-      const next = [...prev, parent];
-      setZonesSelected(computeZonesFromSlugs(next));
-      return next;
-    });
-    setVille("");
-  }, [ville, nameToParentSlug, computeZonesFromSlugs]);
-  const addCommunesFromTokens = useCallback((text: string) => {
-    const tokens = String(text).split(/[\n,;]+/).map((t) => t.trim()).filter(Boolean);
-    if (tokens.length === 0) return;
-    setSelectionSource("input");
-    setCommunesSelected((prev) => {
-      const set = new Set(prev);
-      tokens.forEach((t) => {
-        const slug = slugify(t);
-        const parent = nameToParentSlug[slug] || slug;
-        set.add(parent);
-      });
-      const next = Array.from(set);
-      setZonesSelected(computeZonesFromSlugs(next));
-      return next;
-    });
-    setVille("");
-  }, [nameToParentSlug, computeZonesFromSlugs]);
+  // Modes UI retirés: les sections sont désormais toujours visibles (secteur, budget, critères)
+  const hasMode = useCallback((_m: string) => true, []);
+  const toggleMode = useCallback((_m: string) => {}, []);
 
   // Charge données via API
   const loadAnnonces = useCallback(async (append: boolean = false) => {
     if (activeHomeTab === null) return;
-    if (loadingMore || filtering) return;
+    if (loadingMore) return;
     setLoadingMore(true);
     if (!append) setFiltering(true);
     try {
@@ -266,8 +231,14 @@ export default function HomePage() {
         const filtered = (Array.isArray(all) ? all : []).filter((p: any) => {
           if (normalizedSlugs.length > 0) {
             const slugsArr = Array.isArray(p.communesSlugs) ? p.communesSlugs.map((s: string) => altSlugToCanonical[s] || s) : [];
-            const hasOverlap = slugsArr.some((s: string) => normalizedSlugs.includes(s));
-            if (!hasOverlap) return false;
+            let matchBySlugs = slugsArr.some((s: string) => normalizedSlugs.includes(s));
+            // Si pas de match par slugs, tenter un match par zones si le profil expose des zones
+            if (!matchBySlugs && Array.isArray(p.zones) && p.zones.length) {
+              const zonesToSlugs = new Set<string>();
+              (p.zones as string[]).forEach((z: string) => (ZONE_TO_SLUGS[z] || []).forEach((s) => zonesToSlugs.add(altSlugToCanonical[s] || s)));
+              matchBySlugs = Array.from(zonesToSlugs).some((s) => normalizedSlugs.includes(s));
+            }
+            if (!matchBySlugs) return false;
           }
           if (critAgeMin !== null && !(typeof p.age === 'number' && p.age >= critAgeMin)) return false;
           if (critAgeMax !== null && !(typeof p.age === 'number' && p.age <= critAgeMax)) return false;
@@ -285,7 +256,7 @@ export default function HomePage() {
           else if (p.ville) { const s = slugify(String(p.ville)); parentSlug = nameToParentSlug[s] || s; }
           const zonesFromSlugs = slugsArr.length ? computeZonesFromSlugs(slugsArr) : [];
           const zonesArr: string[] = Array.isArray(p.zones) && p.zones.length ? (p.zones as string[]) : zonesFromSlugs;
-          const zonesLabel = zonesArr && zonesArr.length ? zonesArr.join(', ') : (p.ville || '-');
+          const zonesLabel = zonesArr && zonesArr.length ? zonesArr.map((z) => (z === 'Intérieur' ? 'Secteur Centre' : `Secteur ${z}`)).join(', ') : (p.ville || '-');
           const subLabel = extractSubCommunesLabel([p.nom, p.description, p.ville], parentSlug);
           return {
             id: p.id,
@@ -299,7 +270,7 @@ export default function HomePage() {
             createdAt: p.createdAt,
             parentSlug,
             zonesLabel,
-            subCommunesLabel: subLabel,
+            subCommunesLabel: subLabel || undefined,
             age: p.age,
             profession: p.profession,
           };
@@ -329,22 +300,18 @@ export default function HomePage() {
           if (prixMax !== null && typeof d.prix === 'number' && d.prix > prixMax) return false;
           return true;
         });
-        const mapped = filtered.map((d: any) => {
-          const parentSlug = getDocParentSlug(d);
-          const subLabel = extractSubCommunesLabel([d.titre ?? d.title, d.description, d.ville], parentSlug);
-          return {
-            id: d.id,
-            titre: d.titre ?? d.title ?? '',
-            ville: d.ville ?? null,
-            prix: typeof d.prix === 'number' ? d.prix : undefined,
-            surface: d.surface ?? null,
-            description: d.description ?? null,
-            imageUrl: d.imageUrl || defaultAnnonceImg,
-            createdAt: d.createdAt,
-            parentSlug,
-            subCommunesLabel: subLabel,
-          };
-        });
+        const mapped = filtered.map((d: any) => ({
+          id: d.id,
+          titre: d.titre ?? d.title ?? '',
+          ville: d.ville ?? null,
+          prix: typeof d.prix === 'number' ? d.prix : undefined,
+          surface: d.surface ?? null,
+          description: d.description ?? null,
+          imageUrl: d.imageUrl || defaultAnnonceImg,
+          createdAt: d.createdAt,
+          parentSlug: getDocParentSlug(d),
+          subCommunesLabel: extractSubCommunesLabel([d.titre ?? d.title, d.description], getDocParentSlug(d)) || undefined,
+        }));
         const toMs = (x: any) => {
           const v = x?.createdAt; if (!v) return 0; if (typeof v === 'number') return v;
           if ((v as any)?.seconds) return (v as any).seconds * 1000 + ((v as any).nanoseconds ? Math.floor((v as any).nanoseconds / 1e6) : 0);
@@ -358,9 +325,7 @@ export default function HomePage() {
       }
       if (shouldScrollToResultsOnNextDataRef.current) {
         try {
-          const el = resultsTopRef.current;
-          if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          else if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+          if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch { try { window.scrollTo(0, 0); } catch {} } finally {
           shouldScrollToResultsOnNextDataRef.current = false;
         }
@@ -404,15 +369,18 @@ export default function HomePage() {
   setFirestoreError(null);
     setAnnonces([]);
   setHasMore(true);
-    // Désactiver le tri par date pour l’onglet colocataires: par défaut trier par budget croissant
-    if (activeHomeTab === "colocataires" && sortBy === "date") {
-      setSortBy("prix");
-    }
-    // reset filtres ici
-    setCommunesSelected([]);
-    setVille("");
-    setCodePostal("");
-  // reset critères coloc
+  // Tri par défaut selon l’onglet
+  setSortBy(activeHomeTab === 'colocataires' ? 'prix' : 'date');
+  // Réinitialiser tous les filtres
+  setPrixMax(null);
+  setCommunesSelected([]);
+  setZonesSelected([]);
+  setZoneFilters([]);
+  setSelectionSource(null);
+  setVille("");
+  setCodePostal("");
+  setCountFiltered(null);
+  // Réinitialiser critères coloc
   setCritAgeMin(null);
   setCritAgeMax(null);
   setCritProfession("");
@@ -655,6 +623,20 @@ export default function HomePage() {
         <section className="w-full max-w-6xl flex flex-col items-center">
           <h1 className="text-3xl font-bold mb-2 text-center">Que souhaitez-vous rechercher ?</h1>
           <p className="text-slate-600 mb-8 text-center">Choisissez un type de recherche pour commencer.</p>
+          {/* Illustration kaz réunionnaise (page d'accueil initiale) */}
+          <div className="w-full max-w-5xl mx-auto mb-8 px-2">
+            <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-gradient-to-b from-sky-50 to-white">
+              <Image
+                src="/images/kaz-reunionnaise.svg"
+                alt="Illustration d'une kaz réunionnaise avec des colocs sur la terrasse"
+                width={1200}
+                height={360}
+                priority
+                sizes="(max-width: 768px) 100vw, 1200px"
+                className="w-full h-auto"
+              />
+            </div>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full">
             <button
               className="group bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition text-left"
@@ -722,6 +704,8 @@ export default function HomePage() {
               </button>
             </div>
           </div>
+
+          
 
           {firestoreError && (
             <div className="w-full max-w-7xl mb-4 px-4 py-3 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-sm">
@@ -793,7 +777,7 @@ export default function HomePage() {
                           }
                         }}
                       >
-                        {activeHomeTab === "colocataires" ? (
+            {activeHomeTab === "colocataires" ? (
                           <ColocProfileCard
                             id={annonce.id}
                             nom={annonce.nom}
@@ -802,7 +786,7 @@ export default function HomePage() {
                             description={annonce.description}
                             createdAt={annonce.createdAt}
                             imageUrl={annonce.imageUrl}
-                            subCommunesLabel={annonce.subCommunesLabel}
+              zonesLabel={annonce.zonesLabel}
                             onClick={() => {
                               setColocDetail(annonce);
                               setColocDetailOpen(true);
@@ -819,7 +803,6 @@ export default function HomePage() {
                             createdAt={annonce.createdAt}
                             imageUrl={annonce.imageUrl || defaultAnnonceImg}
                             zonesLabel={annonce.zonesLabel}
-                            subCommunesLabel={annonce.subCommunesLabel}
                             onEdit={isAdmin ? () => setEditAnnonce(annonce) : undefined}
                             onDelete={isAdmin ? () => setDeleteAnnonceId(annonce.id) : undefined}
                           />
@@ -995,51 +978,14 @@ export default function HomePage() {
                   <div className="text-base md:text-lg font-semibold text-slate-700 tracking-tight">Filtrer par</div>
                   <span className="hidden md:block h-px w-8 bg-slate-200" />
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    className={`px-3 py-1.5 rounded-lg text-xs border ${hasMode('map') ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
-                    onClick={() => {
-                      toggleMode('map');
-                    }}
-                  >
-                    Secteur de recherche
-                  </button>
-                  <button
-                    type="button"
-                    className={`px-3 py-1.5 rounded-lg text-xs border ${hasMode('budget') ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
-                    onClick={() => {
-                      toggleMode('budget');
-                    }}
-                  >
-                    Budget
-                  </button>
-                  {activeHomeTab === 'annonces' ? (
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 rounded-lg text-xs border ${hasMode('commune') ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
-                      onClick={() => {
-                        toggleMode('commune');
-                      }}
-                    >
-                      Commune
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 rounded-lg text-xs border ${hasMode('criteres') ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
-                      onClick={() => {
-                        toggleMode('criteres');
-                      }}
-                    >
-                      Critères
-                    </button>
-                  )}
+                <div className="hidden">
+                  {/* anciennement: <div className="grid grid-cols-3 gap-2"> ... */}
                 </div>
+
                 {/* Zones rapides (OU) tout en haut - visibles seulement en mode carte */}
                 {hasMode('map') && (
                   <div ref={zonesBlockRef}>
-                    <div className="mb-2 text-xs font-medium text-slate-600">Zones</div>
+                    <div className="mb-2 text-xs font-medium text-slate-600">Secteur de recherche</div>
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1 text-center justify-items-stretch">
                       {Object.keys(GROUPES).map((z) => (
                         <button
@@ -1052,139 +998,45 @@ export default function HomePage() {
                               : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
                           }`}
                         >
-                          {z === "Intérieur" ? "Centre" : z}
+                          {z === "Intérieur" ? "Secteur Centre" : `Secteur ${z}`}
                         </button>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Carte sera rendue plus bas (sous Commune/Budget) */}
-
                 {/* Carte (déplacée en bas) */}
-                <div ref={communeBlockRef} className="flex flex-wrap gap-4 items-end justify-center">
-              {/* Commune: saisie libre + ajout multiple */}
-              {activeHomeTab === 'annonces' && hasMode('commune') && (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-end gap-2">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Commune(s)</label>
+                <div ref={communeBlockRef} className="flex flex-col gap-4 items-stretch justify-center">
+                  {/* Budget (toujours visible) */}
+                  <div ref={budgetBlockRef}>
+                    <label className="block text-sm font-medium mb-1">
+                      {activeHomeTab === "annonces" ? "Prix max (€)" : "Budget max (€)"}
+                    </label>
                     <input
-                      type="text"
-                      value={ville}
-                      onChange={(e) => onVilleChange(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          setVille("");
-                          setCodePostal("");
-                        }
-                        if (e.key === "Enter" || e.key === ",") {
-                          e.preventDefault();
-                          addTypedCommune();
-                        }
-                        if (e.key === "Backspace" && !ville) {
-                          // supprime le dernier tag si le champ est vide
-                          setCommunesSelected((prev) => {
-                            if (!prev || prev.length === 0) return prev;
-                            const next = prev.slice(0, -1);
-                            setZonesSelected((pz) => {
-                              const zones = computeZonesFromSlugs(next);
-                              return sameIds(pz || [], zones) ? pz : zones;
-                            });
-                            return next;
-                          });
-                        }
-                      }}
-                      onPaste={(e) => {
-                        const text = e.clipboardData?.getData("text");
-                        if (text && /[\n,;]/.test(text)) {
-                          e.preventDefault();
-                          addCommunesFromTokens(text);
-                        }
-                      }}
-                      className="border border-gray-300 rounded px-3 py-2 w-56"
-                      placeholder="Ex: Saint-Denis"
-                      list="communes-reu"
+                      type="number"
+                      value={prixMax ?? ""}
+                      onChange={(e) => setPrixMax(Number(e.target.value) || null)}
+                      className="border border-gray-300 rounded px-3 py-2 w-full"
+                      placeholder={activeHomeTab === "annonces" ? "Ex: 600" : "Ex: 600"}
                     />
                   </div>
-                  <button
-                    type="button"
-                    aria-label="Ajouter la commune"
-                    title="Ajouter"
-                    onClick={addTypedCommune}
-                    className="h-9 px-3 rounded border text-sm bg-blue-600 text-white border-blue-600 hover:bg-blue-700"
-                  >
-                    +
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Effacer toutes les communes"
-                    title="Effacer tout"
-                    disabled={communesSelected.length === 0 && !ville}
-                    onClick={() => {
-                      setVille("");
-                      setCodePostal("");
-                      setCommunesSelected([]);
-                      setZonesSelected([]);
-                      setSelectionSource(null);
-                    }}
-                    className={`h-9 px-3 rounded border text-sm transition ${
-                      communesSelected.length || ville
-                        ? "bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100"
-                        : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
-                    }`}
-                  >
-                    ✕
-                  </button>
-                </div>
-                {/* Affichage des communes sélectionnées (chips) désactivé à la demande */}
-              </div>
-              )}
 
-              {/* Suggestions communes (noms + sous-communes) TRIÉES */}
-              <datalist id="communes-reu">
-                {COMMUNES_CP_SORTED.map((c: { name: string | number | readonly string[] | undefined; cps: any[]; }) => (
-                  <option key={`c-${c.name}`} value={c.name}>{`${c.name} (${c.cps[0]})`}</option>
-                ))}
-                {COMMUNES_CP_SORTED.flatMap((c: { alts: any; name: any; }) =>
-                  (c.alts || []).map((a: { name: string | number | readonly string[] | undefined; cp: any; }) => (
-                    <option key={`a-${c.name}-${a.name}`} value={a.name}>{`${a.name} (${a.cp})`}</option>
-                  ))
-                )}
-              </datalist>
-
-              {hasMode('budget') && (
-                <div ref={budgetBlockRef}>
-                  <label className="block text-sm font-medium mb-1">
-                    {activeHomeTab === "annonces" ? "Prix max (€)" : "Budget max (€)"}
-                  </label>
-                  <input
-                    type="number"
-                    value={prixMax ?? ""}
-                    onChange={(e) => setPrixMax(Number(e.target.value) || null)}
-                    className="border border-gray-300 rounded px-3 py-2 w-full"
-                    placeholder={activeHomeTab === "annonces" ? "Ex: 600" : "Ex: 600"}
-                  />
-                </div>
-              )}
-
-              {/* Bloc Critères (uniquement en mode colocataires) */}
-              {activeHomeTab === 'colocataires' && hasMode('criteres') && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Âge min</label>
-                    <input type="number" className="border border-gray-300 rounded px-3 py-2 w-full" value={critAgeMin ?? ''} onChange={(e) => setCritAgeMin(Number(e.target.value) || null)} placeholder="Ex: 20" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Âge max</label>
-                    <input type="number" className="border border-gray-300 rounded px-3 py-2 w-full" value={critAgeMax ?? ''} onChange={(e) => setCritAgeMax(Number(e.target.value) || null)} placeholder="Ex: 35" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Profession</label>
-                    <input type="text" className="border border-gray-300 rounded px-3 py-2 w-full" value={critProfession} onChange={(e) => setCritProfession(e.target.value)} placeholder="Ex: Étudiant, CDI..." />
+                  {/* Critères (toujours visibles) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Âge min</label>
+                      <input type="number" className="border border-gray-300 rounded px-3 py-2 w-full" value={critAgeMin ?? ''} onChange={(e) => setCritAgeMin(Number(e.target.value) || null)} placeholder="Ex: 20" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Âge max</label>
+                      <input type="number" className="border border-gray-300 rounded px-3 py-2 w-full" value={critAgeMax ?? ''} onChange={(e) => setCritAgeMax(Number(e.target.value) || null)} placeholder="Ex: 35" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Profession</label>
+                      <input type="text" className="border border-gray-300 rounded px-3 py-2 w-full" value={critProfession} onChange={(e) => setCritProfession(e.target.value)} placeholder="Ex: Étudiant, CDI..." />
+                    </div>
                   </div>
                 </div>
-              )}
 
               {/* Tri retiré de la barre gauche */}
 
@@ -1213,10 +1065,10 @@ export default function HomePage() {
               >
                 Réinitialiser filtre
               </button>
-            </div>
+            </form>
 
-              {/* Carte (sous Commune et Budget) */}
-              {showCommuneMap && hasMode('map') && (
+              {/* Carte (sous Secteur et Budget) */}
+              {showCommuneMap && (
                 <div id="map-section" ref={mapWrapRef} className="rounded-2xl border border-slate-200 p-3 overflow-hidden">
                   <CommuneZoneSelector
                     value={communesSelected}
@@ -1240,7 +1092,7 @@ export default function HomePage() {
                 <div className="space-y-3 mt-3">
                   <div className="bg-white rounded-xl border border-slate-200 p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <div className="text-xs font-medium text-slate-600">Zones sélectionnées</div>
+                      <div className="text-xs font-medium text-slate-600">Secteurs sélectionnés</div>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{zonesSelected.length}</span>
                         <button
@@ -1268,10 +1120,10 @@ export default function HomePage() {
                       <div className="flex flex-wrap gap-1">
                         {zonesSelected.map((z) => (
                           <span key={z} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">
-                            {z}
+                            {z === "Intérieur" ? "Secteur Centre" : `Secteur ${z}`}
                             <button
                               type="button"
-                              aria-label={`Retirer la zone ${z}`}
+                              aria-label={`Retirer le secteur ${z}`}
                               title="Retirer"
                               className="ml-1 rounded text-blue-700/80 hover:text-blue-900"
                               onClick={() => {
@@ -1363,7 +1215,6 @@ export default function HomePage() {
               )}
 
               {/* fin blocs sélection */}
-              </form>
             </div>
           </div>
 

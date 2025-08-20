@@ -27,9 +27,9 @@ export async function POST(req: Request) {
     const now = new Date();
     const userId = (session?.user as any)?.id || null;
     const pick = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
+    // N'utiliser que des assets valides pour éviter les warnings Next/Image
     const images = [
-      "/images/annonce-placeholder.png",
-      "/images/annonce-placeholder.jpg",
+      "/images/annonce-holder.svg",
       "/images/annonce-holder.png",
     ];
 

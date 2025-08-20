@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -29,6 +29,7 @@ export default function AdminPage() {
   // toast state removed (unused)
   // toastTimeout removed
   const [seeding, setSeeding] = useState(false);
+  const [repairing, setRepairing] = useState(false);
   const [adminAnnonces, setAdminAnnonces] = useState<any[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminSelected, setAdminSelected] = useState<string[]>([]);
@@ -131,6 +132,33 @@ export default function AdminPage() {
       showToast("error", e?.message || "Erreur création d'exemples");
     } finally {
       setSeeding(false);
+    }
+  };
+
+  // NOUVEAU: réparer les URLs d'images placeholders cassées (annonces + colocs)
+  const repairImages = async () => {
+    if (repairing) return;
+    setRepairing(true);
+    try {
+      const res = await fetch("/api/admin/repair-images", { method: "POST" });
+      if (!res.ok) throw new Error("repair failed");
+      const data = await res.json().catch(() => ({} as any));
+      const a = data?.repaired?.annonces ?? 0;
+      const c = data?.repaired?.colocs ?? 0;
+      showToast("success", `Images réparées: annonces ${a}, colocs ${c} ✅`);
+      // Refresh de l’onglet actif pour refléter les nouvelles URLs
+      if (activeTab === "annonces") {
+        const r = await fetch("/api/annonces?limit=200", { cache: "no-store" });
+        if (r.ok) setAdminAnnonces(await r.json());
+      } else if (activeTab === "colocs") {
+        const items = await listColoc({ limit: 200 });
+        setAdminColocs(items);
+      }
+    } catch (e: any) {
+      console.error("[Admin][RepairImages]", e);
+      showToast("error", e?.message || "Erreur réparation images");
+    } finally {
+      setRepairing(false);
     }
   };
 
@@ -509,69 +537,6 @@ export default function AdminPage() {
     return arr;
   }, [adminAnnonces, annoncesSort, ownersById]);
 
-  // Détection sous-communes pour badge (mêmes règles que la Home)
-  const slugify = (s: string) => (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-  const SUB_COMMUNES = [
-    { name: "Sainte-Clotilde", parent: "Saint-Denis" },
-    { name: "La Montagne", parent: "Saint-Denis" },
-    { name: "Saint-Gilles-les-Bains", parent: "Saint-Paul" },
-    { name: "L'Hermitage-les-Bains", parent: "Saint-Paul" },
-    { name: "Saint-Gilles-les-Hauts", parent: "Saint-Paul" },
-    { name: "La Saline", parent: "Saint-Paul" },
-    { name: "La Saline-les-Hauts", parent: "Saint-Paul" },
-    { name: "Bois-de-Nèfles Saint-Paul", parent: "Saint-Paul" },
-    { name: "Plateau-Caillou", parent: "Saint-Paul" },
-    { name: "La Chaloupe", parent: "Saint-Leu" },
-    { name: "Piton Saint-Leu", parent: "Saint-Leu" },
-    { name: "L'Étang-Salé-les-Bains", parent: "L'Étang-Salé" },
-    { name: "La Rivière", parent: "Saint-Louis" },
-    { name: "La Plaine des Cafres", parent: "Le Tampon" },
-    { name: "Terre-Sainte", parent: "Saint-Pierre" },
-    { name: "Dos d'Âne", parent: "La Possession" },
-  ];
-  const SUBS_BY_PARENT = useMemo(() => {
-    const m: Record<string, string[]> = {};
-    SUB_COMMUNES.forEach(({ name, parent }) => {
-      const ps = slugify(parent);
-      if (!m[ps]) m[ps] = [];
-      m[ps].push(name);
-    });
-    return m;
-  }, []);
-  const SLUG_TO_NAME: Record<string, string> = useMemo(() => ({
-    "saint-denis": "Saint-Denis","sainte-marie": "Sainte-Marie","sainte-suzanne": "Sainte-Suzanne",
-    "saint-andre": "Saint-André","bras-panon": "Bras-Panon","salazie": "Salazie",
-    "saint-benoit": "Saint-Benoît","la-plaine-des-palmistes": "La Plaine-des-Palmistes","sainte-rose": "Sainte-Rose","saint-philippe": "Saint-Philippe",
-    "le-port": "Le Port","la-possession": "La Possession","saint-paul": "Saint-Paul","trois-bassins": "Trois-Bassins","saint-leu": "Saint-Leu","les-avirons": "Les Avirons","l-etang-sale": "L'Étang-Salé",
-    "saint-louis": "Saint-Louis","cilaos": "Cilaos","le-tampon": "Le Tampon","entre-deux": "Entre-Deux","saint-pierre": "Saint-Pierre","petite-ile": "Petite-Île","saint-joseph": "Saint-Joseph"
-  }), []);
-  const nameToParentSlug = useMemo(() => {
-    const map: Record<string, string> = {};
-    Object.entries(SLUG_TO_NAME).forEach(([slug]) => { map[slug] = slug; });
-    SUB_COMMUNES.forEach(({ name, parent }) => { map[slugify(name)] = slugify(parent); });
-    return map;
-  }, []);
-  const getParentSlugFromVille = useCallback((ville?: string) => {
-    if (!ville) return undefined;
-    const s = slugify(ville);
-    return nameToParentSlug[s] || s;
-  }, [nameToParentSlug]);
-  const extractSubLabel = useCallback((texts: Array<string | null | undefined>, parentSlug?: string) => {
-    if (!parentSlug) return undefined;
-    const names = SUBS_BY_PARENT[parentSlug];
-    if (!names || names.length === 0) return undefined;
-    const found = new Set<string>();
-    for (const t of texts) {
-      const s = (t || '').toString();
-      if (!s) continue;
-      for (const n of names) {
-        if (s.includes(n)) found.add(n);
-      }
-    }
-    if (found.size === 0) return undefined;
-    return Array.from(found).slice(0, 3).join(', ');
-  }, [SUBS_BY_PARENT]);
-
   const sortedAdminColocs = useMemo(() => {
     const arr = [...adminColocs];
     const getTime = (v: any) => {
@@ -642,6 +607,15 @@ export default function AdminPage() {
                   title="Créer une annonce d’exemple pour chaque commune"
                 >
                   {seeding ? "Création..." : "Créer annonces d’exemple"}
+                </button>
+                <button
+                  type="button"
+                  onClick={repairImages}
+                  disabled={repairing}
+                  className="bg-indigo-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-60"
+                  title="Réparer les images placeholders cassées (annonces et profils)"
+                >
+                  {repairing ? "Réparation..." : "Réparer images"}
                 </button>
               </div>
             )}
@@ -737,19 +711,7 @@ export default function AdminPage() {
                               {a.titre || "(sans titre)"}
                             </Link>
                           </td>
-                          <td className="py-2 px-3">
-                            <div className="flex flex-col gap-1">
-                              <span>{a.ville || "-"}</span>
-                              {(() => {
-                                const sub = extractSubLabel([a.titre, a.description, a.ville], getParentSlugFromVille(a.ville));
-                                return sub ? (
-                                  <span className="inline-block w-fit px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-600 border border-slate-200">
-                                    Sous-communes: {sub}
-                                  </span>
-                                ) : null;
-                              })()}
-                            </div>
-                          </td>
+                          <td className="py-2 px-3">{a.ville || "-"}</td>
                           <td className="py-2 px-3">{typeof a.prix === "number" ? `${a.prix} €` : "-"}</td>
                           <td className="py-2 px-3 max-w-[560px] whitespace-normal">
                             {shortDesc}
@@ -911,6 +873,14 @@ export default function AdminPage() {
               className="bg-emerald-600 text-white px-3 py-1.5 text-sm rounded hover:bg-emerald-700 disabled:opacity-60"
             >
               {seedingColocs ? "Création..." : "Créer profils d’exemple"}
+            </button>
+            <button
+              type="button"
+              onClick={repairImages}
+              disabled={repairing}
+              className="bg-indigo-600 text-white px-3 py-1.5 text-sm rounded hover:bg-indigo-700 disabled:opacity-60"
+            >
+              {repairing ? "Réparation..." : "Réparer images"}
             </button>
           </div>
 
@@ -1285,7 +1255,7 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 to-white p-0 flex flex-col md:flex-row w-full overflow-x-hidden">
-      <aside className="w-full md:w-64 md:min-h-screen bg-white shadow-lg flex flex-col gap-2 py-8 px-4 border-b md:border-b-0 md:border-r border-slate-200">
+      <aside className="w-full md:w-72 md:min-h-screen bg-white shadow-lg flex flex-col gap-2 py-8 px-4 border-b md:border-b-0 md:border-r border-slate-200">
         <h2 className="text-xl font-bold text-blue-700 mb-8 text-center tracking-wide">Admin Panel</h2>
         <button
           className={`text-left px-4 py-3 rounded-lg transition ${activeTab === "annonces" ? "bg-blue-600 text-white shadow" : "hover:bg-blue-50 text-slate-700"}`}

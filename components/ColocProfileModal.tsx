@@ -1,6 +1,5 @@
 import { useState } from "react";
 import PhotoUploader from "./PhotoUploader";
-import ConfirmModal from "./ConfirmModal";
 
 export default function ColocProfileModal({
   open,
@@ -20,7 +19,6 @@ export default function ColocProfileModal({
     imageUrl: profile?.imageUrl || "",
   });
   const [mainPhoto, setMainPhoto] = useState<string | undefined>(profile?.imageUrl);
-  const [confirm, setConfirm] = useState(false);
 
   return open ? (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -30,7 +28,7 @@ export default function ColocProfileModal({
         <form
           onSubmit={e => {
             e.preventDefault();
-            setConfirm(true);
+            onSubmit({ ...form, imageUrl: mainPhoto });
           }}
           className="space-y-4"
         >
@@ -70,16 +68,7 @@ export default function ColocProfileModal({
             <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Enregistrer</button>
           </div>
         </form>
-        <ConfirmModal
-          isOpen={confirm}
-          onClose={() => setConfirm(false)}
-          onConfirm={() => {
-            setConfirm(false);
-            onSubmit({ ...form, imageUrl: mainPhoto });
-          }}
-          title="Confirmer la modification"
-          description="Voulez-vous enregistrer les modifications de ce profil ?"
-        />
+  {/** Confirmation de suppression conservée ailleurs; pas de confirmation pour l'enregistrement. */}
       </div>
     </div>
   ) : null;

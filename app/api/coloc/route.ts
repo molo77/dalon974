@@ -17,8 +17,9 @@ export async function GET(req: Request) {
     if (prixMax) where.budget = { lte: Number(prixMax) };
     if (ageMin) where.age = { ...(where.age || {}), gte: Number(ageMin) };
     if (ageMax) where.age = { ...(where.age || {}), lte: Number(ageMax) };
-    // Essayer une sélection étendue; en cas de P2022 (colonne manquante), fallback minimal
-    let list: any[] = [];
+    // Sélection étendue avec fallback minimal si des colonnes n'existent pas encore (P2022)
+  let list: any[] = [];
+  let hasExtended = true;
     try {
       list = await prisma.colocProfile.findMany({
         where,
@@ -43,8 +44,11 @@ export async function GET(req: Request) {
         },
       });
     } catch (e: any) {
-      // Fallback: colonnes pas encore migrées -> sélection minimale sans where avancé
+      // Fallback: colonnes pas (encore) présentes -> sélection minimale compatible
+      console.warn("[API][coloc][GET] extended select failed, falling back to minimal select", e?.code || e);
+      hasExtended = false;
       list = await prisma.colocProfile.findMany({
+        // where vide: on évite de référencer des colonnes manquantes
         orderBy: { createdAt: "desc" },
         take: limit,
         skip: offset,
@@ -62,7 +66,7 @@ export async function GET(req: Request) {
       });
     }
     // communesSlugs array-contains-any (fallback: filtrage en mémoire)
-    if (slugsCsv) {
+  if (slugsCsv && hasExtended) {
       const want = slugsCsv.split(",").map(s => s.trim()).filter(Boolean);
       if (want.length) {
         list = list.filter((p: any) => {
@@ -73,8 +77,8 @@ export async function GET(req: Request) {
         });
       }
     }
-    // compat: pour l'UI, on renvoie quelques alias attendus
-    const mapped = list.map((p: any) => ({
+  // compat: pour l'UI, on renvoie quelques alias attendus
+  const mapped = list.map((p: any) => ({
       ...p,
       // alias attendu par l'UI
       nom: (p as any).nom ?? p.title ?? null,

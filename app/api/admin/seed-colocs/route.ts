@@ -43,7 +43,7 @@ export async function POST(req: Request) {
         userId,
         title: nom,
         description: `Je cherche une colocation à ${ville}${subLabel}. Budget environ ${budget} €.`,
-        imageUrl: "/images/coloc-placeholder.png",
+  imageUrl: "/images/coloc-holder.svg",
         photos: [],
         mainPhotoIdx: 0,
         // champs additionnels si présents dans le schéma

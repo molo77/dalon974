@@ -16,6 +16,8 @@ type ColocProfileCardProps = {
   onClick?: (e: React.MouseEvent<HTMLDivElement> | React.KeyboardEvent<HTMLDivElement>) => void;
   // Optionnel: afficher un badge de sous-communes détectées
   subCommunesLabel?: string;
+  // Zones recherchées (affichage)
+  zonesLabel?: string;
 };
 
 export default function ColocProfileCard({
@@ -29,6 +31,7 @@ export default function ColocProfileCard({
   imageUrl,
   onClick,
   subCommunesLabel,
+  zonesLabel,
 }: ColocProfileCardProps) {
   const defaultColocImg = "/images/coloc-holder.svg";
   const thumbUrl = imageUrl || defaultColocImg;
@@ -75,6 +78,13 @@ export default function ColocProfileCard({
           <div className="flex-1 min-w-0">
             <h2 className="text-lg font-bold truncate">{nom}</h2>
             <p className="text-sm text-gray-600">📍 {ville}</p>
+            {zonesLabel && (
+              <div className="mt-1">
+                <span className="inline-block px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                  Secteurs: {zonesLabel}
+                </span>
+              </div>
+            )}
             {subCommunesLabel && (
               <div className="mt-1">
                 <span className="inline-block px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-600 border border-slate-200">

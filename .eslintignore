@@ -1,9 +1,9 @@
+# Ignorer les artefacts de build Next.js
 .next/
+# Ignorer les répertoires courants
 node_modules/
-.next*
-*.log
-public/
-coverage/
+.out/
 dist/
 build/
-.prisma/
+**/*.min.js
+**/*.bundle.js

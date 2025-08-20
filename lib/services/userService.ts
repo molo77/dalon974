@@ -1,54 +1,62 @@
-
-import prisma from "@/lib/prismaClient";
+// NOTE: Ces services sont appelés côté client. Utiliser les routes API Next (serveur) pour accéder à Prisma.
 
 export async function listUsers() {
-  return await prisma.user.findMany();
+  const res = await fetch('/api/admin/users', { cache: 'no-store' });
+  if (!res.ok) throw new Error('Erreur API users');
+  return await res.json();
 }
 
-export async function getUserRole(uid: string): Promise<string | null> {
-  const user = await prisma.user.findUnique({ where: { id: uid } });
-  return user?.role || null;
+// Récupération du rôle via l’API NextAuth session (mieux) ou une route dédiée si nécessaire.
+export async function getUserRole(_uid: string): Promise<string | null> {
+  try {
+    const res = await fetch('/api/auth/session', { cache: 'no-store' });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data?.user?.role as string) || null;
+  } catch { return null; }
 }
 
-export async function ensureUserDoc(uid: string, data: { email: string; displayName: string; role: string; providerId: string }) {
-  const user = await prisma.user.findUnique({ where: { id: uid } });
-  if (!user) {
-    await prisma.user.create({ data: { id: uid, ...data, createdAt: new Date() } });
-  } else if (!user.providerId) {
-    await prisma.user.update({ where: { id: uid }, data: { providerId: data.providerId } });
-  }
+export async function ensureUserDoc(_uid: string, _data: { email: string; displayName: string; role: string; providerId: string }) {
+  // Géré côté auth/adapter; noop côté client
+  return;
 }
 
 export async function createUserDoc(data: { email: string; displayName?: string; role: string; ville?: string; telephone?: string }) {
-  return await prisma.user.create({ data });
+  const res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  if (!res.ok) throw new Error('Erreur API création utilisateur');
+  return await res.json();
 }
 
 export async function updateUserDoc(id: string, patch: { email: string; displayName: string; role: string; ville?: string; telephone?: string }) {
-  await prisma.user.update({ where: { id }, data: patch });
+  const res = await fetch(`/api/admin/users/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+  if (!res.ok) throw new Error('Erreur API mise à jour utilisateur');
 }
 
 export async function deleteUserDoc(id: string) {
-  await prisma.user.delete({ where: { id } });
+  const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Erreur API suppression utilisateur');
 }
 
 export async function normalizeUsers(): Promise<number> {
-  const users = await prisma.user.findMany();
+  const users = await listUsers();
   let count = 0;
   for (const user of users) {
-    const patch: any = {};
-    if (user.providerId == null) patch.providerId = "password";
-    if (user.role == null) patch.role = "user";
-    if (user.createdAt == null) patch.createdAt = new Date();
-    if (user.displayName == null) patch.displayName = "";
-    if (Object.keys(patch).length) {
-      await prisma.user.update({ where: { id: user.id }, data: patch });
-      count++;
+    const needRole = !user.role;
+    const needDisplayName = user.displayName == null;
+    if (needRole || needDisplayName) {
+      try {
+        await updateUserDoc(user.id, {
+          email: user.email,
+          displayName: needDisplayName ? '' : (user.displayName || ''),
+          role: needRole ? 'user' : user.role,
+        });
+        count++;
+      } catch {}
     }
   }
   return count;
 }
 
-// Pour le reset password, il faudra une solution externe (SMTP, etc.)
-export async function sendResetTo(email: string) {
-  throw new Error("sendResetTo n'est plus supporté sans Firebase Auth. À remplacer par une solution SMTP.");
+export async function sendResetTo(_email: string) {
+  throw new Error("Fonction non supportée côté client.");
 }

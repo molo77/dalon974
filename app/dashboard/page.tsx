@@ -144,6 +144,36 @@ const slugify = (s: string) =>
     .normalize("NFD").replace(/\p{Diacritic}/gu, "")
     .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
+// Index des sous-communes par commune parente (clé: parentSlug -> liste de noms de sous-communes)
+const SUBS_BY_PARENT: Record<string, string[]> = (() => {
+  const map: Record<string, string[]> = {};
+  SUB_COMMUNES.forEach(({ name, parent }) => {
+    const ps = slugify(parent);
+    if (!map[ps]) map[ps] = [];
+    map[ps].push(name);
+  });
+  return map;
+})();
+
+// Extrait un label de sous-communes détectées dans les textes fournis, limité à quelques occurrences
+function extractSubCommunesLabel(texts: Array<string | null | undefined>, parentSlug?: string) {
+  if (!parentSlug) return undefined;
+  const names = SUBS_BY_PARENT[parentSlug];
+  if (!names || names.length === 0) return undefined;
+  const found = new Set<string>();
+  for (const t of texts) {
+    const s = (t || '').toString();
+    if (!s) continue;
+    for (const n of names) {
+      if (s.includes(n)) found.add(n);
+    }
+  }
+  if (found.size === 0) return undefined;
+  const arr = Array.from(found);
+  arr.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  return arr.slice(0, 3).join(', ');
+}
+
 // Résolution commune depuis saisie "ville" ou code postal
 
 // Imposer que la ville provienne de la liste officielle
@@ -1121,18 +1151,25 @@ export default function DashboardPage() {
                         onMouseDown={(e) => { e.stopPropagation(); }}
                       />
                     </div>
-                    <AnnonceCard
-                      {...annonce}
-                      imageUrl={annonce.imageUrl || defaultAnnonceImg}
-                      onDelete={() => {
-                        setSelectedAnnonceToDelete(annonce);
-                        setConfirmModalOpen(true);
-                      }}
-                      onEdit={() => {
-                        setEditAnnonce(annonce);
-                        setModalOpen(true);
-                      }}
-                    />
+                    {(() => {
+                      const parentSlug = annonce?.communeSlug || (annonce?.ville ? slugify(String(annonce.ville)) : undefined);
+                      const subLabel = extractSubCommunesLabel([annonce?.titre, annonce?.description, annonce?.ville], parentSlug);
+                      return (
+                        <AnnonceCard
+                          {...annonce}
+                          imageUrl={annonce.imageUrl || defaultAnnonceImg}
+                          subCommunesLabel={subLabel || undefined}
+                          onDelete={() => {
+                            setSelectedAnnonceToDelete(annonce);
+                            setConfirmModalOpen(true);
+                          }}
+                          onEdit={() => {
+                            setEditAnnonce(annonce);
+                            setModalOpen(true);
+                          }}
+                        />
+                      );
+                    })()}
                   </div>
                 ))}
                 {loadingMore && <p className="text-center text-gray-500 mt-4">Chargement…</p>}
