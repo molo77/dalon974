@@ -15,6 +15,7 @@ import AnnonceCard from "@/components/AnnonceCard";
 import ColocProfileCard from "@/components/ColocProfileCard";
 import ConfirmModal from "@/components/ConfirmModal";
 import AnnonceModal from "@/components/AnnonceModal";
+import AdsenseBanner from "@/components/AdsenseBanner";
 // Rôle admin désormais fourni par le contexte d'auth
 // AuthProvider n'exporte pas useAuth dans ce projet; on neutralise l'usage pour déverrouiller la build
 import { showToast } from "@/lib/toast";
@@ -24,6 +25,8 @@ const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr:
 
 
 export default function HomePage() {
+  // Image d'accueil configurable via env (placer l'image dans public/ et utiliser un chemin commençant par "/")
+  const homepageImageSrc = process.env.NEXT_PUBLIC_HOMEPAGE_IMAGE || "/images/home-hero.jpg";
   // Helper: compare deux listes de slugs sans tenir compte de l’ordre
   function sameIds(a: string[], b: string[]): boolean {
     if (a === b) return true;
@@ -184,7 +187,6 @@ export default function HomePage() {
     const norm = (communesSelected || []).map((s) => altSlugToCanonical[s] || s);
     return Array.from(new Set(norm));
   }, [communesSelected, altSlugToCanonical]);
-  const selectedSubCommunesLabel = "";
   const showCommuneMap = true;
 
   // Saisie par commune désactivée: sélection via carte et zones uniquement
@@ -205,7 +207,6 @@ export default function HomePage() {
 
   // Modes UI retirés: les sections sont désormais toujours visibles (secteur, budget, critères)
   const hasMode = useCallback((_m: string) => true, []);
-  const toggleMode = useCallback((_m: string) => {}, []);
 
   // Charge données via API
   const loadAnnonces = useCallback(async (append: boolean = false) => {
@@ -336,7 +337,7 @@ export default function HomePage() {
       setLoadingMore(false);
       setFiltering(false);
     }
-  }, [activeHomeTab, loadingMore, filtering, sortBy, prixMax, ville, codePostal, communesSelected, altSlugToCanonical, parentSlugToName, selectedSubCommunesLabel, critAgeMin, critAgeMax, critProfession, computeZonesFromSlugs, getDocParentSlug, nameToParentSlug, pageLimit]);
+  }, [activeHomeTab, loadingMore, sortBy, prixMax, ville, codePostal, communesSelected, altSlugToCanonical, parentSlugToName, critAgeMin, critAgeMax, critProfession, computeZonesFromSlugs, getDocParentSlug, nameToParentSlug, pageLimit, ZONE_TO_SLUGS, extractSubCommunesLabel]);
 
   // Gestion clavier pour la lightbox
   useEffect(() => {
@@ -624,15 +625,15 @@ export default function HomePage() {
           <h1 className="text-3xl font-bold mb-2 text-center">Que souhaitez-vous rechercher ?</h1>
           <p className="text-slate-600 mb-8 text-center">Choisissez un type de recherche pour commencer.</p>
           {/* Illustration kaz réunionnaise (page d'accueil initiale) */}
-          <div className="w-full max-w-5xl mx-auto mb-8 px-2">
+      <div className="w-full max-w-2xl mx-auto mb-8 px-2">
             <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-gradient-to-b from-sky-50 to-white">
               <Image
-                src="/images/kaz-reunionnaise.svg"
-                alt="Illustration d'une kaz réunionnaise avec des colocs sur la terrasse"
-                width={1200}
-                height={360}
+                src={homepageImageSrc}
+                alt="Colocation à La Réunion, colocs sur la terrasse d'une kaz"
+                width={1280}
+                height={853}
                 priority
-                sizes="(max-width: 768px) 100vw, 1200px"
+        sizes="(max-width: 640px) 92vw, (max-width: 1024px) 70vw, 640px"
                 className="w-full h-auto"
               />
             </div>
@@ -662,6 +663,16 @@ export default function HomePage() {
                 <span>→</span>
               </div>
             </button>
+          </div>
+          {/* Bandeau publicitaire (AdSense) */}
+          <div className="w-full max-w-5xl mx-auto mt-6">
+            <AdsenseBanner
+              slot={process.env.NEXT_PUBLIC_ADSENSE_SLOT || ""}
+              className="my-2"
+              style={{ minHeight: 90 }}
+              format="auto"
+              fullWidthResponsive
+            />
           </div>
         </section>
       ) : (

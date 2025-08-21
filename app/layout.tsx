@@ -27,6 +27,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const adsClient = process.env.NEXT_PUBLIC_ADSENSE_CLIENT;
   return (
     <html lang="fr">
       <body
@@ -43,6 +44,15 @@ export default function RootLayout({
             } catch (_) {}
           `}
         </Script>
+        {/* Google AdSense */}
+        {adsClient && (
+          <Script
+            id="adsense-loader"
+            strategy="afterInteractive"
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsClient}`}
+            crossOrigin="anonymous"
+          />
+        )}
         <ClientProviders>
           <Header />
           <main className="mx-auto w-[85%] max-w-full px-4 sm:px-6 lg:px-8 py-6">
