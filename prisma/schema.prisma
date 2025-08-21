@@ -146,3 +146,20 @@ model ColocAutosaveQueue {
   createdAt DateTime @default(now())
   // processed flag could be added if you prefer soft-delete
 }
+
+// Publicités Google AdSense administrables
+model AdUnit {
+  id                 String   @id @default(uuid())
+  name               String
+  placementKey       String   // ex: "home.initial.belowHero", "listing.inline.1"
+  slot               String   // data-ad-slot
+  format             String?  // ex: "auto"
+  fullWidthResponsive Boolean  @default(true)
+  height             Int?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now()) @db.Timestamp(6)
+  updatedAt          DateTime? @db.Timestamp(6)
+
+  @@index([placementKey])
+  @@index([isActive])
+}

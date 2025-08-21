@@ -15,7 +15,8 @@ import AnnonceCard from "@/components/AnnonceCard";
 import ColocProfileCard from "@/components/ColocProfileCard";
 import ConfirmModal from "@/components/ConfirmModal";
 import AnnonceModal from "@/components/AnnonceModal";
-import AdsenseBanner from "@/components/AdsenseBanner";
+// AdSense via AdSlot
+import AdSlot from "@/components/AdSlot";
 // Rôle admin désormais fourni par le contexte d'auth
 // AuthProvider n'exporte pas useAuth dans ce projet; on neutralise l'usage pour déverrouiller la build
 import { showToast } from "@/lib/toast";
@@ -164,6 +165,8 @@ export default function HomePage() {
   const [countFiltered, setCountFiltered] = useState<number | null>(null);
   const pageLimit = 20;
   const offsetRef = useRef<number>(0);
+  // Permettre de masquer/afficher la barre de filtres
+  const [filtersCollapsed, setFiltersCollapsed] = useState<boolean>(false);
 
   // Refs diverses
   const resultsTopRef = useRef<HTMLDivElement | null>(null);
@@ -621,7 +624,7 @@ export default function HomePage() {
   <main className="min-h-screen p-2 sm:p-6 flex flex-col items-center scroll-pt-28 md:scroll-pt-32">
       {/* Ecran de CHOIX initial */}
       {activeHomeTab === null ? (
-        <section className="w-full max-w-6xl flex flex-col items-center">
+  <section className="w-full max-w-[1440px] flex flex-col items-center">
           <h1 className="text-3xl font-bold mb-2 text-center">Que souhaitez-vous rechercher ?</h1>
           <p className="text-slate-600 mb-8 text-center">Choisissez un type de recherche pour commencer.</p>
           {/* Illustration kaz réunionnaise (page d'accueil initiale) */}
@@ -664,15 +667,9 @@ export default function HomePage() {
               </div>
             </button>
           </div>
-          {/* Bandeau publicitaire (AdSense) */}
+          {/* Bandeau publicitaire (AdSense) géré par le back-office */}
           <div className="w-full max-w-5xl mx-auto mt-6">
-            <AdsenseBanner
-              slot={process.env.NEXT_PUBLIC_ADSENSE_SLOT || ""}
-              className="my-2"
-              style={{ minHeight: 90 }}
-              format="auto"
-              fullWidthResponsive
-            />
+            <AdSlot placementKey="home.initial.belowHero" className="my-2" />
           </div>
         </section>
       ) : (
@@ -682,7 +679,7 @@ export default function HomePage() {
           {/* Ancre au-dessus des onglets */}
           <div ref={tabsTopRef} className="h-0 scroll-mt-28 md:scroll-mt-32" aria-hidden="true" />
           {/* Onglets Accueil — version légèrement agrandie et centrée */}
-          <div className="w-full max-w-7xl mb-4 flex justify-center">
+          <div className="w-full max-w-[1440px] mb-4 flex justify-center">
             <div
               role="tablist"
               aria-label="Type de recherche"
@@ -728,8 +725,8 @@ export default function HomePage() {
             {activeHomeTab === "annonces" ? "Annonces de colocation" : "Profils de colocataires"}
           </h1>
 
-          {/* Layout 3 colonnes (desktop): ruban communes | filtres | annonces */}
-          <div className="w-full max-w-7xl flex flex-col md:flex-row md:items-start gap-6">
+          {/* Layout 2 colonnes (desktop): filtres | annonces */}
+          <div className="w-full max-w-[1440px] flex flex-col md:flex-row md:items-start gap-6">
             {/* Colonne annonces (droite en ≥md) */}
             <div className="flex-1 min-w-0 md:order-2">
               {/* Indicateur de filtrage en cours */}
@@ -767,7 +764,7 @@ export default function HomePage() {
                 {(!filtering && displayedAnnonces.length === 0) ? (
                   <p className="text-slate-500 text-center mt-4 col-span-full">Aucune annonce trouvée.</p>
                 ) : (
-                  displayedAnnonces.map((annonce: any) => {
+                  displayedAnnonces.flatMap((annonce: any, idx: number) => {
                     // isAdmin non utilisé ici
                     const card = (
                       <div
@@ -820,10 +817,11 @@ export default function HomePage() {
                         )}
                       </div>
                     );
+                    const rendered: React.ReactNode[] = [];
                     if (activeHomeTab === "colocataires") {
-                      return (
+                      rendered.push(
                         <div
-                          key={annonce.id}
+                          key={`wrap-${annonce.id}`}
                           role="button"
                           tabIndex={0}
                           onClick={(e) => {
@@ -841,8 +839,17 @@ export default function HomePage() {
                         </div>
                       );
                     } else {
-                      return card;
+                      rendered.push(card);
                     }
+                    // Insérer une pub inline toutes les 16 cartes (annonces et profils)
+                    if ((idx + 1) % 16 === 0) {
+                      rendered.push(
+                        <div key={`ad-inline-${idx}`} className="col-span-full">
+                          <AdSlot placementKey="listing.inline.1" />
+                        </div>
+                      );
+                    }
+                    return rendered;
                   })
                 )}
 
@@ -984,15 +991,28 @@ export default function HomePage() {
                 className="sticky top-4 w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4"
               >
                 {/* Menu navigation */}
-                <div className="flex items-center justify-center gap-3 mb-3">
-                  <span className="hidden md:block h-px w-8 bg-slate-200" />
-                  <div className="text-base md:text-lg font-semibold text-slate-700 tracking-tight">Filtrer par</div>
-                  <span className="hidden md:block h-px w-8 bg-slate-200" />
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-center gap-3">
+                    <span className="hidden md:block h-px w-8 bg-slate-200" />
+                    <div className="text-base md:text-lg font-semibold text-slate-700 tracking-tight">Affiner la recherche</div>
+                    <span className="hidden md:block h-px w-8 bg-slate-200" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFiltersCollapsed((v) => !v)}
+                    className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-50"
+                    aria-expanded={!filtersCollapsed}
+                    aria-controls="filters-content"
+                  >
+                    {filtersCollapsed ? "Afficher" : "Masquer"}
+                  </button>
                 </div>
                 <div className="hidden">
                   {/* anciennement: <div className="grid grid-cols-3 gap-2"> ... */}
                 </div>
 
+                {/* Contenu des filtres, masquable */}
+                <div id="filters-content" className={filtersCollapsed ? "hidden" : "block"}>
                 {/* Zones rapides (OU) tout en haut - visibles seulement en mode carte */}
                 {hasMode('map') && (
                   <div ref={zonesBlockRef}>
@@ -1053,33 +1073,17 @@ export default function HomePage() {
 
               {/* Mise à jour automatique silencieuse */}
 
-              <button
-                type="button"
-                onClick={() => {
-                  setFirestoreError(null);
-                  setVille("");
-                  setCodePostal("");
-                  setPrixMax(null);
-                  setSortBy("date");
-                  setCommunesSelected([]);
-                  setZonesSelected([]);
-                  setAnnonces([]);
-                  setHasMore(true);
-                  setZoneFilters([]);
-                  setSelectionSource(null);
-                  // Remplacement au 1er snapshot pour éviter les doublons
-                  resetOnFirstSnapshotRef.current = true;
-                  setFiltering(true);
-                  // pas d’appel direct à loadAnnonces: l’effet "filtres" va relancer proprement
-                }}
-                className="border border-slate-300 text-slate-700 px-3 py-1.5 rounded-md hover:bg-slate-50 text-sm"
-              >
-                Réinitialiser filtre
-              </button>
+              {/* Le bouton Réinitialiser est déplacé près de la carte */}
+              </div>
             </form>
 
-              {/* Carte (sous Secteur et Budget) */}
-              {showCommuneMap && (
+              {/* Zone pub au-dessus de la carte (juste au-dessus des boutons Réinitialiser / Zoom sélection de la carte) */}
+              <div className="sticky top-[calc(1rem+0px)] z-0 space-y-2 mt-2 mb-2">
+                <AdSlot placementKey="home.list.rightSidebar" />
+              </div>
+
+              {/* Carte (sous la pub et, si visible, le bouton) */}
+              {showCommuneMap && !filtersCollapsed && (
                 <div id="map-section" ref={mapWrapRef} className="rounded-2xl border border-slate-200 p-3 overflow-hidden">
                   <CommuneZoneSelector
                     value={communesSelected}
@@ -1098,8 +1102,37 @@ export default function HomePage() {
                 </div>
               )}
 
-              {/* Blocs de sélection — déscendus en bas de la barre gauche */}
-              {(zonesSelected.length > 0 || communesSelected.length > 0) && (
+              {/* Bouton Réinitialiser filtre (placé sous la carte) */}
+              {!filtersCollapsed && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFirestoreError(null);
+                      setVille("");
+                      setCodePostal("");
+                      setPrixMax(null);
+                      setSortBy("date");
+                      setCommunesSelected([]);
+                      setZonesSelected([]);
+                      setAnnonces([]);
+                      setHasMore(true);
+                      setZoneFilters([]);
+                      setSelectionSource(null);
+                      // Remplacement au 1er snapshot pour éviter les doublons
+                      resetOnFirstSnapshotRef.current = true;
+                      setFiltering(true);
+                      // pas d’appel direct à loadAnnonces: l’effet "filtres" va relancer proprement
+                    }}
+                    className="border border-slate-300 text-slate-700 px-3 py-1.5 rounded-md hover:bg-slate-50 text-sm"
+                  >
+                    Réinitialiser filtre
+                  </button>
+                </div>
+              )}
+
+              {/* Blocs de sélection — masqués si filtres repliés */}
+              {!filtersCollapsed && (zonesSelected.length > 0 || communesSelected.length > 0) && (
                 <div className="space-y-3 mt-3">
                   <div className="bg-white rounded-xl border border-slate-200 p-3">
                     <div className="flex items-center justify-between mb-2">

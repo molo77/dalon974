@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import AdminUsers from "@/components/admin/AdminUsers";
+import AdminAds from "@/components/admin/AdminAds";
 import ExpandableImage from "@/components/ExpandableImage"; // New import
 // import AdminAnnonces from "@/components/admin/AdminAnnonces"; // affichage remplacé par une liste intégrée
 import useAdminGate from "@/hooks/useAdminGate";
@@ -25,7 +26,7 @@ export default function AdminPage() {
   const user = session?.user as any;
   const loading = status === "loading";
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"annonces" | "users" | "colocs">("annonces");
+  const [activeTab, setActiveTab] = useState<"annonces" | "users" | "colocs" | "ads">("annonces");
   // toast state removed (unused)
   // toastTimeout removed
   const [seeding, setSeeding] = useState(false);
@@ -198,7 +199,7 @@ export default function AdminPage() {
         // assurer la compat UI
         const mapped = (Array.isArray(items) ? items : []).map((a: any) => ({ ...a, titre: a.titre ?? a.title ?? "" }));
         if (!stop) setAdminAnnonces(mapped);
-      } catch (e) {
+  } catch {
         if (!stop) setAdminAnnonces([]);
       }
     };
@@ -220,7 +221,7 @@ export default function AdminPage() {
       try {
         const items = await listColoc({ limit: 200 });
         if (!stop) setAdminColocs(items);
-      } catch (e) {
+  } catch {
         if (!stop) setAdminColocs([]);
       }
     };
@@ -1250,6 +1251,9 @@ export default function AdminPage() {
         </>
       );
     }
+    if (activeTab === "ads") {
+      return <AdminAds />;
+    }
     return <AdminUsers showToast={showToast} />;
   };
 
@@ -1274,6 +1278,12 @@ export default function AdminPage() {
           onClick={() => setActiveTab("users")}
         >
           👤 Gestion des utilisateurs
+        </button>
+        <button
+          className={`text-left px-4 py-3 rounded-lg transition ${activeTab === "ads" ? "bg-blue-600 text-white shadow" : "hover:bg-blue-50 text-slate-700"}`}
+          onClick={() => setActiveTab("ads")}
+        >
+          💸 Publicités (AdSense)
         </button>
       </aside>
       <section className="flex-1 w-full px-4 md:px-12 py-10 overflow-x-hidden">

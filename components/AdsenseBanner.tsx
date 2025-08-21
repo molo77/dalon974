@@ -8,6 +8,8 @@ type Props = {
   style?: React.CSSProperties;
   format?: string; // ex: "auto"
   fullWidthResponsive?: boolean;
+  // Force le mode test (utile pour localhost). Par défaut: actif en non-production.
+  testMode?: boolean;
 };
 
 /**
@@ -20,9 +22,12 @@ export default function AdsenseBanner({
   style,
   format = "auto",
   fullWidthResponsive = true,
+  testMode,
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
   const client = process.env.NEXT_PUBLIC_ADSENSE_CLIENT;
+  const isProd = process.env.NODE_ENV === "production";
+  const isTest = typeof testMode === "boolean" ? testMode : !isProd;
 
   useEffect(() => {
     if (!client || !slot) return; // pas configuré
@@ -32,8 +37,18 @@ export default function AdsenseBanner({
     } catch {}
   }, [client, slot]);
 
-  if (!client || !slot) {
-    return null; // Ne rien afficher si non configuré
+  // Si client manquant ou sans préfixe attendu, ne pas rendre l'INS (évite erreurs)
+  const clientLooksValid = !!client && /^ca-pub-/.test(client);
+  if (!clientLooksValid || !slot) {
+    // Fallback discret en dev pour visualiser l'emplacement
+    if (!isProd) {
+      return (
+        <div className={className} style={{ minHeight: 90, ...(style || {}), display: "flex", alignItems: "center", justifyContent: "center", border: "1px dashed #cbd5e1", borderRadius: 6, background: "#f8fafc" }}>
+          <span className="text-xs text-slate-500">AdSense non configuré (client attendu &quot;ca-pub-…&quot;)</span>
+        </div>
+      );
+    }
+    return null;
   }
 
   return (
@@ -45,7 +60,14 @@ export default function AdsenseBanner({
         data-ad-slot={slot}
         data-ad-format={format}
         data-full-width-responsive={fullWidthResponsive ? "true" : "false"}
+        {...(isTest ? { "data-adtest": "on" } : {})}
       />
+      {/* Fallback visuel en dev pour confirmer l'emplacement */}
+      {!isProd && (
+        <div style={{ position: "relative", marginTop: -2 }} aria-hidden>
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", border: "1px dashed transparent" }} />
+        </div>
+      )}
     </div>
   );
 }
