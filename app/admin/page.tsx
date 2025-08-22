@@ -29,8 +29,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<"annonces" | "users" | "colocs" | "ads">("annonces");
   // toast state removed (unused)
   // toastTimeout removed
-  const [seeding, setSeeding] = useState(false);
-  const [repairing, setRepairing] = useState(false);
+  // Seed & réparation supprimés
   const [adminAnnonces, setAdminAnnonces] = useState<any[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminSelected, setAdminSelected] = useState<string[]>([]);
@@ -80,7 +79,7 @@ export default function AdminPage() {
   const [bulkOwnerInput, setBulkOwnerInput] = useState("");
 
   // NOUVEAU: état pour la création de profils d’exemple
-  const [seedingColocs, setSeedingColocs] = useState(false);
+  // Seed colocataires supprimé
 
   // NOUVEAU: état pour modal de détails profil coloc
   const [colocDetailOpen, setColocDetailOpen] = useState(false);
@@ -112,80 +111,13 @@ export default function AdminPage() {
     }
   };
 
-  const seedExamples = async () => {
-    if (seeding) return;
-    setSeeding(true);
-    try {
-      const res = await fetch("/api/admin/seed-annonces", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ perCommune: false, count: 12 }),
-      });
-      if (!res.ok) throw new Error("seed annonces failed");
-      const { created } = await res.json();
-      showToast("success", `${created} annonce(s) d'exemple créées ✅`);
-      // refresh liste
-      if (activeTab === "annonces") {
-        const r = await fetch("/api/annonces?limit=200", { cache: "no-store" });
-        if (r.ok) setAdminAnnonces(await r.json());
-      }
-    } catch (e: any) {
-      showToast("error", e?.message || "Erreur création d'exemples");
-    } finally {
-      setSeeding(false);
-    }
-  };
+  // seedExamples supprimé
 
   // NOUVEAU: réparer les URLs d'images placeholders cassées (annonces + colocs)
-  const repairImages = async () => {
-    if (repairing) return;
-    setRepairing(true);
-    try {
-      const res = await fetch("/api/admin/repair-images", { method: "POST" });
-      if (!res.ok) throw new Error("repair failed");
-      const data = await res.json().catch(() => ({} as any));
-      const a = data?.repaired?.annonces ?? 0;
-      const c = data?.repaired?.colocs ?? 0;
-      showToast("success", `Images réparées: annonces ${a}, colocs ${c} ✅`);
-      // Refresh de l’onglet actif pour refléter les nouvelles URLs
-      if (activeTab === "annonces") {
-        const r = await fetch("/api/annonces?limit=200", { cache: "no-store" });
-        if (r.ok) setAdminAnnonces(await r.json());
-      } else if (activeTab === "colocs") {
-        const items = await listColoc({ limit: 200 });
-        setAdminColocs(items);
-      }
-    } catch (e: any) {
-      console.error("[Admin][RepairImages]", e);
-      showToast("error", e?.message || "Erreur réparation images");
-    } finally {
-      setRepairing(false);
-    }
-  };
+  // repairImages supprimé
 
   // NOUVEAU: créer des profils colocataires d’exemple
-  const seedColocExamples = async () => {
-    if (seedingColocs) return;
-    setSeedingColocs(true);
-    try {
-      const res = await fetch("/api/admin/seed-colocs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ count: 12 }),
-      });
-      if (!res.ok) throw new Error("seed colocs failed");
-      const { created } = await res.json();
-      showToast("success", `${created} profil(s) d'exemple créés ✅`);
-      if (activeTab === "colocs") {
-        const items = await listColoc({ limit: 200 });
-        setAdminColocs(items);
-      }
-    } catch (e: any) {
-      showToast("error", e?.message || "Erreur création profils d'exemple");
-    } finally {
-      setSeedingColocs(false);
-    }
-  };
+  // seedColocExamples supprimé
 
   // Chargement des annonces
   useEffect(() => {
@@ -598,28 +530,7 @@ export default function AdminPage() {
             <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight">
               Administration
             </h1>
-            {activeTab === "annonces" && (
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={seedExamples}
-                  disabled={seeding}
-                  className="bg-emerald-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-emerald-700 disabled:opacity-60"
-                  title="Créer une annonce d’exemple pour chaque commune"
-                >
-                  {seeding ? "Création..." : "Créer annonces d’exemple"}
-                </button>
-                <button
-                  type="button"
-                  onClick={repairImages}
-                  disabled={repairing}
-                  className="bg-indigo-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-60"
-                  title="Réparer les images placeholders cassées (annonces et profils)"
-                >
-                  {repairing ? "Réparation..." : "Réparer images"}
-                </button>
-              </div>
-            )}
+            {/* Boutons seed / repair retirés */}
           </div>
 
           <div className="bg-white rounded-xl shadow-lg p-8">
@@ -867,22 +778,7 @@ export default function AdminPage() {
             >
               {adminLoading ? "Suppression..." : `Supprimer la sélection (${adminColocsSelected.length})`}
             </button>
-            <button
-              type="button"
-              onClick={seedColocExamples}
-              disabled={seedingColocs}
-              className="bg-emerald-600 text-white px-3 py-1.5 text-sm rounded hover:bg-emerald-700 disabled:opacity-60"
-            >
-              {seedingColocs ? "Création..." : "Créer profils d’exemple"}
-            </button>
-            <button
-              type="button"
-              onClick={repairImages}
-              disabled={repairing}
-              className="bg-indigo-600 text-white px-3 py-1.5 text-sm rounded hover:bg-indigo-700 disabled:opacity-60"
-            >
-              {repairing ? "Réparation..." : "Réparer images"}
-            </button>
+            {/* Boutons seed colocs / repair retirés */}
           </div>
 
           {/* Liste profils */}

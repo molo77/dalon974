@@ -97,30 +97,7 @@ export default function AdminUsers({
     setConfirmModal(null);
   };
 
-  const handleAdminResetPassword = async (email: string) => {
-    if (!email) {
-      showToast("error", "Email manquant pour la réinitialisation.");
-      return;
-    }
-    try {
-      const newPassword = prompt(`Nouveau mot de passe pour ${email} (min 8 caractères)`);
-      if (!newPassword) return;
-      if (newPassword.length < 8) {
-        showToast("error", "Mot de passe trop court (min 8).");
-        return;
-      }
-  const res = await fetch("/api/admin/set-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, newPassword }),
-      });
-      if (!res.ok) throw new Error("Erreur API set-password");
-      showToast("success", `Mot de passe mis à jour pour ${email}`);
-    } catch (e: any) {
-      console.error("[AdminUsers][ResetPassword]", e);
-  showToast("error", e?.message || "Erreur lors de la réinitialisation.");
-    }
-  };
+  // handleAdminResetPassword supprimé (API retirée)
 
   const normalizeExistingUsers = async () => {
     setNormalizing(true);
@@ -357,16 +334,7 @@ export default function AdminUsers({
                   >
                     💾
                   </button>
-                  {/* Réinitialiser mot de passe */}
-                  <button
-                    type="button"
-                    title="Réinitialiser le mot de passe"
-                    aria-label="Réinitialiser le mot de passe"
-                    onClick={() => handleAdminResetPassword(u.email)}
-                    className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-amber-500 text-white hover:bg-amber-600"
-                  >
-                    🔑
-                  </button>
+                  {/* Bouton reset password retiré */}
                   {/* Supprimer */}
                   <button
                     type="button"
@@ -501,16 +469,7 @@ export default function AdminUsers({
                       >
                         💾
                       </button>
-                      {/* Réinitialiser mot de passe */}
-                      <button
-                        type="button"
-                        onClick={() => handleAdminResetPassword(u.email)}
-                        title="Réinitialiser le mot de passe"
-                        aria-label="Réinitialiser le mot de passe"
-                        className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-500 text-white hover:bg-amber-600"
-                      >
-                        🔑
-                      </button>
+                      {/* Bouton reset password retiré */}
                       {/* Supprimer */}
                       <button
                         type="button"
