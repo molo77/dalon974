@@ -120,6 +120,20 @@ model Annonce {
   surface     Int?
   nbChambres  Int?
   equipements String?
+  // Attributs détaillés normalisés
+  typeBien            String?
+  meuble              Boolean?
+  nbPieces            Int?
+  nbSdb               Int?
+  natureBien          String?
+  caracteristiques    String?
+  exposition          String?
+  exterieur           String?
+  placesParking       Int?
+  disponibleAPartir   String?
+  typeLocation        String?
+  nombreColocataires  Int?
+  statutFumeur        String?
   createdAt   DateTime?    @db.Timestamp(6)
   updatedAt   DateTime?    @db.Timestamp(6)
   images      AnnonceImage[]
@@ -162,4 +176,33 @@ model AdUnit {
 
   @@index([placementKey])
   @@index([isActive])
+}
+
+// Configuration clé/valeur du scraper (variables LBC_ dynamiques)
+model ScraperSetting {
+  key       String   @id
+  value     String?
+  updatedAt DateTime @updatedAt @db.Timestamp(6)
+}
+
+// Historique d'exécution du scraper
+model ScraperRun {
+  id             String   @id @default(cuid())
+  startedAt      DateTime @default(now()) @db.Timestamp(6)
+  finishedAt     DateTime? @db.Timestamp(6)
+  status         String?  // running | success | error
+  totalCollected Int?
+  totalUpserts   Int?
+  detailLimit    Int?
+  rawLog         String?  @db.LongText
+  errorMessage   String? @db.Text
+  createdCount   Int?
+  updatedCount   Int?
+  skippedRecentCount Int?
+  cooldownHours  Float?
+  createdAt      DateTime @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime? @db.Timestamp(6)
+
+  @@index([startedAt])
+  @@index([status])
 }

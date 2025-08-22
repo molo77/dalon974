@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -26,7 +26,110 @@ export default function AdminPage() {
   const user = session?.user as any;
   const loading = status === "loading";
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"annonces" | "users" | "colocs" | "ads">("annonces");
+  const [activeTab, setActiveTab] = useState<"annonces" | "users" | "colocs" | "ads" | "scraper">("annonces");
+  // État config scraper
+  const [scraperConfig, setScraperConfig] = useState<Record<string,string|undefined>>({});
+  const [scraperLoading, setScraperLoading] = useState(false);
+  const [scraperRuns, setScraperRuns] = useState<any[]>([]);
+  const [scraperSaving, setScraperSaving] = useState(false);
+  const [scraperLaunching, setScraperLaunching] = useState(false);
+  const [showSecret, setShowSecret] = useState<Record<string,boolean>>({});
+  const toggleSecret = (k:string)=> setShowSecret(s=>({ ...s, [k]: !s[k] }));
+  const loadScraper = async () => {
+    try {
+      setScraperLoading(true);
+      const [cfgRes, runsRes] = await Promise.all([
+        fetch('/api/admin/scraper/settings',{ cache: 'no-store' }),
+        fetch('/api/admin/scraper/run',{ cache: 'no-store' })
+      ]);
+      if (cfgRes.ok) setScraperConfig(await cfgRes.json());
+      if (runsRes.ok) setScraperRuns(await runsRes.json());
+    } catch (e) { console.error('[Admin][Scraper] load', e); }
+    finally { setScraperLoading(false); }
+  };
+  const loadScraperRuns = async () => {
+    try {
+      const runsRes = await fetch('/api/admin/scraper/run',{ cache: 'no-store' });
+      if (runsRes.ok) setScraperRuns(await runsRes.json());
+    } catch(e) { console.error('[Admin][Scraper] runs load', e); }
+  };
+  const DEFAULT_SCRAPER_CONFIG: Record<string,string> = {
+    LBC_SEARCH_URL: 'https://www.leboncoin.fr/recherche?category=11&locations=r_26',
+    LBC_BROWSER_HEADLESS: 'true',
+    LBC_MAX: '40',
+    LBC_FETCH_DETAILS: 'true',
+    LBC_DETAIL_LIMIT: '12',
+    LBC_DETAIL_SLEEP: '500',
+    LBC_PAGES: '1',
+    LBC_VERBOSE_LIST: 'false',
+    LBC_EXPORT_JSON: 'false',
+    LBC_NO_DB: 'false',
+    LBC_UPDATE_COOLDOWN_HOURS: '0',
+    LBC_EXTRA_SLEEP: '0',
+    LBC_COOKIES: '',
+    LBC_DATADOME: '',
+    DATADOME_TOKEN: '',
+    LBC_DEBUG: 'false'
+  };
+  const applyDefaultsToEmpty = () => {
+    setScraperConfig(prev => {
+      const next = { ...prev };
+      Object.entries(DEFAULT_SCRAPER_CONFIG).forEach(([k,v])=>{
+        if (!next[k]) next[k] = v;
+      });
+      return next;
+    });
+  };
+  useEffect(()=>{ if(activeTab==='scraper') loadScraper(); },[activeTab]);
+  // Polling contrôlé (évite recréation boucle sur chaque update)
+  const pollingRef = useRef<NodeJS.Timeout|null>(null);
+  useEffect(()=>{
+    if (activeTab !== 'scraper') {
+      if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current=null; }
+      return;
+    }
+    const hasRunning = scraperRuns.some(r=>r.status==='running');
+    if (!hasRunning) {
+      if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current=null; }
+      return;
+    }
+    if (!pollingRef.current) {
+  pollingRef.current = setInterval(()=>{ loadScraperRuns(); }, 5000);
+    }
+    return ()=>{ if (pollingRef.current){ clearInterval(pollingRef.current); pollingRef.current=null; } };
+  },[activeTab, scraperRuns]);
+  const updateCfgField = (k:string,v:string) => setScraperConfig(prev=>({ ...prev, [k]: v }));
+  const saveConfig = async () => {
+    try {
+      setScraperSaving(true);
+      const body: Record<string,string> = {};
+      Object.entries(scraperConfig).forEach(([k,v])=>{ if(v!==undefined) body[k]=v; });
+      const res = await fetch('/api/admin/scraper/settings',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+      if(!res.ok) throw new Error('save fail');
+      showToast('success','Config sauvegardée ✅');
+  } catch{ showToast('error','Erreur sauvegarde config'); }
+    finally { setScraperSaving(false); }
+  };
+  const launchScraper = async () => {
+    try {
+      setScraperLaunching(true);
+      const res = await fetch('/api/admin/scraper/run',{ method:'POST' });
+      if(!res.ok) throw new Error('launch fail');
+      showToast('success','Scraper lancé ✅');
+  setTimeout(()=>loadScraperRuns(),1500);
+  } catch{ showToast('error','Erreur lancement'); }
+    finally { setScraperLaunching(false); }
+  };
+  const forceRun = async () => {
+    try {
+      setScraperLaunching(true);
+      const res = await fetch('/api/admin/scraper/run?force=1',{ method:'POST' });
+      if(!res.ok) throw new Error('force fail');
+      showToast('success','Force run lancé ✅');
+  setTimeout(()=>loadScraperRuns(),1200);
+    } catch { showToast('error','Erreur force run'); }
+    finally { setScraperLaunching(false); }
+  };
   // toast state removed (unused)
   // toastTimeout removed
   // Seed & réparation supprimés
@@ -1150,6 +1253,75 @@ export default function AdminPage() {
     if (activeTab === "ads") {
       return <AdminAds />;
     }
+    if (activeTab === 'scraper') {
+      const fields = [
+        'LBC_SEARCH_URL','LBC_BROWSER_HEADLESS','LBC_MAX','LBC_FETCH_DETAILS','LBC_DETAIL_LIMIT','LBC_DETAIL_SLEEP','LBC_PAGES','LBC_VERBOSE_LIST','LBC_EXPORT_JSON','LBC_NO_DB','LBC_UPDATE_COOLDOWN_HOURS','LBC_EXTRA_SLEEP','LBC_COOKIES','LBC_DATADOME','DATADOME_TOKEN','LBC_DEBUG'
+      ];
+  const sensitive = new Set(['LBC_COOKIES','LBC_DATADOME','DATADOME_TOKEN']);
+      return (
+        <div className='space-y-8'>
+          <div className='flex items-center justify-between'>
+            <h1 className='text-3xl font-bold text-blue-800'>Scraper Leboncoin</h1>
+            <div className='flex gap-2'>
+              <button disabled={scraperLoading} onClick={loadScraper} className='px-3 py-1.5 text-sm rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-50'>Rafraîchir</button>
+              <button disabled={scraperSaving} onClick={saveConfig} className='px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'>{scraperSaving? 'Sauvegarde...' : 'Sauvegarder config'}</button>
+              <button disabled={scraperLaunching} onClick={launchScraper} className='px-3 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50'>{scraperLaunching? 'Lancement...' : 'Lancer scraper'}</button>
+              <button type='button' onClick={applyDefaultsToEmpty} className='px-3 py-1.5 text-sm rounded bg-slate-500 text-white hover:bg-slate-600'>Défauts vides</button>
+              <button disabled={scraperLaunching} onClick={forceRun} title='Interrompt le run en cours et démarre un nouveau' className='px-3 py-1.5 text-sm rounded bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50'>Force run</button>
+            </div>
+          </div>
+          {scraperLoading ? <p>Chargement config…</p> : (
+            <div className='grid md:grid-cols-2 gap-4'>
+              {fields.map(k => {
+                const isSens = sensitive.has(k);
+                return (
+                  <div key={k} className='flex flex-col gap-1'>
+                    <label className='text-xs font-semibold text-slate-600 flex items-center justify-between'>
+                      <span>{k}</span>
+                      {isSens && (
+                        <button type='button' onClick={()=>toggleSecret(k)} className='text-[10px] px-1 py-0.5 rounded border border-slate-300 hover:bg-slate-100'>
+                          {showSecret[k] ? 'Masquer' : 'Voir'}
+                        </button>
+                      )}
+                    </label>
+                    <input
+                      type={isSens && !showSecret[k] ? 'password':'text'}
+                      value={scraperConfig[k] ?? ''}
+                      placeholder={DEFAULT_SCRAPER_CONFIG[k]}
+                      onChange={e=>updateCfgField(k,e.target.value)}
+                      className='border rounded px-2 py-1 text-sm placeholder:text-slate-400'
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div>
+            <h2 className='text-xl font-semibold mb-2'>Dernières exécutions</h2>
+      <table className='w-full text-sm border border-slate-200 rounded overflow-hidden'>
+              <thead className='bg-slate-50'>
+        <tr><th className='p-2 text-left'>Début</th><th className='p-2 text-left'>Fin</th><th className='p-2'>Statut</th><th className='p-2'>Collectées</th><th className='p-2'>Upserts</th><th className='p-2'>Créées</th><th className='p-2'>MAJ</th><th className='p-2'>Cooldown skip</th><th className='p-2'>Log (fin)</th></tr>
+              </thead>
+              <tbody>
+                {scraperRuns.map(r => (
+                  <tr key={r.id} className='border-t hover:bg-slate-50'>
+                    <td className='p-2'>{r.startedAt ? new Date(r.startedAt).toLocaleString() : '-'}</td>
+                    <td className='p-2'>{r.finishedAt ? new Date(r.finishedAt).toLocaleString() : (r.status==='running'?'…':'-')}</td>
+          <td className='p-2'><span className={`px-2 py-0.5 rounded text-xs font-medium ${r.status==='success'?'bg-green-100 text-green-700': r.status==='error'?'bg-rose-100 text-rose-700': r.status==='aborted' ? 'bg-gray-200 text-gray-700':'bg-amber-100 text-amber-700'}`}>{r.status||'-'}</span></td>
+          <td className='p-2 text-center'>{r.totalCollected ?? '-'}</td>
+          <td className='p-2 text-center'>{r.totalUpserts ?? ((r.createdCount ?? 0)+(r.updatedCount ?? 0) || '-')}</td>
+          <td className='p-2 text-center'>{r.createdCount ?? '-'}</td>
+          <td className='p-2 text-center'>{r.updatedCount ?? '-'}</td>
+          <td className='p-2 text-center'>{r.skippedRecentCount ?? '-'}</td>
+          <td className='p-2 max-w-[300px] text-xs font-mono whitespace-pre overflow-hidden text-ellipsis'>{r.rawLog ? r.rawLog.slice(-300) : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
     return <AdminUsers showToast={showToast} />;
   };
 
@@ -1180,6 +1352,12 @@ export default function AdminPage() {
           onClick={() => setActiveTab("ads")}
         >
           💸 Publicités (AdSense)
+        </button>
+        <button
+          className={`text-left px-4 py-3 rounded-lg transition ${activeTab === "scraper" ? "bg-blue-600 text-white shadow" : "hover:bg-blue-50 text-slate-700"}`}
+          onClick={() => setActiveTab("scraper")}
+        >
+          🕷️ Scraper
         </button>
       </aside>
       <section className="flex-1 w-full px-4 md:px-12 py-10 overflow-x-hidden">
