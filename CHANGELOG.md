@@ -5,7 +5,9 @@ Toutes les nouveautés et modifications notables de ce projet seront documentée
 Le format est inspiré de Keep a Changelog et des conventions de commits (feat / fix / refactor / chore ...).
 
 ## [Unreleased]
-- (Aucun changement enregistré après 0.1.1 pour le moment)
+### 🔥 Suppressions / Breaking
+- Suppression endpoints d'administration de seed (`seed-annonces`, `seed-colocs`), réparation images (`repair-images`) et reset mot de passe (`set-password`). UI nettoyée des boutons associés. (`27e53ac`)
+
 
 ## [0.1.1] - 2025-08-22
 Release de stabilisation UI + nettoyage lint.
@@ -52,4 +54,5 @@ Les commits précédents à la version 0.1.1 constituent la base initiale du pro
 ---
 
 [0.1.1]: https://github.com/molo77/dalon974/releases/tag/v0.1.1
-[Unreleased]: https://github.com/molo77/dalon974/compare/v0.1.1...HEAD
+[0.2.0]: https://github.com/molo77/dalon974/releases/tag/v0.2.0
+[Unreleased]: https://github.com/molo77/dalon974/compare/v0.2.0...HEAD
