@@ -163,3 +163,27 @@ model AdUnit {
   @@index([placementKey])
   @@index([isActive])
 }
+
+// Agrégation d'annonces externes (colocations) provenant de sites tiers
+// ATTENTION: respecter les CGU des sites sources; ce modèle stocke les métadonnées normalisées
+model ExternalColocListing {
+  id         String   @id @default(uuid())
+  source     String   // identifiant interne de la source (ex: "exampleSite")
+  sourceId   String?  // identifiant unique côté source si disponible
+  url        String   @db.Text
+  title      String?
+  description String? @db.Text
+  ville      String?
+  budget     Int?
+  chambres   Int?
+  surface    Int?
+  photos     Json?
+  postedAt   DateTime?
+  scrapedAt  DateTime  @default(now()) @db.Timestamp(6)
+  hash       String    // hash de déduplication contenu normalisé
+
+  @@index([source])
+  @@index([ville])
+  @@unique([source, sourceId])
+  @@unique([hash])
+}
