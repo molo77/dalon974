@@ -39,6 +39,9 @@ export async function POST(req: Request) {
     env: childEnv,
     stdio: ['ignore','pipe','pipe']
   });
+  // Sauvegarde PID enfant
+  // @ts-expect-error post-migration
+  try { await prisma.scraperRun.update({ where: { id: run.id }, data: { childPid: child.pid || null } }); } catch {}
   let buffer = '';
   child.stdout.on('data', d => { buffer += d.toString(); });
   child.stderr.on('data', d => { buffer += d.toString(); });
@@ -78,7 +81,52 @@ export async function POST(req: Request) {
       console.error('[scraperRun][close] update fail', e?.message || e);
     }
   });
+  // Tick de progression toutes les 2s pendant exécution
+  const progressTimer = setInterval(async () => {
+    const lines = buffer.split(/\n/).slice(-300);
+    let progress: number|undefined;
+    // Cherche dernière ligne JSON de progression
+    for (let i=lines.length-1;i>=0;i--) {
+      const line = lines[i];
+      if (line.startsWith('LBC_PROGRESS_JSON:')) {
+        try {
+          const obj = JSON.parse(line.replace('LBC_PROGRESS_JSON:',''));
+          if (obj.phase==='list' && obj.totalPages) {
+            progress = Math.min(1, obj.page/obj.totalPages * 0.3); // 30% phase listing
+            break;
+          } else if (obj.phase==='detail' && obj.total) {
+            progress = 0.3 + Math.min(1, obj.index/obj.total) * 0.7; // 70% phase détails
+            break;
+          }
+        } catch {}
+      }
+    }
+    if (progress !== undefined) {
+      // @ts-expect-error post-migration
+      try { await prisma.scraperRun.update({ where: { id: run.id }, data: { progress } }); } catch {}
+    }
+  }, 2000);
+  child.on('exit', ()=>{ clearInterval(progressTimer); });
   return NextResponse.json({ runId: run.id });
+}
+
+export async function DELETE() {
+  const session: any = await getServerSession(authOptions as any);
+  if ((session?.user as any)?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // @ts-expect-error post-migration
+  const running = await prisma.scraperRun.findFirst({ where: { status: 'running' }, orderBy: { startedAt: 'desc' } });
+  if (!running) return NextResponse.json({ message: 'Aucun run actif' });
+  const pid = running.childPid;
+  let killed = false;
+  if (pid) {
+    try {
+      process.kill(pid, 'SIGTERM');
+      killed = true;
+    } catch {}
+  }
+  // @ts-expect-error post-migration
+  await prisma.scraperRun.update({ where: { id: running.id }, data: { status: 'aborted', finishedAt: new Date(), errorMessage: 'Annulé manuellement' } });
+  return NextResponse.json({ aborted: true, killed });
 }
 
 export async function GET() {

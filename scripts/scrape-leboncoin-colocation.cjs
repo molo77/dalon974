@@ -60,6 +60,27 @@ const EXTRA_SLEEP = parseInt(process.env.LBC_EXTRA_SLEEP || '0', 10); // ms afte
 
 function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
 
+// Formatage description réintroduit
+function formatDescription(raw, maxLen = 2000) {
+  if (!raw) return undefined;
+  let txt = String(raw);
+  txt = txt.replace(/<br\s*\/?>/gi, '\n');
+  txt = txt.replace(/<[^>]+>/g, '');
+  txt = txt.replace(/\r\n?|\f/g, '\n');
+  txt = txt.replace(/&nbsp;/gi, ' ')
+           .replace(/&amp;/gi, '&')
+           .replace(/&quot;/gi, '"')
+           .replace(/&#39;|&apos;/gi, "'")
+           .replace(/&lt;/gi, '<')
+           .replace(/&gt;/gi, '>');
+  const lines = txt.split(/\n+/).map(l => l.trim());
+  const compact=[]; for (const l of lines){ if(!l){ if(compact.length && compact[compact.length-1] !== '') compact.push(''); } else { compact.push(l.replace(/([^\S\r\n]{2,})/g,' ').replace(/^([*•-])\s{2,}/,'$1 ')); } }
+  while (compact.length && compact[compact.length-1]==='') compact.pop();
+  let finalTxt = compact.join('\n');
+  if (finalTxt.length>maxLen){ let slice=finalTxt.slice(0,maxLen); const lastDot=slice.lastIndexOf('. '); if(lastDot>maxLen*0.6) slice=slice.slice(0,lastDot+1); finalTxt=slice.trim(); }
+  return finalTxt.trim();
+}
+
 async function navigateWithRetry(page, url) {
   const strategies = [
     { waitUntil: 'domcontentloaded', timeout: 90000 },
@@ -109,7 +130,7 @@ async function scrape() {
       const pageUrlObj = new URL(SEARCH_URL);
       if (pIdx > 1) pageUrlObj.searchParams.set('page', String(pIdx)); else pageUrlObj.searchParams.delete('page');
       const pageUrl = pageUrlObj.toString();
-      console.log(`[lbc] page ${pIdx}/${PAGES} ->`, pageUrl);
+  console.log(`[lbc] page ${pIdx}/${PAGES} ->`, pageUrl);
       await navigateWithRetry(page, pageUrl);
       if (EXTRA_SLEEP > 0) await page.waitForTimeout(EXTRA_SLEEP);
       if (pIdx === 1) { try { await page.click('#didomi-notice-agree-button', { timeout: 4000 }); console.log('[lbc] cookies accept'); } catch {} }
@@ -153,7 +174,9 @@ async function scrape() {
           return { url, title, price: priceMatch? parseInt(priceMatch[1].replace(/\./g,''),10): undefined, ville };
         }).filter(Boolean);
       });
-      console.log(`[lbc] page ${pIdx} annonces trouvées`, pageListings.length);
+  console.log(`[lbc] page ${pIdx} annonces trouvées`, pageListings.length);
+  // Ligne de progression pages
+  try { console.log('LBC_PROGRESS_JSON:' + JSON.stringify({ phase:'list', page:pIdx, totalPages: totalPagesTarget })); } catch {}
       if (VERBOSE_LIST) pageListings.slice(0,10).forEach(l=>console.log('  -', l.price? (l.price+'€'):'?', '|', l.ville || '', '|', l.title.slice(0,70)));
       for (const l of pageListings) { if (!seenPageUrls.has(l.url)) { seenPageUrls.add(l.url); allListings.push(l); } }
       if (allListings.length >= MAX) break;
@@ -166,7 +189,7 @@ async function scrape() {
   if (FETCH_DETAILS) {
     const detailCap = DETAIL_LIMIT === Infinity ? slice.length : Math.min(slice.length, DETAIL_LIMIT);
     console.log('[lbc] détails max', detailCap, DETAIL_LIMIT===Infinity ? '(all)' : '');
-    for (let i=0;i<slice.length && i<detailCap;i++) {
+  for (let i=0;i<slice.length && i<detailCap;i++) {
       const l = slice[i];
       try {
         const p = await browser.newPage();
@@ -181,7 +204,7 @@ async function scrape() {
             const adData = json?.props?.pageProps?.adData || json?.props?.initialProps?.ad || null;
             if (adData) {
               if (!l.title && adData.subject) l.title = adData.subject;
-              if (adData.body) l.description = String(adData.body).trim();
+              if (adData.body) l.description = formatDescription(adData.body);
               if (adData.location?.city && !l.ville) l.ville = adData.location.city;
               const priceVal = adData.price ? (adData.price.value || adData.price[0]?.value) : undefined;
               if (typeof priceVal === 'number' && !l.price) l.price = priceVal;
@@ -189,7 +212,7 @@ async function scrape() {
                 l.photos = adData.images.map(im => im?.url || im?.urls?.large || im?.urls?.thumb).filter(Boolean).slice(0,12);
                 if (l.photos.length) l.imageUrl = l.photos[0];
               }
-              // Extraction attributs dédiés
+              // Extraction attributs dédiés + enrichissements
               try {
                 const pools = [adData.attributes, adData.properties, adData.features];
                 const attr = {};
@@ -203,15 +226,11 @@ async function scrape() {
                     if (key && !attr[key]) attr[key] = val;
                   }
                 }
-                // Mapping heuristique vers champs normalisés
-                const get = (...cands) => {
-                  for (const c of cands) { if (attr[c]) return attr[c]; }
-                  return undefined;
-                };
+                const get = (...cands) => { for (const c of cands) { if (attr[c]) return attr[c]; } return undefined; };
+                const toInt = v => { const n=parseInt((v||'').toString(),10); return isNaN(n)?undefined:n; };
                 l.typeBien = get('real_estate_type','typebien','type_de_bien');
                 const furnishedLabel = get('furnished','meuble','meublé');
                 if (furnishedLabel) l.meuble = /meubl/i.test(furnishedLabel);
-                const toInt = v => { const n=parseInt((v||'').toString(),10); return isNaN(n)?undefined:n; };
                 l.nbPieces = toInt(get('rooms','nb_pieces','pieces'));
                 if (!l.nbChambres) l.nbChambres = toInt(get('bedrooms','nb_chambres','chambres'));
                 l.nbSdb = toInt(get('bathrooms','nb_salles_de_bain','salles_de_bain'));
@@ -224,17 +243,54 @@ async function scrape() {
                 l.typeLocation = get('rental_type','type');
                 l.nombreColocataires = toInt(get('colocataires','roommates','nb_colocataires'));
                 l.statutFumeur = get('smoking','statut_fumeur');
+                // Surface directe
+                if (!l.surface) {
+                  const surfRaw = get('surface','surface_m2','superficie','area','square');
+                  if (surfRaw) { const m=surfRaw.match(/(\d{1,4})/); if (m) l.surface = parseInt(m[1],10); }
+                }
+                // Equipements heuristiques depuis attributs
+                if (!l.equipements) {
+                  const attrValuesStr = Object.values(attr).join(' ').toLowerCase();
+                  const possibles = ['wifi','internet','fibre','clim','climatisation','parking','garage','terrasse','balcon','jardin','piscine','ascenseur','lave','linge','séche','seche','machine'];
+                  const found = [];
+                  for (const kw of possibles) { if (attrValuesStr.includes(kw) && !found.includes(kw)) found.push(kw); }
+                  if (found.length) l.equipements = found.join(', ');
+                }
               } catch {}
+              // Fallback description parsing si certains champs manquent
+              if (l.description) {
+                if (!l.surface) { const m=l.description.match(/(\d{1,4})\s?(m2|m²)/i); if (m) l.surface=parseInt(m[1],10); }
+                if (!l.nbChambres) { const ch=l.description.match(/(\d{1,2})\s?chamb(?:re|res?)/i); if (ch) l.nbChambres=parseInt(ch[1],10); }
+                if (!l.equipements) {
+                  const eqRules = [
+                    { rx: /wifi|fibre|internet/i, label: 'wifi' },
+                    { rx: /clim|climatisation|air ?cond/i, label: 'climatisation' },
+                    { rx: /parking|garage|stationnement/i, label: 'parking' },
+                    { rx: /terrasse/i, label: 'terrasse' },
+                    { rx: /balcon/i, label: 'balcon' },
+                    { rx: /jardin/i, label: 'jardin' },
+                    { rx: /piscine/i, label: 'piscine' },
+                    { rx: /ascenseur/i, label: 'ascenseur' },
+                    { rx: /machine.*laver|lave[- ]linge/i, label: 'lave-linge' },
+                    { rx: /seche[- ]linge|sèche[- ]linge/i, label: 'sèche-linge' }
+                  ];
+                  const tags=[]; for (const r of eqRules) { if (r.rx.test(l.description) && !tags.includes(r.label)) tags.push(r.label); }
+                  if (tags.length) l.equipements = tags.join(', ');
+                }
+              }
             }
           } catch {}
         }
         if (!l.description) {
-          l.description = await p.$eval('body', el => el.textContent.slice(0, 2000)).catch(()=>undefined);
+          l.description = await p.$eval('body', el => el.textContent.slice(0, 3000)).catch(()=>undefined);
+          if (l.description) l.description = formatDescription(l.description, 2000);
         }
   // Basic attribute parsing (surface, chambres, équipements) déjà géré plus haut si besoin
   await p.close();
   if (DETAIL_SLEEP) await sleep(DETAIL_SLEEP + Math.floor(Math.random()*250));
-      } catch (e) {
+  // Progression détails
+  try { console.log('LBC_PROGRESS_JSON:' + JSON.stringify({ phase:'detail', index:i+1, total: detailCap })); } catch {}
+  } catch (e) {
         console.warn('[lbc] detail fail', l.url, e.message);
       }
     }

@@ -200,6 +200,8 @@ model ScraperRun {
   updatedCount   Int?
   skippedRecentCount Int?
   cooldownHours  Float?
+  progress       Float?   // 0..1 progression temps réel
+  childPid       Int?     // PID du process enfant pour annulation
   createdAt      DateTime @default(now()) @db.Timestamp(6)
   updatedAt      DateTime? @db.Timestamp(6)
 
