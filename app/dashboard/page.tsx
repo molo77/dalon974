@@ -371,7 +371,7 @@ export default function DashboardPage() {
       showToast("info", "Index Firestore en cours de création. Le tri peut être temporairement indisponible. Réessayez dans quelques minutes.");
       return;
     }
-    if (code === "permission-denied") {
+  if (code === "permission-denied") {
       let msg = "Accès refusé (permission-denied).";
       msg += userRole
         ? ` Rôle Firestore détecté: "${userRole}".`
@@ -380,9 +380,7 @@ export default function DashboardPage() {
       setFirestoreError(msg);
       showToast("error", msg);
       setHasMore(false);
-    } else {
-      
-    }
+  }
   }, [userRole]);
 
   const { overrideVille, setOverrideVille, MAIN_COMMUNES_SORTED, SUB_COMMUNES_SORTED } =
@@ -996,11 +994,8 @@ export default function DashboardPage() {
   const deselectAllMsgs = () => setSelectedMsgIds(() => []);
 
   const deleteMessageById = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, "messages", id));
-    } catch (e) {
-      throw e;
-    }
+    // La suppression peut lever; inutile de l'envelopper dans un try/catch qui relance
+    await deleteDoc(doc(db, "messages", id));
   };
   const performBulkDeleteMsgs = async () => {
     const toDelete = selectedMsgIds;

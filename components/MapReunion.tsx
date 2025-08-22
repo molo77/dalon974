@@ -54,8 +54,8 @@ export default function MapReunion({
       );
       if (!mounted) return;
 
-      const projection = d3.geoMercator();
-      const p = d3.geoPath(projection as any);
+  const projection = d3.geoMercator();
+  const _p = d3.geoPath(projection as any); // _p non utilisé directement; projection appliquée plus bas
       projection.fitSize([800, 800], { type: 'FeatureCollection', features: feats } as any);
       (path as any).projection(projection);
       setFeatures(feats);

@@ -24,7 +24,8 @@ export async function POST(req: Request) {
 
   const prenoms = ["Alex", "Marie", "Lucas", "Emma", "Tom", "Chloé", "Noah", "Léa"]; 
   const villes = COMMUNES; 
-    const jobs = ["Étudiant(e)", "Développeur", "Infirmier(ère)", "Commercial(e)", "Artisan", "Enseignant(e)"];
+  // Liste de jobs potentiels (désactivée pour le moment)
+  // const jobs = ["Étudiant(e)", "Développeur", "Infirmier(ère)", "Commercial(e)", "Artisan", "Enseignant(e)"]; // (non utilisée)
 
     const toCreate: any[] = [];
     for (let i = 0; i < n; i++) {

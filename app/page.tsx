@@ -25,19 +25,29 @@ import { preloadReunionFeatures } from "@/lib/reunionGeo";
 const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr: false });
 
 
+// === Utilitaires partagés (déplacés hors composant pour éviter recréations) ===
+function sameIds(a: string[] | undefined | null, b: string[] | undefined | null): boolean {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return false;
+  return true;
+}
+// Normalise un champ createdAt potentiellement Firestore-like ou date string/number
+function toMsAny(x: any): number {
+  const v = x?.createdAt ?? x; // autoriser passage direct de l'objet ou de la valeur
+  if (!v) return 0;
+  if (typeof v === 'number') return v;
+  if (v?.seconds) return (v.seconds * 1000) + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+  const p = Date.parse(v);
+  return isNaN(p) ? 0 : p;
+}
+
 export default function HomePage() {
   // Image d'accueil configurable via env (placer l'image dans public/ et utiliser un chemin commençant par "/")
   const homepageImageSrc = process.env.NEXT_PUBLIC_HOMEPAGE_IMAGE || "/images/home-hero.jpg";
-  // Helper: compare deux listes de slugs sans tenir compte de l’ordre
-  function sameIds(a: string[], b: string[]): boolean {
-    if (a === b) return true;
-    if (!Array.isArray(a) || !Array.isArray(b)) return false;
-    if (a.length !== b.length) return false;
-    const sa = [...a].sort();
-    const sb = [...b].sort();
-    for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return false;
-    return true;
-  }
   // Rôle admin depuis la session NextAuth
   const { data: session } = useSession();
   const isAdmin = (session as any)?.user?.role === 'admin';
@@ -279,13 +289,17 @@ export default function HomePage() {
             profession: p.profession,
           };
         });
-        const toMs = (x: any) => {
-          const v = x?.createdAt; if (!v) return 0; if (typeof v === 'number') return v;
-          if ((v as any)?.seconds) return (v as any).seconds * 1000 + ((v as any).nanoseconds ? Math.floor((v as any).nanoseconds / 1e6) : 0);
-          const p = Date.parse(v); return isNaN(p) ? 0 : p;
-        };
-        mapped.sort((a: any, b: any) => sortBy === 'date' ? toMs(b) - toMs(a) : (sortBy === 'prix-desc' ? (b.prix ?? 0) - (a.prix ?? 0) : (a.prix ?? 0) - (b.prix ?? 0)));
-  setAnnonces((prev) => append ? [...prev, ...mapped.filter(i => !(new Set(prev.map((x: any) => x.id))).has(i.id))] : mapped);
+        mapped.sort((a: any, b: any) => sortBy === 'date'
+          ? toMsAny(b) - toMsAny(a)
+          : (sortBy === 'prix-desc' ? (b.prix ?? 0) - (a.prix ?? 0) : (a.prix ?? 0) - (b.prix ?? 0))
+        );
+        setAnnonces((prev) => {
+          if (!append) return mapped;
+          const existing = new Set(prev.map((x: any) => x.id));
+          const additions = mapped.filter(i => !existing.has(i.id));
+          if (additions.length === 0) return prev;
+          return [...prev, ...additions];
+        });
   setCountFiltered((prev) => (append ? (prev ?? 0) : 0) + mapped.length);
   offsetRef.current = currentOffset + mapped.length;
   setHasMore(mapped.length === pageLimit);
@@ -316,13 +330,17 @@ export default function HomePage() {
           parentSlug: getDocParentSlug(d),
           subCommunesLabel: extractSubCommunesLabel([d.titre ?? d.title, d.description], getDocParentSlug(d)) || undefined,
         }));
-        const toMs = (x: any) => {
-          const v = x?.createdAt; if (!v) return 0; if (typeof v === 'number') return v;
-          if ((v as any)?.seconds) return (v as any).seconds * 1000 + ((v as any).nanoseconds ? Math.floor((v as any).nanoseconds / 1e6) : 0);
-          const p = Date.parse(v); return isNaN(p) ? 0 : p;
-        };
-        mapped.sort((a, b) => sortBy === 'date' ? toMs(b) - toMs(a) : (sortBy === 'prix-desc' ? (b.prix ?? 0) - (a.prix ?? 0) : (a.prix ?? 0) - (b.prix ?? 0)));
-  setAnnonces((prev) => append ? [...prev, ...mapped.filter(i => !(new Set(prev.map((x: any) => x.id))).has(i.id))] : mapped);
+        mapped.sort((a, b) => sortBy === 'date'
+          ? toMsAny(b) - toMsAny(a)
+          : (sortBy === 'prix-desc' ? (b.prix ?? 0) - (a.prix ?? 0) : (a.prix ?? 0) - (b.prix ?? 0))
+        );
+        setAnnonces((prev) => {
+          if (!append) return mapped;
+          const existing = new Set(prev.map((x: any) => x.id));
+          const additions = mapped.filter(i => !existing.has(i.id));
+          if (additions.length === 0) return prev;
+          return [...prev, ...additions];
+        });
   setCountFiltered((prev) => (append ? (prev ?? 0) : 0) + mapped.length);
   offsetRef.current = currentOffset + mapped.length;
   setHasMore(mapped.length === pageLimit);
@@ -461,22 +479,13 @@ export default function HomePage() {
     }
 
     list = list.sort((a: any, b: any) => {
-        if (sortBy === "prix" || sortBy === "prix-desc") {
-          const pa = typeof a?.prix === "number" ? a.prix : Number.POSITIVE_INFINITY;
-          const pb = typeof b?.prix === "number" ? b.prix : Number.POSITIVE_INFINITY;
-          return sortBy === "prix-desc" ? pb - pa : pa - pb;
-        } else {
-          const toMs = (x: any) => {
-            const v = x?.createdAt;
-            if (!v) return 0;
-            if (typeof v === "number") return v;
-            if (v?.seconds) return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
-            const p = Date.parse(v);
-            return isNaN(p) ? 0 : p;
-          };
-          return toMs(b) - toMs(a);
-        }
-      });
+      if (sortBy === "prix" || sortBy === "prix-desc") {
+        const pa = typeof a?.prix === "number" ? a.prix : Number.POSITIVE_INFINITY;
+        const pb = typeof b?.prix === "number" ? b.prix : Number.POSITIVE_INFINITY;
+        return sortBy === "prix-desc" ? pb - pa : pa - pb;
+      }
+      return toMsAny(b) - toMsAny(a);
+    });
     return list;
   }, [annonces, selectedParentSlugs, prixMax, sortBy, activeHomeTab, critAgeMin, critAgeMax, critProfession]);
 

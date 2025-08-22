@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
-import type { FeatureGroup, Map as LeafletMap } from 'leaflet';
+import type { Map as LeafletMap } from 'leaflet';
 import L from 'leaflet';
 import { loadReunionFeatures } from '@/lib/reunionGeo';
 
@@ -24,7 +24,7 @@ type Props = {
   hideSelectionSummary?: boolean;
 };
 
-const RAW_URL = 'https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/communes-avec-outre-mer.geojson';
+// RAW_URL supprimé: les données sont chargées via loadReunionFeatures
 
 function slugify(str: string) {
   return String(str || '')
@@ -45,7 +45,8 @@ export default function MapReunionLeaflet({
   const [features, setFeatures] = useState<CommuneFeature[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set(defaultSelected));
   const mapRef = useRef<LeafletMap | null>(null);
-  const groupRef = useRef<FeatureGroup | null>(null);
+  // groupRef supprimé (inutilisé)
+  // const groupRef = useRef<FeatureGroup | null>(null);
   const layerById = useRef<Record<string, L.Path>>({});
   const centerById = useRef<Record<string, L.LatLng>>({});
   const onChangeRef = useRef(onSelectionChange);
@@ -110,7 +111,7 @@ export default function MapReunionLeaflet({
     // évite les setState inutiles
     const same = incoming.size === selected.size && Array.from(incoming).every((s) => selected.has(s));
     if (!same) setSelected(incoming);
-  }, [selectedProp, canon]);
+  }, [selectedProp, canon, selected]);
 
   // Quand les features arrivent (ou changent), re-normaliser la sélection existante
   useEffect(() => {
@@ -120,11 +121,11 @@ export default function MapReunionLeaflet({
       const same = next.size === prev.size && Array.from(next).every((s) => prev.has(s));
       return same ? prev : next;
     });
-  }, [features, canon]);
+  }, [features, canon, selected.size]);
 
   const baseCenter = useMemo(() => ({ lat: -21.115, lng: 55.536 }), []);
 
-  const styleFn = (f: CommuneFeature): L.PathOptions => {
+  const styleFn = useCallback((f: CommuneFeature): L.PathOptions => {
     const name = String(f.properties?.nom || f.properties?.NOM || '');
   const id = canon(slugify(name));
     const isSel = selected.has(id);
@@ -134,9 +135,9 @@ export default function MapReunionLeaflet({
       fillColor: isSel ? '#22c55e' : '#60a5fa',
       fillOpacity: isSel ? 0.45 : 0.25,
     };
-  };
+  }, [canon, selected]);
 
-  const onEachFeature = (feature: CommuneFeature, layer: L.Layer) => {
+  const onEachFeature = useCallback((feature: CommuneFeature, layer: L.Layer) => {
     if (!(layer as any).bindTooltip) return;
     const name = String(feature.properties?.nom || feature.properties?.NOM || '');
   const id = canon(slugify(name));
@@ -156,7 +157,7 @@ export default function MapReunionLeaflet({
       (layer as any).openTooltip(center);
     }
 
-    layer.on('click', (ev: L.LeafletMouseEvent) => {
+  layer.on('click', (ev: L.LeafletMouseEvent) => {
       const multi = alwaysMultiSelect || ev.originalEvent.ctrlKey || ev.originalEvent.metaKey;
       setSelected(prev => {
         const next = new Set(prev);
@@ -174,7 +175,7 @@ export default function MapReunionLeaflet({
       const b = (layer as any).getBounds?.();
       if (b) m.fitBounds(b.pad(0.15));
     });
-  };
+  }, [alwaysMultiSelect, canon, onZoneClick]);
 
   const resetView = () => {
   mapRef.current?.setView(baseCenter as any, 9);
