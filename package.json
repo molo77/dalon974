@@ -5,6 +5,7 @@
   "scripts": {
   "dev:raw": "next dev -H 0.0.0.0 -p 3000 --turbopack",
   "dev": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$p=(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess); if($p){Write-Host 'Killing PID' $p 'on :3000'; Stop-Process -Id $p -Force; Start-Sleep -Seconds 1}; npm run dev:raw\"",
+  "scrape:lbc:coloc": "node scripts/scrape-leboncoin-colocation.cjs",
     "prisma:generate": "prisma generate",
     "migrate:prisma": "prisma migrate dev",
     "migrate:firestore-to-mysql": "ts-node --transpile-only scripts/migrateFirestoreToMySQL.ts --apply",
@@ -56,6 +57,7 @@
     "tailwindcss": "^3.4.1",
     "ts-node": "^10.9.2",
     "typescript": "^5",
-    "typescript-eslint": "^8.39.1"
+  "typescript-eslint": "^8.39.1",
+  "puppeteer": "^23.4.1"
   }
 }

@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "strict": true,
+    "noEmit": false,
+    "outDir": "./.ts-build-scripts",
+    "allowJs": false
+  },
+  "include": [
+    "scripts/**/*",
+    "lib/**/*",
+    "prisma/**/*",
+    "types/**/*"
+  ]
+}

@@ -20,6 +20,11 @@ type AnnonceProps = {
   zonesLabel?: string;
   // NOUVEAU: sous-communes couvertes par les zones sélectionnées
   subCommunesLabel?: string;
+  // Attributs enrichis
+  typeBien?: string;
+  meuble?: boolean;
+  nbPieces?: number;
+  nbChambres?: number; // déjà existant mais pour cohérence de lecture
 };
 export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.MouseEvent<HTMLDivElement> | React.KeyboardEvent<HTMLDivElement>) => void }) {
   const {
@@ -149,6 +154,15 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
                 })()}
               </div>
             )}
+            {/* Badges attributs */}
+      {props.typeBien || props.meuble != null || props.nbPieces || props.nbChambres ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+        {props.typeBien && <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-xs">{props.typeBien}</span>}
+        {props.nbPieces && <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-xs">{props.nbPieces} pièces</span>}
+        {props.nbChambres && <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-xs">{props.nbChambres} ch.</span>}
+        {props.meuble != null && <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-xs">{props.meuble ? 'Meublé' : 'Non meublé'}</span>}
+              </div>
+            ) : null}
           </div>
         </div>
 
