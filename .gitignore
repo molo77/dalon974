@@ -2,10 +2,10 @@
 
 # Env et secrets (ne jamais versionner)
 .env
-# .env.local
-# .env.*.local
-# *.env
-# *.env.local
+.env.local
+.env.*.local
+*.env
+*.env.local
 .npmrc
 .yarnrc
 .yarnrc.yml
