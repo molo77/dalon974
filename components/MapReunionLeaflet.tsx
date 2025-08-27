@@ -111,17 +111,18 @@ export default function MapReunionLeaflet({
     // évite les setState inutiles
     const same = incoming.size === selected.size && Array.from(incoming).every((s) => selected.has(s));
     if (!same) setSelected(incoming);
-  }, [selectedProp, canon, selected]);
+  }, [selectedProp, canon]);
 
   // Quand les features arrivent (ou changent), re-normaliser la sélection existante
   useEffect(() => {
-    if (features.length === 0 || selected.size === 0) return;
+    if (features.length === 0) return;
     setSelected((prev) => {
+      if (prev.size === 0) return prev;
       const next: Set<string> = new Set<string>(Array.from(prev).map(canon));
       const same = next.size === prev.size && Array.from(next).every((s) => prev.has(s));
       return same ? prev : next;
     });
-  }, [features, canon, selected.size]);
+  }, [features, canon]);
 
   const baseCenter = useMemo(() => ({ lat: -21.115, lng: 55.536 }), []);
 

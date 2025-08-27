@@ -98,6 +98,17 @@ export async function POST(req: Request) {
       // s'assurer que c'est un tableau côté JSON
       data.photos = Array.isArray(data.photos) ? data.photos : [];
     }
+    
+    // Générer un id si manquant
+    if (!data.id) {
+      data.id = (globalThis.crypto?.randomUUID?.() || require('crypto').randomUUID());
+    }
+    
+    // Timestamp de création si pas fourni
+    if (!data.createdAt) {
+      data.createdAt = new Date();
+    }
+    
     const created = await prisma.colocProfile.create({ data });
     return NextResponse.json(created, { status: 201 });
   } catch (e) {

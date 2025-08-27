@@ -104,6 +104,11 @@ async function navigateWithRetry(page, url) {
 async function scrape() {
   let puppeteer;
   try { puppeteer = require('puppeteer'); } catch { console.error('[lbc] Installez puppeteer: npm i -D puppeteer'); process.exit(1); }
+  
+  // Étape 1: Initialisation
+  console.log('🚀 [ÉTAPE 1/5] Initialisation du scraper...');
+  try { console.log('LBC_PROGRESS_JSON:' + JSON.stringify({ phase:'init', step:1, totalSteps:5, message:'Initialisation du navigateur' })); } catch {}
+  
   const browser = await puppeteer.launch({ headless: HEADLESS, args: ['--no-sandbox','--disable-setuid-sandbox'] });
   const page = await browser.newPage();
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
@@ -111,6 +116,7 @@ async function scrape() {
     'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
     'Referer': 'https://www.google.com/'
   });
+  
   if (COOKIE_RAW) {
     // Supporte liste "k=v; k2=v2"
     const cookies = COOKIE_RAW.split(/;\s*/).filter(Boolean).map(chunk => {
@@ -122,7 +128,13 @@ async function scrape() {
       try { await page.setCookie(...cookies); console.log('[lbc] cookies injectés', cookies.map(c=>c.name).join(',')); } catch (e) { console.warn('[lbc] setCookie fail', e.message); }
     }
   }
+  
   console.log('[lbc] start headless=', HEADLESS, 'pages=', PAGES);
+  console.log('✅ [ÉTAPE 1/5] Initialisation terminée');
+  
+  // Étape 2: Collecte des annonces
+  console.log('📋 [ÉTAPE 2/5] Collecte des annonces...');
+  try { console.log('LBC_PROGRESS_JSON:' + JSON.stringify({ phase:'collect', step:2, totalSteps:5, message:'Collecte des annonces' })); } catch {}
   const allListings = [];
   const seenPageUrls = new Set();
   let totalPagesTarget = PAGES;
@@ -130,7 +142,8 @@ async function scrape() {
       const pageUrlObj = new URL(SEARCH_URL);
       if (pIdx > 1) pageUrlObj.searchParams.set('page', String(pIdx)); else pageUrlObj.searchParams.delete('page');
       const pageUrl = pageUrlObj.toString();
-  console.log(`[lbc] page ${pIdx}/${PAGES} ->`, pageUrl);
+      console.log(`[lbc] page ${pIdx}/${PAGES} ->`, pageUrl);
+      console.log(`📄 Traitement de la page ${pIdx}/${totalPagesTarget}...`);
       await navigateWithRetry(page, pageUrl);
       if (EXTRA_SLEEP > 0) await page.waitForTimeout(EXTRA_SLEEP);
       if (pIdx === 1) { try { await page.click('#didomi-notice-agree-button', { timeout: 4000 }); console.log('[lbc] cookies accept'); } catch {} }
@@ -183,14 +196,21 @@ async function scrape() {
       await sleep(400 + Math.floor(Math.random()*300));
     }
     console.log('[lbc] total annonces collectées avant coupe', allListings.length);
-  var slice = allListings.slice(0, MAX);
-  console.log('[lbc] retenues', slice.length);
+    console.log('✅ [ÉTAPE 2/5] Collecte terminée -', allListings.length, 'annonces trouvées');
+    
+    var slice = allListings.slice(0, MAX);
+    console.log('[lbc] retenues', slice.length);
 
   if (FETCH_DETAILS) {
+    // Étape 3: Récupération des détails
+    console.log('🔍 [ÉTAPE 3/5] Récupération des détails des annonces...');
+    try { console.log('LBC_PROGRESS_JSON:' + JSON.stringify({ phase:'details', step:3, totalSteps:5, message:'Récupération des détails' })); } catch {}
+    
     const detailCap = DETAIL_LIMIT === Infinity ? slice.length : Math.min(slice.length, DETAIL_LIMIT);
     console.log('[lbc] détails max', detailCap, DETAIL_LIMIT===Infinity ? '(all)' : '');
   for (let i=0;i<slice.length && i<detailCap;i++) {
       const l = slice[i];
+      console.log(`🔍 Traitement détail ${i+1}/${detailCap}: ${l.title?.slice(0, 50)}...`);
       try {
         const p = await browser.newPage();
         await p.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
@@ -276,10 +296,11 @@ async function scrape() {
                   ];
                   const tags=[]; for (const r of eqRules) { if (r.rx.test(l.description) && !tags.includes(r.label)) tags.push(r.label); }
                   if (tags.length) l.equipements = tags.join(', ');
-                }
-              }
-            }
-          } catch {}
+                        }
+      }
+    }
+    console.log('✅ [ÉTAPE 3/5] Récupération des détails terminée');
+  } catch {}
         }
         if (!l.description) {
           l.description = await p.$eval('body', el => el.textContent.slice(0, 3000)).catch(()=>undefined);
@@ -296,11 +317,21 @@ async function scrape() {
     }
   }
 
+  // Étape 4: Export (optionnel)
   if (EXPORT_JSON) {
+    console.log('💾 [ÉTAPE 4/5] Export des données...');
+    try { console.log('LBC_PROGRESS_JSON:' + JSON.stringify({ phase:'export', step:4, totalSteps:5, message:'Export des données' })); } catch {}
     try { require('fs').writeFileSync('lbc_output.json', JSON.stringify(slice, null, 2), 'utf8'); console.log('[lbc] export JSON -> lbc_output.json'); } catch(e){ console.warn('[lbc] export json fail', e.message); }
+    console.log('✅ [ÉTAPE 4/5] Export terminé');
   }
+  
+  // Étape 5: Sauvegarde en base de données
+  console.log('💾 [ÉTAPE 5/5] Sauvegarde en base de données...');
+  try { console.log('LBC_PROGRESS_JSON:' + JSON.stringify({ phase:'save', step:5, totalSteps:5, message:'Sauvegarde en base de données' })); } catch {}
+  
   if (NO_DB) {
     console.log('[lbc] NO_DB= true -> skip upserts');
+    console.log('✅ [ÉTAPE 5/5] Sauvegarde ignorée (NO_DB=true)');
   } else {
     let created = 0, updated = 0, skippedRecent = 0;
     const cooldownMs = UPDATE_COOLDOWN_HOURS > 0 ? UPDATE_COOLDOWN_HOURS * 3600 * 1000 : 0;
@@ -339,9 +370,12 @@ async function scrape() {
     }
   const metricsObj = { created, updated, skippedRecent, cooldownHours: UPDATE_COOLDOWN_HOURS, totalProcessed: slice.length };
   console.log('[lbc] résumé persist:', metricsObj);
+  console.log('✅ [ÉTAPE 5/5] Sauvegarde terminée -', created, 'créées,', updated, 'mises à jour');
   // Ligne JSON brute pour parsing externe
   try { console.log('LBC_METRICS_JSON:' + JSON.stringify(metricsObj)); } catch {}
   }
+  
+  console.log('🎉 [SCRAPER] Toutes les étapes terminées avec succès !');
   await browser.close();
   await prisma.$disconnect();
 }

@@ -27,12 +27,17 @@ export async function POST(req: Request) {
     } catch {}
   }
   const childEnv = { ...process.env, ...settingsMap };
+  
   // Crée un ScraperRun status=running
   const run = await prisma.scraperRun.create({ data: { status: 'running' } });
-  const scriptPath = path.join(process.cwd(), 'scripts', 'scrape-leboncoin-colocation.cjs');
+  
+      console.log('[API][scraper][run] Démarrage du scraper avec ProtonVPN manuel');
+    console.log('[API][scraper][run] Connexion manuelle à ProtonVPN au démarrage');
+    console.log('[API][scraper][run] Suivez les instructions pour vous connecter à ProtonVPN');
+    const scriptPath = path.join(process.cwd(), 'scripts', 'scrape-lbc-simple.js');
   const child = spawn(process.execPath, [scriptPath], {
     env: childEnv,
-    stdio: ['ignore','pipe','pipe']
+    stdio: ['pipe','pipe','pipe'] // Permettre l'interaction avec stdin pour le CAPTCHA
   });
   // Sauvegarde PID enfant
   try { await prisma.scraperRun.update({ where: { id: run.id }, data: { childPid: child.pid || null } }); } catch {}
@@ -78,24 +83,51 @@ export async function POST(req: Request) {
   const progressTimer = setInterval(async () => {
     const lines = buffer.split(/\n/).slice(-300);
     let progress: number|undefined;
+    let currentStep: string|undefined;
+    let currentMessage: string|undefined;
+    
     // Cherche dernière ligne JSON de progression
     for (let i=lines.length-1;i>=0;i--) {
       const line = lines[i];
       if (line.startsWith('LBC_PROGRESS_JSON:')) {
         try {
           const obj = JSON.parse(line.replace('LBC_PROGRESS_JSON:',''));
+          
+          // Nouveau format avec étapes
+          if (obj.step && obj.totalSteps) {
+            progress = Math.min(1, obj.step / obj.totalSteps);
+            currentStep = `Étape ${obj.step}/${obj.totalSteps}`;
+            currentMessage = obj.message || '';
+            break;
+          }
+          
+          // Ancien format (rétrocompatibilité)
           if (obj.phase==='list' && obj.totalPages) {
             progress = Math.min(1, obj.page/obj.totalPages * 0.3); // 30% phase listing
+            currentStep = 'Collecte des annonces';
+            currentMessage = `Page ${obj.page}/${obj.totalPages}`;
             break;
           } else if (obj.phase==='detail' && obj.total) {
             progress = 0.3 + Math.min(1, obj.index/obj.total) * 0.7; // 70% phase détails
+            currentStep = 'Récupération des détails';
+            currentMessage = `Annonce ${obj.index}/${obj.total}`;
             break;
           }
         } catch {}
       }
     }
+    
     if (progress !== undefined) {
-      try { await prisma.scraperRun.update({ where: { id: run.id }, data: { progress } }); } catch {}
+      try { 
+        await prisma.scraperRun.update({ 
+          where: { id: run.id }, 
+          data: { 
+            progress,
+            currentStep: currentStep || undefined,
+            currentMessage: currentMessage || undefined
+          } 
+        }); 
+      } catch {}
     }
   }, 2000);
   child.on('exit', ()=>{ clearInterval(progressTimer); });

@@ -1,6 +1,7 @@
 "use client";
 import ColocProfileModal from "@/components/ColocProfileModal";
 import AnnonceDetailModal from "@/components/AnnonceDetailModal";
+import Header from "@/components/Header";
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
@@ -630,7 +631,9 @@ export default function HomePage() {
   };
 
   return (
-  <main className="min-h-screen p-2 sm:p-6 flex flex-col items-center scroll-pt-28 md:scroll-pt-32">
+    <>
+      <Header />
+      <main className="min-h-screen p-2 sm:p-6 flex flex-col items-center scroll-pt-28 md:scroll-pt-32">
       {/* Ecran de CHOIX initial */}
       {activeHomeTab === null ? (
   <section className="w-full max-w-[1440px] flex flex-col items-center">
@@ -1525,6 +1528,7 @@ export default function HomePage() {
         </>
       )}
     </main>
+    </>
   );
 }
 

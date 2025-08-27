@@ -35,6 +35,7 @@ export default function AdminPage() {
   const [scraperLaunching, setScraperLaunching] = useState(false);
   const [scraperCancelling, setScraperCancelling] = useState(false);
   const [scraperPurging, setScraperPurging] = useState(false);
+  const [scraperFetchingDatadome, setScraperFetchingDatadome] = useState(false);
   const [confirmPurgeOpen, setConfirmPurgeOpen] = useState<null | 'runs' | 'all'>(null);
   const [showSecret, setShowSecret] = useState<Record<string,boolean>>({});
   const toggleSecret = (k:string)=> setShowSecret(s=>({ ...s, [k]: !s[k] }));
@@ -159,6 +160,26 @@ export default function AdminPage() {
     if (confirmPurgeOpen==='runs') purgeCache(false);
     if (confirmPurgeOpen==='all') purgeCache(true);
     setConfirmPurgeOpen(null);
+  };
+  const fetchDatadomeToken = async () => {
+    try {
+      setScraperFetchingDatadome(true);
+      const res = await fetch('/api/admin/scraper/datadome', { method: 'POST' });
+      if (!res.ok) throw new Error('fetch datadome fail');
+      const data = await res.json();
+      if (data.token) {
+        // Mettre à jour la config avec le nouveau token
+        setScraperConfig(prev => ({ ...prev, LBC_DATADOME: data.token }));
+        showToast('success', 'Token Datadome récupéré ✅');
+      } else {
+        showToast('error', 'Aucun token trouvé');
+      }
+    } catch (e) {
+      console.error('[Admin][Datadome]', e);
+      showToast('error', 'Erreur récupération token');
+    } finally {
+      setScraperFetchingDatadome(false);
+    }
   };
   // toast state removed (unused)
   // toastTimeout removed
@@ -663,7 +684,53 @@ export default function AdminPage() {
             <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight">
               Administration
             </h1>
-            {/* Boutons seed / repair retirés */}
+            {/* Boutons de création d'exemples */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setAdminLoading(true);
+                    const res = await fetch('/api/annonces', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        titre: 'Exemple annonce admin',
+                        description: 'Annonce créée depuis le panel admin pour test.',
+                        ville: 'Saint-Denis',
+                        prix: 400,
+                        surface: 20,
+                        nbChambres: 1,
+                        typeBien: 'Appartement',
+                        meuble: true,
+                        nbPieces: 3
+                      })
+                    });
+                    if (res.ok) {
+                      showToast('success', 'Annonce exemple créée ✅');
+                      // Recharger la liste
+                      const refreshRes = await fetch("/api/annonces?limit=200", { cache: "no-store" });
+                      if (refreshRes.ok) {
+                        const items = await refreshRes.json();
+                        const mapped = (Array.isArray(items) ? items : []).map((a: any) => ({ ...a, titre: a.titre ?? a.title ?? "" }));
+                        setAdminAnnonces(mapped);
+                      }
+                    } else {
+                      throw new Error('Erreur création');
+                    }
+                  } catch (e) {
+                    console.error('[Admin][CreateExampleAnnonce]', e);
+                    showToast('error', 'Erreur création annonce exemple');
+                  } finally {
+                    setAdminLoading(false);
+                  }
+                }}
+                disabled={adminLoading}
+                className="bg-green-600 text-white px-3 py-1.5 text-sm rounded hover:bg-green-700 disabled:opacity-60"
+              >
+                {adminLoading ? "Création..." : "Créer exemple annonce"}
+              </button>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-lg p-8">
@@ -911,7 +978,48 @@ export default function AdminPage() {
             >
               {adminLoading ? "Suppression..." : `Supprimer la sélection (${adminColocsSelected.length})`}
             </button>
-            {/* Boutons seed colocs / repair retirés */}
+            {/* Boutons de création d'exemples */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setAdminLoading(true);
+                    const res = await fetch('/api/coloc', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        title: 'Exemple coloc admin',
+                        description: 'Profil coloc créé depuis le panel admin pour test.',
+                        ville: 'Saint-Denis',
+                        budget: 450,
+                        age: 25,
+                        profession: 'Développeur',
+                        nom: 'Admin Test',
+                        communesSlugs: ['saint-denis', 'sainte-suzanne']
+                      })
+                    });
+                    if (res.ok) {
+                      showToast('success', 'Profil coloc exemple créé ✅');
+                      // Recharger la liste
+                      const items = await listColoc({ limit: 200 });
+                      setAdminColocs(items);
+                    } else {
+                      throw new Error('Erreur création');
+                    }
+                  } catch (e) {
+                    console.error('[Admin][CreateExampleColoc]', e);
+                    showToast('error', 'Erreur création profil coloc exemple');
+                  } finally {
+                    setAdminLoading(false);
+                  }
+                }}
+                disabled={adminLoading}
+                className="bg-green-600 text-white px-3 py-1.5 text-sm rounded hover:bg-green-700 disabled:opacity-60"
+              >
+                {adminLoading ? "Création..." : "Créer exemple coloc"}
+              </button>
+            </div>
           </div>
 
           {/* Liste profils */}
@@ -1301,6 +1409,7 @@ export default function AdminPage() {
               <button disabled={scraperPurging} onClick={()=>openPurge('all')} className='px-3 py-1.5 text-sm rounded bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50' title='Supprime aussi les annonces source LBC'>Purge + annonces</button>
               <button type='button' onClick={applyDefaultsToEmpty} className='px-3 py-1.5 text-sm rounded bg-slate-500 text-white hover:bg-slate-600'>Défauts vides</button>
               <button disabled={scraperLaunching} onClick={forceRun} title='Interrompt le run en cours et démarre un nouveau' className='px-3 py-1.5 text-sm rounded bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50'>Force run</button>
+              <button disabled={scraperFetchingDatadome} onClick={fetchDatadomeToken} title='Récupère un nouveau token Datadome depuis Leboncoin' className='px-3 py-1.5 text-sm rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50'>{scraperFetchingDatadome ? 'Récupération...' : 'Récupérer Datadome'}</button>
             </div>
           </div>
           {scraperLoading ? <p>Chargement config…</p> : (
@@ -1352,7 +1461,13 @@ export default function AdminPage() {
                         eta = mins>0 ? `${mins}m${secs.toString().padStart(2,'0')}s` : `${secs}s`;
                       }
                     }
-                    phase = (r.progress < 0.3) ? 'Listing' : 'Détails';
+                    
+                    // Utiliser les nouveaux champs d'étapes si disponibles
+                    if (r.currentStep) {
+                      phase = r.currentStep;
+                    } else {
+                      phase = (r.progress < 0.3) ? 'Listing' : 'Détails';
+                    }
                   }
                   return (
                   <tr key={r.id} className='border-t hover:bg-slate-50'>
@@ -1365,7 +1480,10 @@ export default function AdminPage() {
                 <div className='w-full h-2 bg-slate-200 rounded overflow-hidden'>
                   <div className='h-full bg-blue-500 transition-all' style={{width: ((r.progress ?? 0)*100).toFixed(1)+ '%'}} />
                 </div>
-                <span className='text-[10px] text-slate-600'>{phase? phase+' · ':''}{(((r.progress ?? 0)*100)|0)}%{eta? ' · ETA '+eta:''}</span>
+                <span className='text-[10px] text-slate-600'>
+                  {phase? phase+' · ':''}{(((r.progress ?? 0)*100)|0)}%{eta? ' · ETA '+eta:''}
+                  {r.currentMessage ? ` · ${r.currentMessage}` : ''}
+                </span>
               </div>
             ): (r.progress!=null ? (((r.progress*100)|0)+'%') : '-')}
           </td>
