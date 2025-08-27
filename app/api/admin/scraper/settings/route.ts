@@ -12,7 +12,6 @@ const ALLOWED_KEYS = [
 export async function GET() {
   const session: any = await getServerSession(authOptions as any);
   if ((session?.user as any)?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  // @ts-expect-error modèle custom post-generate
   const rows = await prisma.scraperSetting.findMany({ orderBy: { key: 'asc' } });
   const map: Record<string,string|null> = {};
   for (const r of rows) map[r.key] = r.value ?? null;
@@ -26,7 +25,6 @@ export async function POST(req: Request) {
   if (typeof body !== 'object' || !body) return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   const entries = Object.entries(body).filter(([k]) => ALLOWED_KEYS.includes(k));
   for (const [k,v] of entries) {
-  // @ts-expect-error modèle custom post-generate
   await prisma.scraperSetting.upsert({
       where: { key: k },
       update: { value: v == null ? null : String(v) },

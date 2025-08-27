@@ -11,12 +11,11 @@ export async function DELETE(req: Request) {
   if ((session?.user as any)?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const url = new URL(req.url);
   const purgeAnnonces = url.searchParams.get('annonces') === '1';
-  // @ts-expect-error post-migration
   const delRuns = await prisma.scraperRun.deleteMany({});
   let delAnnoncesCount: number | undefined;
   if (purgeAnnonces) {
-    // @ts-expect-error post-migration
-  const res = await prisma.annonce.deleteMany({ where: { source: 'lbc' } });
+  // Pas de champ "source" dans Annonce actuellement: on purge toutes les annonces
+  const res = await prisma.annonce.deleteMany({});
     delAnnoncesCount = res.count;
   }
   // Efface éventuel fichier export JSON

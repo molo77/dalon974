@@ -10,29 +10,24 @@ export async function POST(req: Request) {
   if ((session?.user as any)?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const url = new URL(req.url);
   const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
-  // @ts-expect-error post-migration
   const running = await prisma.scraperRun.findFirst({ where: { status: 'running' }, orderBy: { startedAt: 'desc' } });
   if (running && !force) return NextResponse.json({ error: 'Déjà en cours', runId: running.id }, { status: 409 });
   if (running && force) {
-    // @ts-expect-error post-migration
     await prisma.scraperRun.update({ where: { id: running.id }, data: { status: 'aborted', finishedAt: new Date(), errorMessage: 'Abandonné par force run' } });
   }
   // Charge les settings DB pour construire l'env du scraper
-  // @ts-expect-error post-migration
   const settings = await prisma.scraperSetting.findMany();
   const settingsMap: Record<string,string> = {};
   for (const s of settings) { if (s.value) settingsMap[s.key] = s.value; }
   // Sync auto: si pas de row LBC_DATADOME mais variable process présente -> persister
   if (!settingsMap['LBC_DATADOME'] && process.env.LBC_DATADOME) {
     try {
-      // @ts-expect-error post-migration
       await prisma.scraperSetting.upsert({ where: { key: 'LBC_DATADOME' }, update: { value: process.env.LBC_DATADOME }, create: { key: 'LBC_DATADOME', value: process.env.LBC_DATADOME } });
       settingsMap['LBC_DATADOME'] = process.env.LBC_DATADOME as string;
     } catch {}
   }
   const childEnv = { ...process.env, ...settingsMap };
   // Crée un ScraperRun status=running
-  // @ts-expect-error modèle post-migration
   const run = await prisma.scraperRun.create({ data: { status: 'running' } });
   const scriptPath = path.join(process.cwd(), 'scripts', 'scrape-leboncoin-colocation.cjs');
   const child = spawn(process.execPath, [scriptPath], {
@@ -40,7 +35,6 @@ export async function POST(req: Request) {
     stdio: ['ignore','pipe','pipe']
   });
   // Sauvegarde PID enfant
-  // @ts-expect-error post-migration
   try { await prisma.scraperRun.update({ where: { id: run.id }, data: { childPid: child.pid || null } }); } catch {}
   let buffer = '';
   child.stdout.on('data', d => { buffer += d.toString(); });
@@ -61,7 +55,6 @@ export async function POST(req: Request) {
           cooldownHours = parsed.cooldownHours;
         } catch {}
       }
-      // @ts-expect-error modèle post-migration
       await prisma.scraperRun.update({
         where: { id: run.id },
         data: {
@@ -102,7 +95,6 @@ export async function POST(req: Request) {
       }
     }
     if (progress !== undefined) {
-      // @ts-expect-error post-migration
       try { await prisma.scraperRun.update({ where: { id: run.id }, data: { progress } }); } catch {}
     }
   }, 2000);
@@ -113,7 +105,6 @@ export async function POST(req: Request) {
 export async function DELETE() {
   const session: any = await getServerSession(authOptions as any);
   if ((session?.user as any)?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  // @ts-expect-error post-migration
   const running = await prisma.scraperRun.findFirst({ where: { status: 'running' }, orderBy: { startedAt: 'desc' } });
   if (!running) return NextResponse.json({ message: 'Aucun run actif' });
   const pid = running.childPid;
@@ -124,7 +115,6 @@ export async function DELETE() {
       killed = true;
     } catch {}
   }
-  // @ts-expect-error post-migration
   await prisma.scraperRun.update({ where: { id: running.id }, data: { status: 'aborted', finishedAt: new Date(), errorMessage: 'Annulé manuellement' } });
   return NextResponse.json({ aborted: true, killed });
 }
@@ -132,7 +122,6 @@ export async function DELETE() {
 export async function GET() {
   const session: any = await getServerSession(authOptions as any);
   if ((session?.user as any)?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  // @ts-expect-error modèle post-migration
   const runs = await prisma.scraperRun.findMany({ orderBy: { startedAt: 'desc' }, take: 20 });
   return NextResponse.json(runs);
 }

@@ -4,12 +4,12 @@ import type { Session } from "next-auth";
 import { authOptions } from "../../../auth/[...nextauth]/authOptions";
 import prisma from "@/lib/prismaClient";
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const session = (await getServerSession(authOptions as any)) as Session | null;
     const isAdmin = (session?.user as any)?.role === "admin";
     if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const { id } = params;
+    const { id } = await context.params;
     const body = await req.json();
     const client: any = prisma as any;
     if (!client?.adUnit?.update) {
@@ -31,12 +31,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const session = (await getServerSession(authOptions as any)) as Session | null;
     const isAdmin = (session?.user as any)?.role === "admin";
     if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const { id } = params;
+    const { id } = await context.params;
     const client: any = prisma as any;
     if (!client?.adUnit?.delete) {
       return NextResponse.json({ error: "AdUnit non disponible: exécutez les migrations Prisma" }, { status: 503 });

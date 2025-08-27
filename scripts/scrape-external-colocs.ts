@@ -24,10 +24,15 @@ function computeHash(l: RawListing): string {
 }
 
 async function upsertListings(listings: RawListing[]) {
+  const client: any = prisma as any;
+  if (!client?.externalColocListing?.upsert) {
+    console.warn('externalColocListing model indisponible (pas dans le schéma Prisma). Skip upserts.');
+    return;
+  }
   for (const l of listings) {
     const hash = computeHash(l);
     try {
-      await prisma.externalColocListing.upsert({
+      await client.externalColocListing.upsert({
         where: { hash },
         update: {
           title: l.title,
@@ -92,15 +97,15 @@ async function scrapeDetail(url: string): Promise<RawListing | null> {
     // Extraction ville (ex: span .ville ou regex sur texte)
     let ville: string | undefined;
       const villeText = $('[class*="ville" i]').first().text().trim();
-    if (villeText) ville = villeText.split(/[,\-]/)[0].trim();
+    if (villeText) ville = villeText.split(/[,-]/)[0].trim();
     // Budget/prix (recherche nombres avec €)
     const bodyText = $('body').text();
     const prixMatch = bodyText.match(/(\d{3,4}) ?€\b/);
     const budget = prixMatch ? parseInt(prixMatch[1], 10) : undefined;
     // Photos (img avec data-src ou src)
     const photos: string[] = [];
-      $('img').each((_: unknown, img: cheerio.Element) => {
-        const src = ($(img).attr('data-src') || $(img).attr('src') || '').trim();
+    $('img').each((_, img) => {
+      const src = ($(img).attr('data-src') || $(img).attr('src') || '').trim();
       if (src && /^https?:/i.test(src)) photos.push(src);
     });
     return {

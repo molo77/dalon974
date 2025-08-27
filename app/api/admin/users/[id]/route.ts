@@ -4,12 +4,12 @@ import type { Session } from "next-auth";
 import { authOptions } from "../../../auth/[...nextauth]/authOptions";
 import prisma from "@/lib/prismaClient";
 
-export async function PATCH(_req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(_req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const session = (await getServerSession(authOptions as any)) as Session | null;
     const isAdmin = (session?.user as any)?.role === "admin";
     if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const id = params.id;
+    const { id } = await context.params;
     const body = await _req.json();
   const patch: any = {};
   if (body.email !== undefined) patch.email = String(body.email);
@@ -23,12 +23,12 @@ export async function PATCH(_req: Request, { params }: { params: { id: string } 
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const session = (await getServerSession(authOptions as any)) as Session | null;
     const isAdmin = (session?.user as any)?.role === "admin";
     if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const id = params.id;
+    const { id } = await context.params;
     await prisma.user.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (e) {
