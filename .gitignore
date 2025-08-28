@@ -70,3 +70,4 @@ functions/serviceAccount*.json
 !pnpm-lock.yaml
 
 
+lbc-simple-result.png
