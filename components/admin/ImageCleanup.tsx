@@ -29,13 +29,13 @@ export default function ImageCleanup() {
 
       if (response.ok) {
         setLastResult(result);
-        appToast('success', `Nettoyage terminé${dryRun ? ' (mode test)' : ''} ✅`);
+        toast.success(`Nettoyage terminé${dryRun ? ' (mode test)' : ''} ✅`);
       } else {
-        appToast('error', `Erreur: ${result.error || 'Erreur inconnue'} ❌`);
+        toast.error(`Erreur: ${result.error || 'Erreur inconnue'} ❌`);
       }
     } catch (error) {
       console.error('Erreur lors du nettoyage:', error);
-      appToast('error', 'Erreur lors du nettoyage ❌');
+      toast.error('Erreur lors du nettoyage ❌');
     } finally {
       setIsLoading(false);
     }
