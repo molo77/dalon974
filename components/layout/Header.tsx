@@ -21,7 +21,7 @@ export default function Header() {
   const toggleMobile = () => setMobileOpen((prev) => !prev);
 
   return (
-    <header className="bg-white shadow px-4 py-3 sticky top-0 z-50">
+    <header className="bg-white shadow px-4 py-3 sticky top-0 z-[9999]">
       <div className="w-[85%] max-w-full mx-auto flex items-center justify-between">
         <Link href="/" className="text-xl font-bold text-blue-600">
           Dalon974

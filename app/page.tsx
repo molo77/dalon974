@@ -1020,29 +1020,45 @@ export default function HomePage() {
             </div>
 
             {/* Colonne filtres (gauche en ≥md) */}
-            <div className="w-full md:order-1 md:basis-[34%] lg:basis-[36%] md:flex-shrink-0">
+            <div className="w-full md:order-1 md:basis-[24%] lg:basis-[26%] md:flex-shrink-0">
               <form
                 onSubmit={(e) => {
                   e.preventDefault(); // mise à jour auto: pas d'appel manuel
                 }}
-                className="sticky top-4 w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4"
+                className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4"
               >
-                {/* Menu navigation */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center justify-center gap-3">
-                    <span className="hidden md:block h-px w-8 bg-slate-200" />
-                    <div className="text-base md:text-lg font-semibold text-slate-700 tracking-tight">Affiner la recherche</div>
-                    <span className="hidden md:block h-px w-8 bg-slate-200" />
+                {/* Titre Affiner la recherche */}
+                <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 -mx-4 -mt-4 mb-4 rounded-t-2xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-center gap-3 flex-1">
+                      <span className="hidden md:block h-px w-8 bg-slate-200" />
+                      <div className="text-base md:text-lg font-semibold text-slate-700 tracking-tight">Affiner la recherche</div>
+                      <span className="hidden md:block h-px w-8 bg-slate-200" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFirestoreError(null);
+                        setVille("");
+                        setCodePostal("");
+                        setPrixMax(null);
+                        setSortBy("date");
+                        setCommunesSelected([]);
+                        setZonesSelected([]);
+                        setAnnonces([]);
+                        setHasMore(true);
+                        setZoneFilters([]);
+                        setSelectionSource(null);
+                        // Remplacement au 1er snapshot pour éviter les doublons
+                        resetOnFirstSnapshotRef.current = true;
+                        setFiltering(true);
+                        // pas d'appel direct à loadAnnonces: l'effet "filtres" va relancer proprement
+                      }}
+                      className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors"
+                    >
+                      Réinitialiser
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setFiltersCollapsed((v) => !v)}
-                    className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-50"
-                    aria-expanded={!filtersCollapsed}
-                    aria-controls="filters-content"
-                  >
-                    {filtersCollapsed ? "Afficher" : "Masquer"}
-                  </button>
                 </div>
                 <div className="hidden">
                   {/* anciennement: <div className="grid grid-cols-3 gap-2"> ... */}
