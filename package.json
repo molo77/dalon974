@@ -17,6 +17,10 @@
 "cleanup:images:dry-run": "node scripts/maintenance/cleanup-unused-images.js --dry-run --verbose",
 "cleanup:images:test": "node scripts/maintenance/schedule-cleanup.js test",
 "cleanup:images:scheduled": "node scripts/maintenance/schedule-cleanup.js cleanup",
+"deploy:setup": "node scripts/deployment/setup-linux-server.js",
+"deploy": "node scripts/deployment/deploy-to-linux-server.js",
+"deploy:fix-ssh": "node scripts/deployment/fix-ssh-keys.js",
+"health-check": "curl -f http://localhost:3000/api/health || exit 1",
 "dev:raw": "next dev -H 0.0.0.0 -p 3000 --turbopack"
   },
   "dependencies": {
