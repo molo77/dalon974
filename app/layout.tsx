@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import AuthProvider from '@/components/AuthProvider'
 import MaintenanceAlert from '@/components/MaintenanceAlert'
+import Header from '@/components/Header'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -20,7 +21,10 @@ export default function RootLayout({
     <html lang="fr" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
         <AuthProvider>
-          {children}
+          <Header />
+          <main>
+            {children}
+          </main>
           {/* Alerte de maintenance globale */}
           <MaintenanceAlert 
             showOnHealthy={false}

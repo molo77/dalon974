@@ -5,7 +5,6 @@ const puppeteer = require('puppeteer');
 const { PrismaClient } = require('@prisma/client');
 const { exec } = require('child_process');
 const { promisify } = require('util');
-const readline = require('readline');
 
 const execAsync = promisify(exec);
 const prisma = new PrismaClient();
@@ -18,7 +17,8 @@ const DEFAULT_CONFIG = {
   LBC_FETCH_DETAILS: 'true',
   LBC_DETAIL_LIMIT: '12',
   LBC_PAGES: '1',
-  LBC_DEBUG: 'false'
+  LBC_DEBUG: 'false',
+  LBC_USE_PROTONVPN: 'true'
 };
 
 async function getConfig() {
@@ -60,25 +60,19 @@ async function getCurrentIP() {
 }
 
 async function promptUserForProtonVPN() {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  return new Promise((resolve) => {
-    console.log('\n🔄 Changement d\'IP avec ProtonVPN');
-    console.log('📋 Instructions :');
-    console.log('1. Ouvrez l\'application ProtonVPN');
-    console.log('2. Déconnectez-vous si vous êtes connecté');
-    console.log('3. Connectez-vous à un serveur français (FR) ou européen (NL, DE)');
-    console.log('4. Vérifiez que l\'IP a changé sur https://whatismyipaddress.com/');
-    console.log('5. Une fois connecté, appuyez sur Entrée pour continuer');
-    
-    rl.question('\n✅ Une fois ProtonVPN connecté, appuyez sur Entrée pour continuer...', () => {
-      rl.close();
-      resolve(true);
-    });
-  });
+  console.log('\n🔄 Changement d\'IP avec ProtonVPN');
+  console.log('📋 Instructions :');
+  console.log('1. Ouvrez l\'application ProtonVPN');
+  console.log('2. Déconnectez-vous si vous êtes connecté');
+  console.log('3. Connectez-vous à un serveur français (FR) ou européen (NL, DE)');
+  console.log('4. Vérifiez que l\'IP a changé sur https://whatismyipaddress.com/');
+  console.log('5. Le script attendra automatiquement 30 secondes...');
+  
+  console.log('\n⏰ Attente automatique de 30 secondes...');
+  await sleep(30000);
+  console.log('✅ Attente terminée, continuation...');
+  
+  return true;
 }
 
 async function changeIPWithProtonVPN() {
@@ -176,20 +170,26 @@ async function scrapeWithProtonSimple() {
     console.log(`🌐 IP initiale: ${initialIP || 'Inconnue'}`);
     
     // 🔌 CONNEXION MANUELLE À PROTONVPN AU DÉMARRAGE
-    console.log('\n🔌 Connexion manuelle à ProtonVPN au démarrage...');
-    const connected = await changeIPWithProtonVPN();
+    const useProtonVPN = config.LBC_USE_PROTONVPN === 'true';
     
-    if (connected) {
-      const newIP = await getCurrentIP();
-      console.log(`🌐 IP après connexion ProtonVPN: ${newIP || 'Inconnue'}`);
-      if (initialIP && newIP && initialIP !== newIP) {
-        console.log('✅ Connexion ProtonVPN réussie - IP changée !');
+    if (useProtonVPN) {
+      console.log('\n🔌 Connexion manuelle à ProtonVPN au démarrage...');
+      const connected = await changeIPWithProtonVPN();
+      
+      if (connected) {
+        const newIP = await getCurrentIP();
+        console.log(`🌐 IP après connexion ProtonVPN: ${newIP || 'Inconnue'}`);
+        if (initialIP && newIP && initialIP !== newIP) {
+          console.log('✅ Connexion ProtonVPN réussie - IP changée !');
+        } else {
+          console.log('⚠️ Connexion ProtonVPN effectuée mais IP non vérifiée');
+        }
       } else {
-        console.log('⚠️ Connexion ProtonVPN effectuée mais IP non vérifiée');
+        console.log('❌ Échec de la connexion ProtonVPN au démarrage');
+        console.log('💡 Le script continuera sans VPN');
       }
     } else {
-      console.log('❌ Échec de la connexion ProtonVPN au démarrage');
-      console.log('💡 Le script continuera sans VPN');
+      console.log('\n🔌 ProtonVPN désactivé par configuration (LBC_USE_PROTONVPN=false)');
     }
     
     // Lancer le navigateur
@@ -264,7 +264,8 @@ async function scrapeWithProtonSimple() {
         if (isBlocked) {
           console.log('🚨 Blocage détecté !');
           
-          if (attemptCount < maxAttempts) {
+          if (attemptCount < maxAttempts && useProtonVPN) {
+            console.log('🔄 Tentative de changement d\'IP avec ProtonVPN...');
             const ipChanged = await changeIPWithProtonVPN();
             
             if (ipChanged) {
@@ -279,6 +280,10 @@ async function scrapeWithProtonSimple() {
               console.log('💡 Vérifiez que ProtonVPN est bien connecté');
               break;
             }
+          } else if (attemptCount < maxAttempts && !useProtonVPN) {
+            console.log('⚠️ Blocage détecté mais ProtonVPN désactivé');
+            console.log('💡 Impossible de changer d\'IP - arrêt du script');
+            break;
           } else {
             console.log('⚠️ Nombre maximum de tentatives atteint');
             break;

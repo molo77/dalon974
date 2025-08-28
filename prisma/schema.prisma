@@ -87,6 +87,32 @@ model ColocProfile {
   mainPhotoIdx Int?
   communesSlugs Json?
   zones        Json?
+  // Nouveaux champs pour les profils coloc
+  bioCourte    String?
+  genre        String?
+  orientation  String?
+  langues      Json?
+  instagram    String?
+  telephone    String?
+  dateDispo    String?
+  // Préférences
+  prefGenre    String?
+  prefAgeMin   Int?
+  prefAgeMax   Int?
+  accepteFumeurs Boolean?
+  accepteAnimaux Boolean?
+  rythme       String?
+  proprete     String?
+  sportif      Boolean?
+  vegetarien   Boolean?
+  soirees      Boolean?
+  musique      String?
+  // Champs legacy
+  fumeur       Boolean?
+  animaux      Boolean?
+  quartiers    String?
+  interets     Json?
+  codePostal   String?
   createdAt    DateTime?     @db.Timestamp(6)
   updatedAt    DateTime?     @db.Timestamp(6)
   images       ColocImage[]  @relation("coloc_images")
@@ -134,6 +160,8 @@ model Annonce {
   typeLocation        String?
   nombreColocataires  Int?
   statutFumeur        String?
+  // Source de l'annonce (ex: 'lbc' pour Leboncoin)
+  source              String?
   createdAt   DateTime?    @db.Timestamp(6)
   updatedAt   DateTime?    @db.Timestamp(6)
   images      AnnonceImage[]
@@ -204,6 +232,7 @@ model ScraperRun {
   currentStep    String?  // Étape actuelle (ex: "Étape 2/5")
   currentMessage String?  // Message détaillé de l'étape
   childPid       Int?     // PID du process enfant pour annulation
+  config         Json?    // Configuration utilisée pour ce run
   createdAt      DateTime @default(now()) @db.Timestamp(6)
   updatedAt      DateTime? @db.Timestamp(6)
 

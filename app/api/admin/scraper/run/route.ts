@@ -28,8 +28,13 @@ export async function POST(req: Request) {
   }
   const childEnv = { ...process.env, ...settingsMap };
   
-  // Crée un ScraperRun status=running
-  const run = await prisma.scraperRun.create({ data: { status: 'running' } });
+  // Crée un ScraperRun status=running avec la configuration
+  const run = await prisma.scraperRun.create({ 
+    data: { 
+      status: 'running',
+      config: settingsMap // Sauvegarde la configuration utilisée
+    } 
+  });
   
       console.log('[API][scraper][run] Démarrage du scraper avec ProtonVPN manuel');
     console.log('[API][scraper][run] Connexion manuelle à ProtonVPN au démarrage');

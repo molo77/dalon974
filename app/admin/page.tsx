@@ -38,6 +38,9 @@ export default function AdminPage() {
   const [scraperFetchingDatadome, setScraperFetchingDatadome] = useState(false);
   const [confirmPurgeOpen, setConfirmPurgeOpen] = useState<null | 'runs' | 'all'>(null);
   const [showSecret, setShowSecret] = useState<Record<string,boolean>>({});
+  const [showScraperConfig, setShowScraperConfig] = useState(false); // Caché par défaut
+  const [showScraperLogs, setShowScraperLogs] = useState(false); // Caché par défaut
+  const [scraperLogs, setScraperLogs] = useState<string>('');
   const toggleSecret = (k:string)=> setShowSecret(s=>({ ...s, [k]: !s[k] }));
   const loadScraper = async () => {
     try {
@@ -57,6 +60,53 @@ export default function AdminPage() {
       if (runsRes.ok) setScraperRuns(await runsRes.json());
     } catch(e) { console.error('[Admin][Scraper] runs load', e); }
   };
+  
+  const loadScraperLogs = async () => {
+    try {
+      console.log('[Admin][Scraper] Chargement des logs...');
+      console.log('[Admin][Scraper] Runs disponibles:', scraperRuns.length);
+      
+      // Si pas de runs, afficher un message informatif
+      if (scraperRuns.length === 0) {
+        setScraperLogs('=== LOGS DU SCRAPER ===\n\nAucun run de scraper trouvé.\n\nPour voir des logs :\n1. Lancer un scraper\n2. Attendre qu\'il commence\n3. Recharger les logs');
+        return;
+      }
+      
+      // Récupérer les logs du dernier run en cours ou du dernier run terminé
+      const currentRun = scraperRuns.find(r => r.status === 'running');
+      if (currentRun) {
+        console.log('[Admin][Scraper] Run en cours trouvé:', currentRun.id);
+        // Si un run est en cours, récupérer ses logs en temps réel
+        const logsRes = await fetch(`/api/admin/scraper/run/${currentRun.id}/logs`, { cache: 'no-store' });
+        if (logsRes.ok) {
+          const logs = await logsRes.text();
+          setScraperLogs(logs);
+        } else {
+          console.error('[Admin][Scraper] Erreur API logs:', logsRes.status);
+          setScraperLogs(`=== ERREUR ===\nImpossible de récupérer les logs du run ${currentRun.id}\nStatus: ${logsRes.status}`);
+        }
+      } else {
+        console.log('[Admin][Scraper] Aucun run en cours, recherche du dernier run terminé...');
+        // Sinon, récupérer les logs du dernier run terminé
+        const lastRun = scraperRuns.find(r => r.status === 'success' || r.status === 'error' || r.status === 'aborted');
+        if (lastRun) {
+          console.log('[Admin][Scraper] Dernier run trouvé:', lastRun.id, 'Status:', lastRun.status);
+          if (lastRun.rawLog && lastRun.rawLog.trim()) {
+            setScraperLogs(lastRun.rawLog);
+          } else {
+            setScraperLogs(`=== RUN ${lastRun.id} ===\nStatut: ${lastRun.status}\nDébut: ${lastRun.startedAt ? new Date(lastRun.startedAt).toLocaleString() : 'inconnu'}\nFin: ${lastRun.finishedAt ? new Date(lastRun.finishedAt).toLocaleString() : 'inconnu'}\n\nAucun log détaillé disponible pour ce run.\n\nPour voir des logs détaillés :\n1. Lancer un nouveau scraper\n2. Attendre qu\'il commence\n3. Recharger les logs`);
+          }
+        } else {
+          console.log('[Admin][Scraper] Aucun run terminé trouvé');
+          setScraperLogs('=== LOGS DU SCRAPER ===\n\nAucun run terminé trouvé.\n\nRuns disponibles :\n' + scraperRuns.map(r => `- ${r.id}: ${r.status} (${r.startedAt ? new Date(r.startedAt).toLocaleString() : 'inconnu'})`).join('\n'));
+        }
+      }
+    } catch(e) { 
+      console.error('[Admin][Scraper] logs load', e);
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      setScraperLogs(`=== ERREUR ===\nErreur lors du chargement des logs :\n${errorMessage}\n\nVérifiez que :\n1. Le serveur fonctionne\n2. Vous avez les permissions admin\n3. La base de données est accessible`);
+    }
+  };
   const DEFAULT_SCRAPER_CONFIG: Record<string,string> = {
     LBC_SEARCH_URL: 'https://www.leboncoin.fr/recherche?category=11&locations=r_26',
     LBC_BROWSER_HEADLESS: 'true',
@@ -73,7 +123,8 @@ export default function AdminPage() {
     LBC_COOKIES: '',
     LBC_DATADOME: '',
     DATADOME_TOKEN: '',
-    LBC_DEBUG: 'false'
+    LBC_DEBUG: 'false',
+    LBC_USE_PROTONVPN: 'true'
   };
   const applyDefaultsToEmpty = () => {
     setScraperConfig(prev => {
@@ -98,10 +149,16 @@ export default function AdminPage() {
       return;
     }
     if (!pollingRef.current) {
-  pollingRef.current = setInterval(()=>{ loadScraperRuns(); }, 5000);
+      pollingRef.current = setInterval(()=>{ 
+        loadScraperRuns(); 
+        // Actualiser les logs si ils sont affichés et qu'un run est en cours
+        if (showScraperLogs) {
+          loadScraperLogs();
+        }
+      }, 5000);
     }
     return ()=>{ if (pollingRef.current){ clearInterval(pollingRef.current); pollingRef.current=null; } };
-  },[activeTab, scraperRuns]);
+  },[activeTab, scraperRuns, showScraperLogs]);
   const updateCfgField = (k:string,v:string) => setScraperConfig(prev=>({ ...prev, [k]: v }));
   const saveConfig = async () => {
     try {
@@ -691,36 +748,49 @@ export default function AdminPage() {
                 onClick={async () => {
                   try {
                     setAdminLoading(true);
-                    const res = await fetch('/api/annonces', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        titre: 'Exemple annonce admin',
-                        description: 'Annonce créée depuis le panel admin pour test.',
-                        ville: 'Saint-Denis',
-                        prix: 400,
-                        surface: 20,
-                        nbChambres: 1,
-                        typeBien: 'Appartement',
-                        meuble: true,
-                        nbPieces: 3
-                      })
-                    });
-                    if (res.ok) {
-                      showToast('success', 'Annonce exemple créée ✅');
-                      // Recharger la liste
-                      const refreshRes = await fetch("/api/annonces?limit=200", { cache: "no-store" });
-                      if (refreshRes.ok) {
-                        const items = await refreshRes.json();
-                        const mapped = (Array.isArray(items) ? items : []).map((a: any) => ({ ...a, titre: a.titre ?? a.title ?? "" }));
-                        setAdminAnnonces(mapped);
+                    const villes = ['Saint-Denis', 'Saint-Paul', 'Saint-Pierre', 'Le Tampon', 'Saint-André', 'Saint-Louis', 'Le Port', 'La Possession', 'Saint-Joseph', 'Saint-Benoît'];
+                    const types = ['Appartement', 'Maison', 'Studio', 'T2', 'T3', 'T4'];
+                    const professions = ['Étudiant', 'Employé', 'Cadre', 'Artisan', 'Commerçant', 'Profession libérale'];
+                    
+                    let createdCount = 0;
+                    for (let i = 0; i < 20; i++) {
+                      const ville = villes[i % villes.length];
+                      const type = types[i % types.length];
+                      const profession = professions[i % professions.length];
+                      const prix = 350 + (i * 25) + Math.floor(Math.random() * 100);
+                      const surface = 15 + (i * 2) + Math.floor(Math.random() * 20);
+                      
+                      const res = await fetch('/api/annonces', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          titre: `Colocation ${type} ${ville} - ${profession}`,
+                          description: `Belle colocation ${type.toLowerCase()} à ${ville}, idéal pour ${profession.toLowerCase()}. Logement meublé avec toutes commodités.`,
+                          ville: ville,
+                          prix: prix,
+                          surface: surface,
+                          nbChambres: 1 + (i % 3),
+                          typeBien: type,
+                          meuble: true,
+                          nbPieces: 2 + (i % 4)
+                        })
+                      });
+                      if (res.ok) {
+                        createdCount++;
                       }
-                    } else {
-                      throw new Error('Erreur création');
+                    }
+                    
+                    showToast('success', `${createdCount} annonces exemples créées ✅`);
+                    // Recharger la liste
+                    const refreshRes = await fetch("/api/annonces?limit=200", { cache: "no-store" });
+                    if (refreshRes.ok) {
+                      const items = await refreshRes.json();
+                      const mapped = (Array.isArray(items) ? items : []).map((a: any) => ({ ...a, titre: a.titre ?? a.title ?? "" }));
+                      setAdminAnnonces(mapped);
                     }
                   } catch (e) {
-                    console.error('[Admin][CreateExampleAnnonce]', e);
-                    showToast('error', 'Erreur création annonce exemple');
+                    console.error('[Admin][CreateExampleAnnonces]', e);
+                    showToast('error', 'Erreur création annonces exemples');
                   } finally {
                     setAdminLoading(false);
                   }
@@ -728,7 +798,7 @@ export default function AdminPage() {
                 disabled={adminLoading}
                 className="bg-green-600 text-white px-3 py-1.5 text-sm rounded hover:bg-green-700 disabled:opacity-60"
               >
-                {adminLoading ? "Création..." : "Créer exemple annonce"}
+                {adminLoading ? "Création..." : "Créer 20 exemples annonces"}
               </button>
             </div>
           </div>
@@ -985,31 +1055,54 @@ export default function AdminPage() {
                 onClick={async () => {
                   try {
                     setAdminLoading(true);
-                    const res = await fetch('/api/coloc', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        title: 'Exemple coloc admin',
-                        description: 'Profil coloc créé depuis le panel admin pour test.',
-                        ville: 'Saint-Denis',
-                        budget: 450,
-                        age: 25,
-                        profession: 'Développeur',
-                        nom: 'Admin Test',
-                        communesSlugs: ['saint-denis', 'sainte-suzanne']
-                      })
-                    });
-                    if (res.ok) {
-                      showToast('success', 'Profil coloc exemple créé ✅');
-                      // Recharger la liste
-                      const items = await listColoc({ limit: 200 });
-                      setAdminColocs(items);
-                    } else {
-                      throw new Error('Erreur création');
+                    const villes = ['Saint-Denis', 'Saint-Paul', 'Saint-Pierre', 'Le Tampon', 'Saint-André', 'Saint-Louis', 'Le Port', 'La Possession', 'Saint-Joseph', 'Saint-Benoît'];
+                    const professions = ['Étudiant', 'Employé', 'Cadre', 'Artisan', 'Commerçant', 'Profession libérale', 'Développeur', 'Infirmier', 'Enseignant', 'Médecin'];
+                    const noms = ['Alex', 'Marie', 'Thomas', 'Sophie', 'Lucas', 'Emma', 'Hugo', 'Léa', 'Nathan', 'Chloé', 'Louis', 'Jade', 'Gabriel', 'Inès', 'Raphaël', 'Zoé', 'Antoine', 'Lola', 'Maxime', 'Camille'];
+                    const zones = [['Nord'], ['Ouest'], ['Sud'], ['Est'], ['Intérieur'], ['Nord', 'Ouest'], ['Sud', 'Est'], ['Ouest', 'Sud'], ['Nord', 'Est'], ['Intérieur', 'Nord']];
+                    
+                    let createdCount = 0;
+                    for (let i = 0; i < 20; i++) {
+                      const ville = villes[i % villes.length];
+                      const profession = professions[i % professions.length];
+                      const nom = noms[i % noms.length];
+                      const zone = zones[i % zones.length];
+                      const budget = 350 + (i * 30) + Math.floor(Math.random() * 150);
+                      const age = 20 + (i % 15) + Math.floor(Math.random() * 10);
+                      
+                      const res = await fetch('/api/coloc', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          description: `Jeune ${profession.toLowerCase()} de ${age} ans, je recherche une colocation sympa à ${ville}. Je suis ${profession.toLowerCase()}, propre et respectueux.`,
+                          ville: ville,
+                          budget: budget,
+                          age: age,
+                          profession: profession,
+                          nom: nom,
+                          zones: zone,
+                          communesSlugs: [ville.toLowerCase().replace(/\s+/g, '-')],
+                          bioCourte: `${profession} de ${age} ans, recherche colocation à ${ville}`,
+                          genre: i % 2 === 0 ? 'Homme' : 'Femme',
+                          accepteFumeurs: i % 3 === 0,
+                          accepteAnimaux: i % 4 === 0,
+                          sportif: i % 2 === 0,
+                          vegetarien: i % 5 === 0,
+                          soirees: i % 3 === 0,
+                          musique: i % 2 === 0 ? 'Pop/Rock' : 'Jazz/Classique'
+                        })
+                      });
+                      if (res.ok) {
+                        createdCount++;
+                      }
                     }
+                    
+                    showToast('success', `${createdCount} profils coloc exemples créés ✅`);
+                    // Recharger la liste
+                    const items = await listColoc({ limit: 200 });
+                    setAdminColocs(items);
                   } catch (e) {
-                    console.error('[Admin][CreateExampleColoc]', e);
-                    showToast('error', 'Erreur création profil coloc exemple');
+                    console.error('[Admin][CreateExampleColocs]', e);
+                    showToast('error', 'Erreur création profils coloc exemples');
                   } finally {
                     setAdminLoading(false);
                   }
@@ -1017,7 +1110,7 @@ export default function AdminPage() {
                 disabled={adminLoading}
                 className="bg-green-600 text-white px-3 py-1.5 text-sm rounded hover:bg-green-700 disabled:opacity-60"
               >
-                {adminLoading ? "Création..." : "Créer exemple coloc"}
+                {adminLoading ? "Création..." : "Créer 20 exemples colocs"}
               </button>
             </div>
           </div>
@@ -1392,15 +1485,22 @@ export default function AdminPage() {
       return <AdminAds />;
     }
     if (activeTab === 'scraper') {
-      const fields = [
-        'LBC_SEARCH_URL','LBC_BROWSER_HEADLESS','LBC_MAX','LBC_FETCH_DETAILS','LBC_DETAIL_LIMIT','LBC_DETAIL_SLEEP','LBC_PAGES','LBC_VERBOSE_LIST','LBC_EXPORT_JSON','LBC_NO_DB','LBC_UPDATE_COOLDOWN_HOURS','LBC_EXTRA_SLEEP','LBC_COOKIES','LBC_DATADOME','DATADOME_TOKEN','LBC_DEBUG'
-      ];
+             const fields = [
+         'LBC_SEARCH_URL','LBC_BROWSER_HEADLESS','LBC_MAX','LBC_FETCH_DETAILS','LBC_DETAIL_LIMIT','LBC_DETAIL_SLEEP','LBC_PAGES','LBC_VERBOSE_LIST','LBC_EXPORT_JSON','LBC_NO_DB','LBC_UPDATE_COOLDOWN_HOURS','LBC_EXTRA_SLEEP','LBC_COOKIES','LBC_DATADOME','DATADOME_TOKEN','LBC_DEBUG','LBC_USE_PROTONVPN'
+       ];
   const sensitive = new Set(['LBC_COOKIES','LBC_DATADOME','DATADOME_TOKEN']);
       return (
         <div className='space-y-8'>
           <div className='flex items-center justify-between'>
             <h1 className='text-3xl font-bold text-blue-800'>Scraper Leboncoin</h1>
             <div className='flex gap-2'>
+              <button 
+                onClick={() => setShowScraperConfig(!showScraperConfig)} 
+                className='px-3 py-1.5 text-sm rounded bg-slate-400 text-white hover:bg-slate-500'
+                title={showScraperConfig ? 'Masquer la configuration' : 'Afficher la configuration'}
+              >
+                {showScraperConfig ? '🔽 Masquer config' : '🔼 Afficher config'}
+              </button>
               <button disabled={scraperLoading} onClick={loadScraper} className='px-3 py-1.5 text-sm rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-50'>Rafraîchir</button>
               <button disabled={scraperSaving} onClick={saveConfig} className='px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'>{scraperSaving? 'Sauvegarde...' : 'Sauvegarder config'}</button>
               <button disabled={scraperLaunching} onClick={launchScraper} className='px-3 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50'>{scraperLaunching? 'Lancement...' : 'Lancer scraper'}</button>
@@ -1410,39 +1510,67 @@ export default function AdminPage() {
               <button type='button' onClick={applyDefaultsToEmpty} className='px-3 py-1.5 text-sm rounded bg-slate-500 text-white hover:bg-slate-600'>Défauts vides</button>
               <button disabled={scraperLaunching} onClick={forceRun} title='Interrompt le run en cours et démarre un nouveau' className='px-3 py-1.5 text-sm rounded bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50'>Force run</button>
               <button disabled={scraperFetchingDatadome} onClick={fetchDatadomeToken} title='Récupère un nouveau token Datadome depuis Leboncoin' className='px-3 py-1.5 text-sm rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50'>{scraperFetchingDatadome ? 'Récupération...' : 'Récupérer Datadome'}</button>
+              <button 
+                onClick={() => {
+                  setShowScraperLogs(!showScraperLogs);
+                  if (!showScraperLogs) {
+                    loadScraperLogs();
+                  }
+                }} 
+                className='px-3 py-1.5 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700'
+                title={showScraperLogs ? 'Masquer les logs' : 'Afficher les logs'}
+              >
+                {showScraperLogs ? '📋 Masquer logs' : '📋 Afficher logs'}
+              </button>
             </div>
           </div>
-          {scraperLoading ? <p>Chargement config…</p> : (
-            <div className='grid md:grid-cols-2 gap-4'>
-              {fields.map(k => {
-                const isSens = sensitive.has(k);
-                return (
-                  <div key={k} className='flex flex-col gap-1'>
-                    <label className='text-xs font-semibold text-slate-600 flex items-center justify-between'>
-                      <span>{k}</span>
-                      {isSens && (
-                        <button type='button' onClick={()=>toggleSecret(k)} className='text-[10px] px-1 py-0.5 rounded border border-slate-300 hover:bg-slate-100'>
-                          {showSecret[k] ? 'Masquer' : 'Voir'}
-                        </button>
+          {scraperLoading ? <p>Chargement config…</p> : showScraperConfig && (
+            <div className='border border-slate-200 rounded-lg p-4 bg-slate-50'>
+              <h3 className='text-lg font-semibold mb-3 text-slate-700'>Configuration du Scraper</h3>
+              <div className='grid md:grid-cols-2 gap-4'>
+                {fields.map(k => {
+                  const isSens = sensitive.has(k);
+                  const isBoolean = k === 'LBC_USE_PROTONVPN' || k === 'LBC_BROWSER_HEADLESS' || k === 'LBC_FETCH_DETAILS' || k === 'LBC_VERBOSE_LIST' || k === 'LBC_EXPORT_JSON' || k === 'LBC_NO_DB' || k === 'LBC_DEBUG';
+                  
+                  return (
+                    <div key={k} className='flex flex-col gap-1'>
+                      <label className='text-xs font-semibold text-slate-600 flex items-center justify-between'>
+                        <span>{k}</span>
+                        {isSens && (
+                          <button type='button' onClick={()=>toggleSecret(k)} className='text-[10px] px-1 py-0.5 rounded border border-slate-300 hover:bg-slate-100'>
+                            {showSecret[k] ? 'Masquer' : 'Voir'}
+                          </button>
+                        )}
+                      </label>
+                      {isBoolean ? (
+                        <select
+                          value={scraperConfig[k] ?? DEFAULT_SCRAPER_CONFIG[k]}
+                          onChange={e=>updateCfgField(k,e.target.value)}
+                          className='border rounded px-2 py-1 text-sm'
+                        >
+                          <option value="true">true</option>
+                          <option value="false">false</option>
+                        </select>
+                      ) : (
+                        <input
+                          type={isSens && !showSecret[k] ? 'password':'text'}
+                          value={scraperConfig[k] ?? ''}
+                          placeholder={DEFAULT_SCRAPER_CONFIG[k]}
+                          onChange={e=>updateCfgField(k,e.target.value)}
+                          className='border rounded px-2 py-1 text-sm placeholder:text-slate-400'
+                        />
                       )}
-                    </label>
-                    <input
-                      type={isSens && !showSecret[k] ? 'password':'text'}
-                      value={scraperConfig[k] ?? ''}
-                      placeholder={DEFAULT_SCRAPER_CONFIG[k]}
-                      onChange={e=>updateCfgField(k,e.target.value)}
-                      className='border rounded px-2 py-1 text-sm placeholder:text-slate-400'
-                    />
-                  </div>
-                );
-              })}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
           <div>
             <h2 className='text-xl font-semibold mb-2'>Dernières exécutions</h2>
       <table className='w-full text-sm border border-slate-200 rounded overflow-hidden'>
               <thead className='bg-slate-50'>
-  <tr><th className='p-2 text-left'>Début</th><th className='p-2 text-left'>Fin</th><th className='p-2'>Statut</th><th className='p-2'>Progress</th><th className='p-2'>Collectées</th><th className='p-2'>Upserts</th><th className='p-2'>Créées</th><th className='p-2'>MAJ</th><th className='p-2'>Cooldown skip</th><th className='p-2'>Log (fin)</th></tr>
+  <tr><th className='p-2 text-left'>Début</th><th className='p-2 text-left'>Fin</th><th className='p-2'>Statut</th><th className='p-2'>Progress</th><th className='p-2'>Collectées</th><th className='p-2'>Upserts</th><th className='p-2'>Créées</th><th className='p-2'>MAJ</th><th className='p-2'>Cooldown skip</th><th className='p-2'>Use Proton</th><th className='p-2'>Log (fin)</th></tr>
               </thead>
               <tbody>
                 {scraperRuns.map(r => {
@@ -1492,12 +1620,46 @@ export default function AdminPage() {
           <td className='p-2 text-center'>{r.createdCount ?? '-'}</td>
           <td className='p-2 text-center'>{r.updatedCount ?? '-'}</td>
           <td className='p-2 text-center'>{r.skippedRecentCount ?? '-'}</td>
+          <td className='p-2 text-center'>
+            <span className={`px-2 py-0.5 rounded text-xs font-medium ${r.config?.LBC_USE_PROTONVPN === 'true' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+              {r.config?.LBC_USE_PROTONVPN === 'true' ? 'Oui' : 'Non'}
+            </span>
+          </td>
           <td className='p-2 max-w-[300px] text-xs font-mono whitespace-pre overflow-hidden text-ellipsis'>{r.rawLog ? r.rawLog.slice(-300) : ''}</td>
                   </tr>
                 ); })}
               </tbody>
             </table>
           </div>
+          
+          {/* Section des logs du scraper */}
+          {showScraperLogs && (
+            <div className='mt-6 border border-slate-200 rounded-lg p-4 bg-slate-50'>
+              <div className='flex items-center justify-between mb-3'>
+                <h3 className='text-lg font-semibold text-slate-700'>Logs du Scraper</h3>
+                <div className='flex gap-2'>
+                  <button 
+                    onClick={loadScraperLogs}
+                    className='px-2 py-1 text-xs rounded bg-slate-600 text-white hover:bg-slate-700'
+                    title='Actualiser les logs'
+                  >
+                    🔄 Actualiser
+                  </button>
+                  <button 
+                    onClick={() => setScraperLogs('')}
+                    className='px-2 py-1 text-xs rounded bg-slate-500 text-white hover:bg-slate-600'
+                    title='Effacer les logs affichés'
+                  >
+                    🗑️ Effacer
+                  </button>
+                </div>
+              </div>
+              <div className='bg-black text-green-400 p-4 rounded font-mono text-sm overflow-auto max-h-96'>
+                <pre className='whitespace-pre-wrap'>{scraperLogs || 'Chargement des logs...'}</pre>
+              </div>
+            </div>
+          )}
+          
           {confirmPurgeOpen && (
             <div className='fixed inset-0 z-50 flex items-center justify-center'>
               <div className='absolute inset-0 bg-black/40' onClick={()=>setConfirmPurgeOpen(null)} />

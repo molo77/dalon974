@@ -57,8 +57,62 @@ if (!COOKIE_RAW && DATADOME_TOKEN) {
   console.log('[lbc] datadome token injecté depuis env');
 }
 const EXTRA_SLEEP = parseInt(process.env.LBC_EXTRA_SLEEP || '0', 10); // ms after navigation
+const USE_PROTONVPN = (process.env.LBC_USE_PROTONVPN || 'true').toLowerCase() === 'true'; // Utiliser ProtonVPN ou non
 
 function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+// Fonction pour gérer ProtonVPN
+async function handleProtonVPN() {
+  if (!USE_PROTONVPN) {
+    console.log('🔌 [VPN] ProtonVPN désactivé par configuration');
+    return;
+  }
+  
+  console.log('🔌 [VPN] Vérification de ProtonVPN...');
+  
+  try {
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+    
+    // Vérifier si ProtonVPN est installé
+    try {
+      await execAsync('protonvpn --version');
+      console.log('✅ [VPN] ProtonVPN CLI détecté');
+    } catch (e) {
+      console.log('⚠️ [VPN] ProtonVPN CLI non trouvé, tentative avec l\'interface graphique...');
+      
+      // Essayer de lancer ProtonVPN GUI
+      try {
+        await execAsync('start "" "C:\\Program Files\\Proton Technologies\\ProtonVPN\\ProtonVPN.exe"');
+        console.log('✅ [VPN] ProtonVPN GUI lancé');
+        console.log('⚠️ [VPN] Veuillez vous connecter manuellement à ProtonVPN puis appuyez sur Entrée...');
+        
+        // Attendre que l'utilisateur se connecte
+        const readline = require('readline');
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout
+        });
+        
+        await new Promise(resolve => {
+          rl.question('Appuyez sur Entrée une fois connecté à ProtonVPN...', () => {
+            rl.close();
+            resolve();
+          });
+        });
+        
+        console.log('✅ [VPN] Connexion ProtonVPN confirmée');
+      } catch (guiError) {
+        console.log('❌ [VPN] Impossible de lancer ProtonVPN GUI');
+        console.log('💡 [VPN] Veuillez vous connecter manuellement à ProtonVPN');
+      }
+    }
+  } catch (error) {
+    console.log('❌ [VPN] Erreur lors de la gestion de ProtonVPN:', error.message);
+    console.log('💡 [VPN] Le scraping continuera sans VPN');
+  }
+}
 
 // Formatage description réintroduit
 function formatDescription(raw, maxLen = 2000) {
@@ -109,6 +163,9 @@ async function scrape() {
   console.log('🚀 [ÉTAPE 1/5] Initialisation du scraper...');
   try { console.log('LBC_PROGRESS_JSON:' + JSON.stringify({ phase:'init', step:1, totalSteps:5, message:'Initialisation du navigateur' })); } catch {}
   
+  // Gestion de ProtonVPN si activé
+  await handleProtonVPN();
+  
   const browser = await puppeteer.launch({ headless: HEADLESS, args: ['--no-sandbox','--disable-setuid-sandbox'] });
   const page = await browser.newPage();
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
@@ -134,7 +191,11 @@ async function scrape() {
   
   // Étape 2: Collecte des annonces
   console.log('📋 [ÉTAPE 2/5] Collecte des annonces...');
+  console.log('🔍 URL de recherche:', SEARCH_URL);
+  console.log('📄 Pages à traiter:', PAGES);
+  console.log('🎯 Annonces max:', MAX);
   try { console.log('LBC_PROGRESS_JSON:' + JSON.stringify({ phase:'collect', step:2, totalSteps:5, message:'Collecte des annonces' })); } catch {}
+  
   const allListings = [];
   const seenPageUrls = new Set();
   let totalPagesTarget = PAGES;
@@ -143,13 +204,22 @@ async function scrape() {
       if (pIdx > 1) pageUrlObj.searchParams.set('page', String(pIdx)); else pageUrlObj.searchParams.delete('page');
       const pageUrl = pageUrlObj.toString();
       console.log(`[lbc] page ${pIdx}/${PAGES} ->`, pageUrl);
-      console.log(`📄 Traitement de la page ${pIdx}/${totalPagesTarget}...`);
+      console.log(`📄 [PAGE ${pIdx}/${totalPagesTarget}] Navigation vers la page...`);
       await navigateWithRetry(page, pageUrl);
       if (EXTRA_SLEEP > 0) await page.waitForTimeout(EXTRA_SLEEP);
       if (pIdx === 1) { try { await page.click('#didomi-notice-agree-button', { timeout: 4000 }); console.log('[lbc] cookies accept'); } catch {} }
       // Scroll pour charger lazy content
-      for (let i=0;i<6;i++) { await page.evaluate(()=>window.scrollBy(0, window.innerHeight*0.92)); await sleep(500 + Math.floor(Math.random()*220)); }
-      try { await page.waitForSelector('article[data-qa-id="aditem_container"] a[href^="/ad/"]', { timeout: 12000 }); } catch {}
+      console.log(`📄 [PAGE ${pIdx}/${totalPagesTarget}] Chargement du contenu...`);
+      for (let i=0;i<6;i++) { 
+        await page.evaluate(()=>window.scrollBy(0, window.innerHeight*0.92)); 
+        await sleep(500 + Math.floor(Math.random()*220)); 
+      }
+      try { 
+        await page.waitForSelector('article[data-qa-id="aditem_container"] a[href^="/ad/"]', { timeout: 12000 }); 
+        console.log(`📄 [PAGE ${pIdx}/${totalPagesTarget}] Contenu chargé avec succès`);
+      } catch (e) {
+        console.log(`⚠️ [PAGE ${pIdx}/${totalPagesTarget}] Aucune annonce trouvée sur cette page`);
+      }
       // Détection nombre total de pages (première page)
       if (pIdx === 1) {
         try {
@@ -187,7 +257,7 @@ async function scrape() {
           return { url, title, price: priceMatch? parseInt(priceMatch[1].replace(/\./g,''),10): undefined, ville };
         }).filter(Boolean);
       });
-  console.log(`[lbc] page ${pIdx} annonces trouvées`, pageListings.length);
+  console.log(`📄 [PAGE ${pIdx}/${totalPagesTarget}] ${pageListings.length} annonces trouvées`);
   // Ligne de progression pages
   try { console.log('LBC_PROGRESS_JSON:' + JSON.stringify({ phase:'list', page:pIdx, totalPages: totalPagesTarget })); } catch {}
       if (VERBOSE_LIST) pageListings.slice(0,10).forEach(l=>console.log('  -', l.price? (l.price+'€'):'?', '|', l.ville || '', '|', l.title.slice(0,70)));
@@ -195,11 +265,11 @@ async function scrape() {
       if (allListings.length >= MAX) break;
       await sleep(400 + Math.floor(Math.random()*300));
     }
-    console.log('[lbc] total annonces collectées avant coupe', allListings.length);
+    console.log('📊 [RÉSUMÉ] Total annonces collectées:', allListings.length);
     console.log('✅ [ÉTAPE 2/5] Collecte terminée -', allListings.length, 'annonces trouvées');
     
     var slice = allListings.slice(0, MAX);
-    console.log('[lbc] retenues', slice.length);
+    console.log('🎯 [RÉSUMÉ] Annonces retenues pour traitement:', slice.length);
 
   if (FETCH_DETAILS) {
     // Étape 3: Récupération des détails
@@ -207,10 +277,10 @@ async function scrape() {
     try { console.log('LBC_PROGRESS_JSON:' + JSON.stringify({ phase:'details', step:3, totalSteps:5, message:'Récupération des détails' })); } catch {}
     
     const detailCap = DETAIL_LIMIT === Infinity ? slice.length : Math.min(slice.length, DETAIL_LIMIT);
-    console.log('[lbc] détails max', detailCap, DETAIL_LIMIT===Infinity ? '(all)' : '');
+    console.log('🔍 [DÉTAILS] Limite de traitement:', detailCap, DETAIL_LIMIT===Infinity ? '(toutes)' : '');
   for (let i=0;i<slice.length && i<detailCap;i++) {
       const l = slice[i];
-      console.log(`🔍 Traitement détail ${i+1}/${detailCap}: ${l.title?.slice(0, 50)}...`);
+      console.log(`🔍 [DÉTAIL ${i+1}/${detailCap}] Traitement: ${l.title?.slice(0, 50)}...`);
       try {
         const p = await browser.newPage();
         await p.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
@@ -312,7 +382,7 @@ async function scrape() {
   // Progression détails
   try { console.log('LBC_PROGRESS_JSON:' + JSON.stringify({ phase:'detail', index:i+1, total: detailCap })); } catch {}
   } catch (e) {
-        console.warn('[lbc] detail fail', l.url, e.message);
+        console.warn(`❌ [DÉTAIL ${i+1}/${detailCap}] Erreur:`, e.message);
       }
     }
   }
@@ -369,13 +439,19 @@ async function scrape() {
       }
     }
   const metricsObj = { created, updated, skippedRecent, cooldownHours: UPDATE_COOLDOWN_HOURS, totalProcessed: slice.length };
-  console.log('[lbc] résumé persist:', metricsObj);
-  console.log('✅ [ÉTAPE 5/5] Sauvegarde terminée -', created, 'créées,', updated, 'mises à jour');
+  console.log('📊 [RÉSUMÉ] Sauvegarde:', metricsObj);
+  console.log('✅ [ÉTAPE 5/5] Sauvegarde terminée -', created, 'créées,', updated, 'mises à jour,', skippedRecent, 'ignorées');
   // Ligne JSON brute pour parsing externe
   try { console.log('LBC_METRICS_JSON:' + JSON.stringify(metricsObj)); } catch {}
   }
   
   console.log('🎉 [SCRAPER] Toutes les étapes terminées avec succès !');
+  console.log('📈 [STATISTIQUES FINALES]');
+  console.log('   • Annonces collectées:', allListings.length);
+  console.log('   • Annonces traitées:', slice.length);
+  console.log('   • Nouvelles annonces:', created);
+  console.log('   • Annonces mises à jour:', updated);
+  console.log('   • Annonces ignorées:', skippedRecent);
   await browser.close();
   await prisma.$disconnect();
 }
