@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import AuthProvider from '@/components/AuthProvider'
-import MaintenanceAlert from '@/components/MaintenanceAlert'
-import Header from '@/components/Header'
+import AuthProvider from '@/components/auth/AuthProvider'
+import MaintenanceAlert from '@/components/maintenance/MaintenanceAlert'
+import Header from '@/components/layout/Header'
+import LeafletStyles from '@/components/map/LeafletStyles'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -31,6 +32,8 @@ export default function RootLayout({
             autoHide={true}
             hideDelay={3000}
           />
+          {/* Styles Leaflet pour la carte */}
+          <LeafletStyles />
         </AuthProvider>
       </body>
     </html>

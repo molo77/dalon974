@@ -6,14 +6,18 @@
     "dev": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$p=(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess); if($p){Write-Host 'Killing PID' $p 'on :3000'; Stop-Process -Id $p -Force; Start-Sleep -Seconds 1}; npm run dev:raw\"",
     "lint": "eslint .",
     "build": "next build",
-    "scrape:lbc:coloc": "node scripts/scrape-leboncoin-colocation.cjs",
+    "scrape:lbc:coloc": "node scripts/scraper/leboncoin/scrape-leboncoin-colocation.cjs",
     "prisma:generate": "prisma generate",
     "migrate:prisma": "prisma migrate dev",
     "migrate:firestore-to-mysql": "ts-node --transpile-only scripts/migrateFirestoreToMySQL.ts --apply",
-    "prebuild": "node scripts/build-reunion-geo.mjs",
+    "prebuild": "node scripts/utils/build-reunion-geo.mjs",
     "start": "next start -H 0.0.0.0 -p 3000",
-    "scrape:colocs": "ts-node --transpile-only scripts/scrape-external-colocs.ts",
-    "dev:raw": "next dev -H 0.0.0.0 -p 3000 --turbopack"
+    "scrape:colocs": "ts-node --transpile-only scripts/scraper/external/scrape-external-colocs.ts",
+"cleanup:images": "node scripts/maintenance/cleanup-unused-images.js",
+"cleanup:images:dry-run": "node scripts/maintenance/cleanup-unused-images.js --dry-run --verbose",
+"cleanup:images:test": "node scripts/maintenance/schedule-cleanup.js test",
+"cleanup:images:scheduled": "node scripts/maintenance/schedule-cleanup.js cleanup",
+"dev:raw": "next dev -H 0.0.0.0 -p 3000 --turbopack"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",

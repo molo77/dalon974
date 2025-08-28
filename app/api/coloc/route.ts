@@ -17,10 +17,16 @@ export async function GET(req: Request) {
     if (prixMax) where.budget = { lte: Number(prixMax) };
     if (ageMin) where.age = { ...(where.age || {}), gte: Number(ageMin) };
     if (ageMax) where.age = { ...(where.age || {}), lte: Number(ageMax) };
+    
     // Sélection étendue avec fallback minimal si des colonnes n'existent pas encore (P2022)
-  let list: any[] = [];
-  let hasExtended = true;
+    let list: any[] = [];
+    let hasExtended = true;
+    let totalCount = 0;
+    
     try {
+      // Récupérer le nombre total avec les mêmes filtres
+      totalCount = await prisma.colocProfile.count({ where });
+      
       list = await prisma.colocProfile.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -47,6 +53,10 @@ export async function GET(req: Request) {
       // Fallback: colonnes pas (encore) présentes -> sélection minimale compatible
       console.warn("[API][coloc][GET] extended select failed, falling back to minimal select", e?.code || e);
       hasExtended = false;
+      
+      // Récupérer le nombre total sans filtres complexes
+      totalCount = await prisma.colocProfile.count();
+      
       list = await prisma.colocProfile.findMany({
         // where vide: on évite de référencer des colonnes manquantes
         orderBy: { createdAt: "desc" },
@@ -65,25 +75,34 @@ export async function GET(req: Request) {
         },
       });
     }
+    
     // communesSlugs array-contains-any (fallback: filtrage en mémoire)
-  if (slugsCsv && hasExtended) {
+    if (slugsCsv && hasExtended) {
       const want = slugsCsv.split(",").map(s => s.trim()).filter(Boolean);
       if (want.length) {
         list = list.filter((p: any) => {
           const arr = Array.isArray(p.communesSlugs) ? (p.communesSlugs as any[]) : Array.isArray((p as any).communesSlugs?.set) ? (p as any).communesSlugs.set : [];
           // Prisma/JSON peut renvoyer l'array natif; au besoin, normalise
-          const sl = Array.isArray(arr) ? arr.map(String) : [];
+          const sl = Array.isArray(arr) ? arr : [];
           return sl.some(s => want.includes(s));
         });
       }
     }
-  // compat: pour l'UI, on renvoie quelques alias attendus
-  const mapped = list.map((p: any) => ({
+    
+    // compat: pour l'UI, on renvoie quelques alias attendus
+    const mapped = list.map((p: any) => ({
       ...p,
       // alias attendu par l'UI
       nom: (p as any).nom ?? p.title ?? null,
     }));
-    return NextResponse.json(mapped);
+    
+    // Retourner les données avec le total
+    return NextResponse.json({
+      items: mapped,
+      total: totalCount,
+      limit,
+      offset
+    });
   } catch (e) {
     console.error("[API][coloc][GET]", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

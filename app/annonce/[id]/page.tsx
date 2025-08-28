@@ -1,15 +1,15 @@
 "use client";
 
-import MessageModal from "@/components/MessageModal";
-import AnnonceModal from "@/components/AnnonceModal";
+import MessageModal from "@/components/modals/MessageModal";
+import AnnonceModal from "@/components/modals/AnnonceModal";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import ExpandableImage from "@/components/ExpandableImage";
+import ExpandableImage from "@/components/ui/ExpandableImage";
 
-const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr: false });
+const ImageLightbox = dynamic(() => import("@/components/modals/ImageLightbox"), { ssr: false });
 import { updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/lib/services/annonceService";
 
 export default function AnnonceDetailPage() {

@@ -1,3 +1,0 @@
-Virtualisation de la grille (react-virtual) si > quelques centaines d’items.
-Regrouper les multiples useRef dédiés au layout dans un objet pour lisibilité.
-Extraire la colonne filtres dans un composant dédié avec memo.

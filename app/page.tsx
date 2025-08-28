@@ -1,6 +1,6 @@
 "use client";
-import ColocProfileModal from "@/components/ColocProfileModal";
-import AnnonceDetailModal from "@/components/AnnonceDetailModal";
+import ColocProfileModal from "@/components/modals/ColocProfileModal";
+import AnnonceDetailModal from "@/components/modals/AnnonceDetailModal";
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
@@ -10,19 +10,19 @@ import Image from "next/image";
 import { listAnnoncesPage } from "@/lib/services/homeService";
 import { listColoc } from "@/lib/services/colocService";
 import dynamic from "next/dynamic";
-import ExpandableImage from "@/components/ExpandableImage";
-import AnnonceCard from "@/components/AnnonceCard";
-import ColocProfileCard from "@/components/ColocProfileCard";
-import ConfirmModal from "@/components/ConfirmModal";
-import AnnonceModal from "@/components/AnnonceModal";
+import ExpandableImage from "@/components/ui/ExpandableImage";
+import AnnonceCard from "@/components/cards/AnnonceCard";
+import ColocProfileCard from "@/components/cards/ColocProfileCard";
+import ConfirmModal from "@/components/modals/ConfirmModal";
+import AnnonceModal from "@/components/modals/AnnonceModal";
 // AdSense via AdSlot
-import AdSlot from "@/components/AdSlot";
+import AdSlot from "@/components/ads/AdSlot";
 // Rôle admin désormais fourni par le contexte d'auth
 // AuthProvider n'exporte pas useAuth dans ce projet; on neutralise l'usage pour déverrouiller la build
 import { showToast } from "@/lib/toast";
-import CommuneZoneSelector from "@/components/CommuneZoneSelector";
+import CommuneZoneSelector from "@/components/map/CommuneZoneSelector";
 import { preloadReunionFeatures } from "@/lib/reunionGeo";
-const ImageLightbox = dynamic(() => import("@/components/ImageLightbox"), { ssr: false });
+const ImageLightbox = dynamic(() => import("@/components/modals/ImageLightbox"), { ssr: false });
 
 
 // === Utilitaires partagés (déplacés hors composant pour éviter recréations) ===
@@ -71,6 +71,10 @@ export default function HomePage() {
   const [critAgeMin, setCritAgeMin] = useState<number | null>(null);
   const [critAgeMax, setCritAgeMax] = useState<number | null>(null);
   const [critProfession, setCritProfession] = useState<string>("");
+  
+  // Filtres de surface
+  const [surfaceMin, setSurfaceMin] = useState<number | null>(null);
+  const [surfaceMax, setSurfaceMax] = useState<number | null>(null);
 
   // Constantes et helpers UI + géo
   const defaultAnnonceImg = "/images/annonce-holder.svg";
@@ -233,7 +237,7 @@ export default function HomePage() {
       const currentOffset = append ? offsetRef.current : 0;
       if (!append) offsetRef.current = 0;
       if (isColoc) {
-        const all = await listColoc({
+        const result = await listColoc({
           limit: pageLimit,
           offset: currentOffset,
           ville: ville || undefined,
@@ -242,24 +246,12 @@ export default function HomePage() {
           ageMin: critAgeMin ?? null,
           ageMax: critAgeMax ?? null,
         });
-        const filtered = (Array.isArray(all) ? all : []).filter((p: any) => {
-          if (normalizedSlugs.length > 0) {
-            const slugsArr = Array.isArray(p.communesSlugs) ? p.communesSlugs.map((s: string) => altSlugToCanonical[s] || s) : [];
-            let matchBySlugs = slugsArr.some((s: string) => normalizedSlugs.includes(s));
-            // Si pas de match par slugs, tenter un match par zones si le profil expose des zones
-            if (!matchBySlugs && Array.isArray(p.zones) && p.zones.length) {
-              const zonesToSlugs = new Set<string>();
-              (p.zones as string[]).forEach((z: string) => (ZONE_TO_SLUGS[z] || []).forEach((s) => zonesToSlugs.add(altSlugToCanonical[s] || s)));
-              matchBySlugs = Array.from(zonesToSlugs).some((s) => normalizedSlugs.includes(s));
-            }
-            if (!matchBySlugs) return false;
-          }
-          if (critAgeMin !== null && !(typeof p.age === 'number' && p.age >= critAgeMin)) return false;
-          if (critAgeMax !== null && !(typeof p.age === 'number' && p.age <= critAgeMax)) return false;
-          if (critProfession && !String(p.profession || '').toLowerCase().includes(critProfession.toLowerCase())) return false;
-          return true;
-        });
-        const mapped = filtered.map((p: any) => {
+        const all = result.items;
+        const totalCount = result.total;
+        
+        // Le filtrage est maintenant géré côté serveur par l'API
+        // On applique seulement le tri et le mapping
+        const mapped = all.map((p: any) => {
           const budgetNum = Number(p.budget);
           const head = [p.profession, typeof p.age === 'number' ? `${p.age} ans` : null].filter(Boolean).join(' • ');
           const tail = (p.description || '').toString();
@@ -300,25 +292,30 @@ export default function HomePage() {
           if (additions.length === 0) return prev;
           return [...prev, ...additions];
         });
-  setCountFiltered((prev) => (append ? (prev ?? 0) : 0) + mapped.length);
+        
+        // Utiliser le total retourné par l'API
+        if (!append) {
+          setCountFiltered(totalCount);
+        } else {
+          setCountFiltered((prev) => (prev ?? 0) + mapped.length);
+        }
+        
   offsetRef.current = currentOffset + mapped.length;
   setHasMore(mapped.length === pageLimit);
       } else {
-  const all = await listAnnoncesPage(pageLimit, currentOffset);
-        const villeSet = new Set(normalizedSlugs.map((s) => parentSlugToName[s]).filter(Boolean));
-        const filtered = all.filter((d: any) => {
-          if (normalizedSlugs.length > 0) {
-            const parentSlug = getDocParentSlug(d);
-            if (!normalizedSlugs.includes(parentSlug)) return false;
-            if (villeSet.size > 0 && d.ville && !villeSet.has(d.ville)) return false;
-          } else {
-            if (ville && d.ville !== ville) return false;
-            if (codePostal && d.codePostal && d.codePostal !== codePostal) return false;
-          }
-          if (prixMax !== null && typeof d.prix === 'number' && d.prix > prixMax) return false;
-          return true;
+        const result = await listAnnoncesPage(pageLimit, currentOffset, {
+          ville: ville || undefined,
+          codePostal: codePostal || undefined,
+          prixMax: prixMax ?? undefined,
+          slugs: normalizedSlugs.length > 0 ? normalizedSlugs : undefined,
+          zones: zoneFilters.length > 0 ? zoneFilters : undefined
         });
-        const mapped = filtered.map((d: any) => ({
+        const all = result.items;
+        const totalCount = result.total;
+        
+        // Le filtrage est maintenant géré côté serveur par l'API
+        // On applique seulement le tri et le mapping
+        const mapped = all.map((d: any) => ({
           id: d.id,
           titre: d.titre ?? d.title ?? '',
           ville: d.ville ?? null,
@@ -341,7 +338,14 @@ export default function HomePage() {
           if (additions.length === 0) return prev;
           return [...prev, ...additions];
         });
-  setCountFiltered((prev) => (append ? (prev ?? 0) : 0) + mapped.length);
+        
+        // Utiliser le total retourné par l'API
+        if (!append) {
+          setCountFiltered(totalCount);
+        } else {
+          setCountFiltered((prev) => (prev ?? 0) + mapped.length);
+        }
+        
   offsetRef.current = currentOffset + mapped.length;
   setHasMore(mapped.length === pageLimit);
       }
@@ -375,7 +379,7 @@ export default function HomePage() {
   // Préchargement silencieux des features de carte (si utilisé)
   useEffect(() => { try { preloadReunionFeatures(); } catch {} }, []);
 
-  // Reset quand on change d’onglet
+  // Reset quand on change d'onglet
   useEffect(() => {
     if (activeHomeTab === null) return;
     // Si les onglets sont masqués derrière le header, remonter juste jusqu'à l'ancre
@@ -391,7 +395,7 @@ export default function HomePage() {
   setFirestoreError(null);
     setAnnonces([]);
   setHasMore(true);
-  // Tri par défaut selon l’onglet
+  // Tri par défaut selon l'onglet
   setSortBy(activeHomeTab === 'colocataires' ? 'prix' : 'date');
   // Réinitialiser tous les filtres
   setPrixMax(null);
@@ -406,7 +410,11 @@ export default function HomePage() {
   setCritAgeMin(null);
   setCritAgeMax(null);
   setCritProfession("");
-    // Ne pas appeler loadAnnonces ici (il sera déclenché par l’effet “filtres”)
+  
+  // Réinitialiser filtres de surface
+  setSurfaceMin(null);
+  setSurfaceMax(null);
+    // Ne pas appeler loadAnnonces ici (il sera déclenché par l'effet "filtres")
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeHomeTab]);
 
@@ -426,7 +434,7 @@ export default function HomePage() {
       loadAnnonces(false);
     }, 250);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortBy, prixMax, ville, codePostal, communesSelected, critAgeMin, critAgeMax, critProfession]);
+  }, [sortBy, prixMax, ville, codePostal, communesSelected, zoneFilters, critAgeMin, critAgeMax, critProfession, surfaceMin, surfaceMax]);
 
   // Totaux globaux (premier affichage par onglet)
   useEffect(() => {
@@ -436,14 +444,14 @@ export default function HomePage() {
         if (activeHomeTab === 'annonces' && countAnnoncesTotal === null) {
           const res = await fetch('/api/annonces', { cache: 'no-store' });
           if (!aborted && res.ok) {
-            const arr = await res.json();
-            setCountAnnoncesTotal(Array.isArray(arr) ? arr.length : 0);
+            const data = await res.json();
+            setCountAnnoncesTotal(data.total || 0);
           }
         } else if (activeHomeTab === 'colocataires' && countProfilsTotal === null) {
           const res = await fetch('/api/coloc', { cache: 'no-store' });
           if (!aborted && res.ok) {
-            const arr = await res.json();
-            setCountProfilsTotal(Array.isArray(arr) ? arr.length : 0);
+            const data = await res.json();
+            setCountProfilsTotal(data.total || 0);
           }
         }
       } catch {}
@@ -453,19 +461,32 @@ export default function HomePage() {
 
   // Liste affichée (filtrée + triée) utilisée à la fois pour l'entête et la grille
   const displayedAnnonces = useMemo(() => {
-    let list = (Array.isArray(annonces) ? annonces : [])
-      .filter((a: any) => {
-        if (selectedParentSlugs.length === 0) return true;
-        const p = a?.parentSlug;
-        return p ? selectedParentSlugs.includes(p) : false;
-      })
-      .filter((a: any) => {
-        if (prixMax === null) return true;
+    let list = (Array.isArray(annonces) ? annonces : []);
+    
+         // Le filtrage par communes et prix est maintenant géré côté serveur par l'API
+     // On applique seulement le filtrage par prix si nécessaire (fallback)
+     if (prixMax !== null) {
+       list = list.filter((a: any) => {
         if (typeof a?.prix !== "number") return false;
         return a.prix <= prixMax;
       });
+     }
 
-    // Filtrage client additionnel pour l’onglet colocataires (critères)
+     // Filtrage par surface (côté client)
+     if (surfaceMin !== null) {
+       list = list.filter((a: any) => {
+         if (typeof a?.surface !== "number") return false;
+         return a.surface >= surfaceMin;
+       });
+     }
+     if (surfaceMax !== null) {
+       list = list.filter((a: any) => {
+         if (typeof a?.surface !== "number") return false;
+         return a.surface <= surfaceMax;
+       });
+     }
+
+    // Filtrage client additionnel pour l'onglet colocataires (critères)
     if (activeHomeTab === 'colocataires') {
       list = list.filter((a: any) => {
         // Le mapping coloc place le "prix" dans a.prix (budget) et calcule un short desc dans a.description
@@ -487,7 +508,7 @@ export default function HomePage() {
       return toMsAny(b) - toMsAny(a);
     });
     return list;
-  }, [annonces, selectedParentSlugs, prixMax, sortBy, activeHomeTab, critAgeMin, critAgeMax, critProfession]);
+  }, [annonces, selectedParentSlugs, prixMax, sortBy, activeHomeTab, critAgeMin, critAgeMax, critProfession, surfaceMin, surfaceMax]);
 
   // Quand le filtrage se termine, restaurer la position de scroll initiale
   useEffect(() => {
@@ -575,9 +596,9 @@ export default function HomePage() {
     }, { root: null, rootMargin: '200px', threshold: 0 });
     io.observe(el);
     return () => io.disconnect();
-  }, [hasMore, loadingMore, filtering, activeHomeTab, sortBy, prixMax, ville, codePostal, communesSelected.length, critAgeMin, critAgeMax, critProfession, loadAnnonces]);
+  }, [hasMore, loadingMore, filtering, activeHomeTab, sortBy, prixMax, ville, codePostal, communesSelected.length, critAgeMin, critAgeMax, critProfession, surfaceMin, surfaceMax, loadAnnonces]);
 
-  // Nettoyage global à l’unmount
+  // Nettoyage global à l'unmount
   useEffect(() => {
     return () => {
      if (filtersDebounceRef.current) clearTimeout(filtersDebounceRef.current);
@@ -617,7 +638,7 @@ export default function HomePage() {
       const next = prev.includes(zone) ? prev.filter((z) => z !== zone) : [...prev, zone];
       // Union des slugs pour les zones choisies
       const zoneSlugs = Array.from(new Set(next.flatMap((z) => ZONE_TO_SLUGS[z] || [])));
-      // Tri stable par nom officiel pour éviter les variations d’ordre
+      // Tri stable par nom officiel pour éviter les variations d'ordre
       zoneSlugs.sort((a, b) =>
         (SLUG_TO_NAME[a] || a).localeCompare(SLUG_TO_NAME[b] || b, "fr", { sensitivity: "base" })
       );
@@ -631,7 +652,7 @@ export default function HomePage() {
 
   return (
     <>
-      <main className="min-h-screen p-2 sm:p-6 flex flex-col items-center scroll-pt-28 md:scroll-pt-32">
+  <main className="min-h-screen p-2 sm:p-6 flex flex-col items-center scroll-pt-28 md:scroll-pt-32">
       {/* Ecran de CHOIX initial */}
       {activeHomeTab === null ? (
   <section className="w-full max-w-[1440px] flex flex-col items-center">
@@ -684,7 +705,7 @@ export default function HomePage() {
         </section>
       ) : (
         <>
-          {/* Bouton “Changer de type de recherche” retiré */}
+          {/* Bouton "Changer de type de recherche" retiré */}
 
           {/* Ancre au-dessus des onglets */}
           <div ref={tabsTopRef} className="h-0 scroll-mt-28 md:scroll-mt-32" aria-hidden="true" />
@@ -752,17 +773,23 @@ export default function HomePage() {
                   {activeHomeTab === 'annonces' ? 'Nombre d\'annonces' : 'Nombre de profils'}
                   {" : "}
                   {(() => {
+                    // Si en cours de chargement, afficher "Chargement..."
+                    if (filtering) {
+                      return 'Chargement...';
+                    }
+                    
                     const hasCommuneSel = selectedParentSlugs.length > 0;
                     const hasBudget = prixMax !== null;
                     const hasVille = !!ville || !!codePostal;
                     const hasCriteres = activeHomeTab === 'colocataires' && (critAgeMin !== null || critAgeMax !== null || !!critProfession);
-                    const anyFilter = hasCommuneSel || hasBudget || hasVille || hasCriteres;
-                    // Si aucun filtre et premier affichage, montrer le total global par onglet
-                    if (!anyFilter && annonces.length === 0) {
+                     const hasSurface = surfaceMin !== null || surfaceMax !== null;
+                     const anyFilter = hasCommuneSel || hasBudget || hasVille || hasCriteres || hasSurface;
+                    // Si aucun filtre, montrer le total global par onglet
+                    if (!anyFilter) {
                       return activeHomeTab === 'annonces' ? (countAnnoncesTotal ?? '…') : (countProfilsTotal ?? '…');
                     }
-                    // Sinon, montrer le nombre filtré calculé côté client, sinon fallback sur la liste affichée
-                    return (countFiltered ?? displayedAnnonces.length);
+                    // Sinon, montrer le nombre d'annonces réellement affichées après filtrage côté client
+                    return displayedAnnonces.length;
                   })()}
           {" "}
           {activeHomeTab === 'annonces' ? 'trouvées' : 'trouvés'}
@@ -996,7 +1023,7 @@ export default function HomePage() {
             <div className="w-full md:order-1 md:basis-[34%] lg:basis-[36%] md:flex-shrink-0">
               <form
                 onSubmit={(e) => {
-                  e.preventDefault(); // mise à jour auto: pas d’appel manuel
+                  e.preventDefault(); // mise à jour auto: pas d'appel manuel
                 }}
                 className="sticky top-4 w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4"
               >
@@ -1062,7 +1089,32 @@ export default function HomePage() {
                     />
                   </div>
 
-                  {/* Critères (toujours visibles) */}
+                   {/* Surface (toujours visible) */}
+                   <div className="grid grid-cols-2 gap-3 w-full">
+                     <div>
+                       <label className="block text-sm font-medium mb-1">Surface min (m²)</label>
+                       <input
+                         type="number"
+                         value={surfaceMin ?? ""}
+                         onChange={(e) => setSurfaceMin(Number(e.target.value) || null)}
+                         className="border border-gray-300 rounded px-3 py-2 w-full"
+                         placeholder="Ex: 20"
+                       />
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium mb-1">Surface max (m²)</label>
+                       <input
+                         type="number"
+                         value={surfaceMax ?? ""}
+                         onChange={(e) => setSurfaceMax(Number(e.target.value) || null)}
+                         className="border border-gray-300 rounded px-3 py-2 w-full"
+                         placeholder="Ex: 80"
+                       />
+                     </div>
+                   </div>
+
+                                     {/* Critères (visibles seulement pour les colocataires) */}
+                   {activeHomeTab === 'colocataires' && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
                     <div>
                       <label className="block text-sm font-medium mb-1">Âge min</label>
@@ -1077,6 +1129,7 @@ export default function HomePage() {
                       <input type="text" className="border border-gray-300 rounded px-3 py-2 w-full" value={critProfession} onChange={(e) => setCritProfession(e.target.value)} placeholder="Ex: Étudiant, CDI..." />
                     </div>
                   </div>
+                   )}
                 </div>
 
               {/* Tri retiré de la barre gauche */}
@@ -1094,7 +1147,16 @@ export default function HomePage() {
 
               {/* Carte (sous la pub et, si visible, le bouton) */}
               {showCommuneMap && !filtersCollapsed && (
-                <div id="map-section" ref={mapWrapRef} className="rounded-2xl border border-slate-200 p-3 overflow-hidden">
+                <div>
+                  <div id="map-section" ref={mapWrapRef} className="rounded-2xl border border-slate-200 overflow-hidden">
+                    <div className="bg-slate-50 px-3 py-2 border-b border-slate-200">
+                      <div className="flex items-center justify-center gap-3">
+                        <span className="hidden md:block h-px w-8 bg-slate-200" />
+                        <div className="text-base md:text-lg font-semibold text-slate-700 tracking-tight">Rechercher par secteur</div>
+                        <span className="hidden md:block h-px w-8 bg-slate-200" />
+                      </div>
+                    </div>
+                    <div className="p-3">
                   <CommuneZoneSelector
                     value={communesSelected}
                     computeZonesFromSlugs={computeZonesFromSlugs}
@@ -1109,6 +1171,8 @@ export default function HomePage() {
                     // Masque le résumé de sélection sous la carte
                     hideSelectionSummary
                   />
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1132,7 +1196,7 @@ export default function HomePage() {
                       // Remplacement au 1er snapshot pour éviter les doublons
                       resetOnFirstSnapshotRef.current = true;
                       setFiltering(true);
-                      // pas d’appel direct à loadAnnonces: l’effet "filtres" va relancer proprement
+                      // pas d'appel direct à loadAnnonces: l'effet "filtres" va relancer proprement
                     }}
                     className="border border-slate-300 text-slate-700 px-3 py-1.5 rounded-md hover:bg-slate-50 text-sm"
                   >
@@ -1148,7 +1212,7 @@ export default function HomePage() {
                     <div className="flex items-center justify-between mb-2">
                       <div className="text-xs font-medium text-slate-600">Secteurs sélectionnés</div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{zonesSelected.length}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{zoneFilters.length}</span>
                         <button
                           type="button"
                           onClick={() => {

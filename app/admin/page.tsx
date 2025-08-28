@@ -6,18 +6,19 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import AdminUsers from "@/components/admin/AdminUsers";
 import AdminAds from "@/components/admin/AdminAds";
-import ExpandableImage from "@/components/ExpandableImage"; // New import
+import ImageCleanup from "@/components/admin/ImageCleanup";
+import ExpandableImage from "@/components/ui/ExpandableImage"; // New import
 // import AdminAnnonces from "@/components/admin/AdminAnnonces"; // affichage remplacé par une liste intégrée
 import useAdminGate from "@/hooks/useAdminGate";
 // Firebase supprimé: à migrer vers API Prisma.
 const serverTimestamp = () => new Date();
-import AnnonceModal from "@/components/AnnonceModal";
-const ColocPhotoSection = dynamic(() => import("@/components/ColocPhotoSection"), { ssr: false });
+import AnnonceModal from "@/components/modals/AnnonceModal";
+const ColocPhotoSection = dynamic(() => import("@/components/ui/ColocPhotoSection"), { ssr: false });
 import { updateAnnonce, deleteAnnonce } from "@/lib/services/annonceService";
 import { updateColoc, deleteColoc, getColoc, listColoc } from "@/lib/services/colocService";
 import Link from "next/link"; // + import
 import Image from "next/image";
-import { toast as appToast } from "@/components/Toast";
+import { toast as appToast } from "@/components/ui/feedback/Toast";
 
 // données seed retirées (non utilisées pendant la migration)
 
@@ -26,7 +27,7 @@ export default function AdminPage() {
   const user = session?.user as any;
   const loading = status === "loading";
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"annonces" | "users" | "colocs" | "ads" | "scraper">("annonces");
+  const [activeTab, setActiveTab] = useState<"annonces" | "users" | "colocs" | "ads" | "scraper" | "maintenance">("annonces");
   // État config scraper
   const [scraperConfig, setScraperConfig] = useState<Record<string,string|undefined>>({});
   const [scraperLoading, setScraperLoading] = useState(false);
@@ -338,11 +339,13 @@ export default function AdminPage() {
       try {
         const res = await fetch("/api/annonces?limit=200", { cache: "no-store" });
         if (!res.ok) throw new Error("annonces fetch failed");
-        const items = await res.json();
+        const data = await res.json();
+        // L'API retourne maintenant { items: [], total: number }
+        const items = data.items || [];
         // assurer la compat UI
-        const mapped = (Array.isArray(items) ? items : []).map((a: any) => ({ ...a, titre: a.titre ?? a.title ?? "" }));
+        const mapped = items.map((a: any) => ({ ...a, titre: a.titre ?? a.title ?? "" }));
         if (!stop) setAdminAnnonces(mapped);
-  } catch {
+      } catch {
         if (!stop) setAdminAnnonces([]);
       }
     };
@@ -362,8 +365,8 @@ export default function AdminPage() {
     let stop = false;
     const load = async () => {
       try {
-        const items = await listColoc({ limit: 200 });
-        if (!stop) setAdminColocs(items);
+        const result = await listColoc({ limit: 200 });
+        if (!stop) setAdminColocs(result.items);
   } catch {
         if (!stop) setAdminColocs([]);
       }
@@ -1098,8 +1101,8 @@ export default function AdminPage() {
                     
                     showToast('success', `${createdCount} profils coloc exemples créés ✅`);
                     // Recharger la liste
-                    const items = await listColoc({ limit: 200 });
-                    setAdminColocs(items);
+                    const result = await listColoc({ limit: 200 });
+                    setAdminColocs(result.items);
                   } catch (e) {
                     console.error('[Admin][CreateExampleColocs]', e);
                     showToast('error', 'Erreur création profils coloc exemples');
@@ -1714,6 +1717,12 @@ export default function AdminPage() {
           onClick={() => setActiveTab("scraper")}
         >
           🕷️ Scraper
+        </button>
+        <button
+          className={`text-left px-4 py-3 rounded-lg transition ${activeTab === "maintenance" ? "bg-blue-600 text-white shadow" : "hover:bg-blue-50 text-slate-700"}`}
+          onClick={() => setActiveTab("maintenance")}
+        >
+          🛠️ Maintenance
         </button>
       </aside>
       <section className="flex-1 w-full px-4 md:px-12 py-10 overflow-x-hidden">

@@ -4,7 +4,7 @@ import { useState, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { signInEmail } from "@/lib/services/authService";
-import { toast as appToast } from "@/components/Toast";
+import { toast as appToast } from "@/components/ui/feedback/Toast";
 
 function LoginContent() {
   const router = useRouter();

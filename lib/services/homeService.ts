@@ -17,11 +17,27 @@ export async function listAnnoncesAll(): Promise<HomeAnnonce[]> {
   return res.json();
 }
 
-export async function listAnnoncesPage(limit = 20, offset = 0): Promise<HomeAnnonce[]> {
+export async function listAnnoncesPage(limit = 20, offset = 0, filters?: { ville?: string, codePostal?: string, prixMax?: number, slugs?: string[], zones?: string[] }): Promise<{ items: HomeAnnonce[], total: number }> {
   const qs = new URLSearchParams();
   qs.set('limit', String(limit));
   qs.set('offset', String(offset));
+  
+  // Ajouter les paramètres de filtrage
+  if (filters) {
+    if (filters.ville) qs.set('ville', filters.ville);
+    if (filters.codePostal) qs.set('codePostal', filters.codePostal);
+    if (filters.prixMax !== undefined) qs.set('prixMax', String(filters.prixMax));
+    if (filters.slugs && filters.slugs.length > 0) qs.set('slugs', filters.slugs.join(','));
+    if (filters.zones && filters.zones.length > 0) qs.set('zones', filters.zones.join(','));
+  }
+  
   const res = await fetch(`/api/annonces?${qs.toString()}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('fetch annonces page failed');
-  return res.json();
+  const data = await res.json();
+  
+  // Retourner la structure avec items et total
+  return {
+    items: data.items || data, // Fallback pour compatibilité
+    total: data.total || 0
+  };
 }

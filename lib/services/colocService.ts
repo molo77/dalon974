@@ -23,7 +23,7 @@ export type ListColocParams = {
   ageMax?: number | null;
 };
 
-export async function listColoc(params: ListColocParams = {}): Promise<ColocProfileDto[]> {
+export async function listColoc(params: ListColocParams = {}): Promise<{ items: ColocProfileDto[], total: number }> {
   const { limit = 20, offset = 0, ville, prixMax, slugs, ageMin, ageMax } = params;
   const qs = new URLSearchParams();
   qs.set('limit', String(limit));
@@ -35,7 +35,13 @@ export async function listColoc(params: ListColocParams = {}): Promise<ColocProf
   if (typeof ageMax === 'number') qs.set('ageMax', String(ageMax));
   const res = await fetch(`/api/coloc?${qs.toString()}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('fetch coloc failed');
-  return res.json();
+  const data = await res.json();
+  
+  // Retourner la structure avec items et total
+  return {
+    items: data.items || data, // Fallback pour compatibilité
+    total: data.total || 0
+  };
 }
 
 export async function getColoc(id: string): Promise<ColocProfileDto | null> {
