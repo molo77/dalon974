@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { toast as appToast } from '@/components/ui/feedback/Toast';
+import { toast } from 'react-hot-toast';
 
 export default function ImageCleanup() {
   const [isLoading, setIsLoading] = useState(false);

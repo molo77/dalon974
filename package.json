@@ -20,6 +20,10 @@
 "deploy:setup": "node scripts/deployment/setup-linux-server.js",
 "deploy": "node scripts/deployment/deploy-to-linux-server.js",
 "deploy:fix-ssh": "node scripts/deployment/fix-ssh-keys.js",
+"deploy:setup-ssh": "node scripts/deployment/setup-ssh-keys.js",
+"deploy:setup-simple": "node scripts/deployment/setup-linux-server-simple.js",
+"deploy:setup-no-sudo": "node scripts/deployment/setup-linux-server-no-sudo.js",
+"deploy:setup-user": "node scripts/deployment/setup-linux-server-user-only.js",
 "health-check": "curl -f http://localhost:3000/api/health || exit 1",
 "dev:raw": "next dev -H 0.0.0.0 -p 3000 --turbopack"
   },
