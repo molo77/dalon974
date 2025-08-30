@@ -137,15 +137,9 @@ cleanup_backups() {
 stop_servers() {
     log_info "Arrêt des serveurs avant synchronisation..."
     
-    # Arrêt du serveur de développement
-    log_info "Arrêt du serveur de développement..."
-    pkill -f "next dev.*:3001" || true
-    sleep 2
-    
-    # Arrêt du serveur de production
-    log_info "Arrêt du serveur de production..."
-    pkill -f "next start.*:3000" || true
-    sleep 2
+    # Utiliser le script server-manager.sh
+    local script_dir=$(dirname "$(readlink -f "$0")")
+    "$script_dir/server-manager.sh" stop
     
     log_success "Serveurs arrêtés"
 }
@@ -154,15 +148,9 @@ stop_servers() {
 restart_servers() {
     log_info "Redémarrage des serveurs après synchronisation..."
     
-    # Redémarrage du serveur de développement
-    log_info "Redémarrage du serveur de développement..."
-    bash "$DEV_DIR/scripts/dev-start.sh" &
-    sleep 5
-    
-    # Redémarrage du serveur de production
-    log_info "Redémarrage du serveur de production..."
-    bash "$PROD_DIR/scripts/prod-start.sh" &
-    sleep 5
+    # Utiliser le script server-manager.sh
+    local script_dir=$(dirname "$(readlink -f "$0")")
+    "$script_dir/server-manager.sh" both
     
     log_success "Serveurs redémarrés"
 }
