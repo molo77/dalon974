@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
@@ -10,8 +10,31 @@ export default function Header() {
   const { data } = useSession();
   const user = data?.user as any;
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isDevEnvironment, setIsDevEnvironment] = useState<boolean | null>(null);
   const router = useRouter();
   const isAdmin = (user?.role || (user as any)?.role) === "admin";
+
+  // Fonction pour récupérer l'environnement via l'API
+  const fetchEnvironment = async () => {
+    try {
+      const response = await fetch('/api/version');
+      if (response.ok) {
+        const data = await response.json();
+        setIsDevEnvironment(data.appEnv === 'development');
+      } else {
+        console.error('Erreur lors de la récupération de l\'environnement:', response.status);
+        setIsDevEnvironment(false); // Fallback vers production
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération de l\'environnement:', error);
+      setIsDevEnvironment(false); // Fallback vers production
+    }
+  };
+
+  // Récupérer l'environnement au chargement du composant
+  useEffect(() => {
+    fetchEnvironment();
+  }, []);
 
   const handleLogout = async () => {
   await signOut({ callbackUrl: "/" });
@@ -24,7 +47,9 @@ export default function Header() {
     <header className="bg-white shadow px-4 py-3 sticky top-0 z-[9999]">
       <div className="w-[85%] max-w-full mx-auto flex items-center justify-between">
         <Link href="/" className="text-xl font-bold text-blue-600">
-          Dalon974 <span className="text-xs bg-yellow-400 text-black px-2 py-1 rounded ml-2">DEV</span>
+          Dalon974 {isDevEnvironment === true && (
+            <span className="text-xs bg-yellow-400 text-black px-2 py-1 rounded ml-2">DEV</span>
+          )}
         </Link>
 
         <button

@@ -7,9 +7,24 @@ export default function DevIndicator() {
   const [isDev, setIsDev] = useState(false);
 
   useEffect(() => {
-    // Vérifier si nous sommes en environnement de développement
-    const appEnv = process.env.NEXT_PUBLIC_APP_ENV || process.env.NODE_ENV;
-    setIsDev(appEnv === 'development');
+    // Récupérer l'environnement via l'API
+    const fetchEnvironment = async () => {
+      try {
+        const response = await fetch('/api/version');
+        if (response.ok) {
+          const data = await response.json();
+          setIsDev(data.appEnv === 'development');
+        } else {
+          console.error('Erreur lors de la récupération de l\'environnement:', response.status);
+          setIsDev(false); // Fallback vers production
+        }
+      } catch (error) {
+        console.error('Erreur lors de la récupération de l\'environnement:', error);
+        setIsDev(false); // Fallback vers production
+      }
+    };
+
+    fetchEnvironment();
 
     // Masquer l'indicateur après 5 secondes
     const timer = setTimeout(() => {
