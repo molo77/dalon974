@@ -1,0 +1,31 @@
+nohup: les entrées sont ignorées
+
+> dalon974-prod@0.2.0 start
+> next start -H 0.0.0.0 -p 3000
+
+   ▲ Next.js 15.4.6
+   - Local:        http://localhost:3000
+   - Network:      http://0.0.0.0:3000
+
+ ✓ Starting...
+ ✓ Ready in 454ms
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ [Error: Input Buffer is empty]
+ ⨯ The requested resource isn't a valid image for /uploads/7f186f8e3e91e2ab6a0f37276147252e.jpg received null
