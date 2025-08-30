@@ -28,12 +28,31 @@ log_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
+# Fonction pour vérifier si un serveur est en cours sur un port
+check_server_running() {
+    local port=$1
+    local server_type=$2
+    
+    log_info "Vérification du $server_type sur le port $port..."
+    
+    # Chercher les processus utilisant le port
+    local pids=$(lsof -ti:$port 2>/dev/null || true)
+    
+    if [ -n "$pids" ]; then
+        log_warning "$server_type déjà en cours sur le port $port"
+        return 0  # Serveur en cours
+    else
+        log_info "Aucun $server_type trouvé sur le port $port"
+        return 1  # Serveur non en cours
+    fi
+}
+
 # Fonction pour arrêter les processus sur un port
 stop_process_on_port() {
     local port=$1
     local process_name=$2
     
-    log_info "Vérification des processus sur le port $port..."
+    log_info "Arrêt de $process_name sur le port $port..."
     
     # Chercher les processus utilisant le port
     local pids=$(lsof -ti:$port 2>/dev/null || true)
@@ -114,12 +133,18 @@ main() {
     log_info "🚀 Démarrage du serveur de production"
     log_info "====================================="
     
-    # Arrêter les serveurs sur les ports spécifiques
-    stop_process_on_port 3000 "serveur prod"
-    stop_process_on_port 3001 "serveur dev"
+    # Vérifier si le serveur prod est déjà en cours
+    if check_server_running 3000 "serveur de production"; then
+        log_info "🔄 Redémarrage du serveur de production..."
+    else
+        log_info "🆕 Démarrage d'un nouveau serveur de production..."
+    fi
     
-    # Arrêter tous les serveurs Next.js
-    stop_all_next_servers
+    # Arrêter tous les processus Next.js (méthode simple et efficace)
+    log_warning "Arrêt des processus Next.js..."
+    pkill -f "next.*start" 2>/dev/null || true
+    sleep 2
+    pkill -9 -f "next.*start" 2>/dev/null || true
     
     # Attendre un peu pour s'assurer que tout est arrêté
     sleep 2

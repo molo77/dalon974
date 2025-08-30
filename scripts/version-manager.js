@@ -163,24 +163,65 @@ function autoIncrement(type) {
 }
 
 // Fonction pour définir une version spécifique
-function setVersion(version) {
+function setVersion(version, targetEnv = null) {
   // Validation du format de version
   if (!/^\d+\.\d+\.\d+$/.test(version)) {
     logError(`Format de version invalide: ${version}. Utilisez le format X.Y.Z`);
     return false;
   }
   
-  logInfo(`Définition de la version ${version}...`);
-  
-  const result = updateVersions(version);
-  
-  if (result.errorCount === 0) {
-    logSuccess(`✅ Toutes les versions ont été définies à ${version}`);
-    return true;
-  } else {
-    logError(`${result.errorCount} erreur(s) lors de la mise à jour`);
+  if (targetEnv && !ENVIRONMENTS.includes(targetEnv)) {
+    logError(`Environnement invalide: ${targetEnv}. Environnements valides: ${ENVIRONMENTS.join(', ')}`);
     return false;
   }
+  
+  if (targetEnv) {
+    // Cibler un environnement spécifique
+    logInfo(`Définition de la version ${version} pour ${targetEnv}...`);
+    const packageFile = path.join(process.cwd(), targetEnv, 'package.json');
+    const packageData = readPackageJson(packageFile);
+    if (!packageData) {
+      logError(`Impossible de lire le package.json de ${targetEnv}`);
+      return false;
+    }
+    
+    const oldVersion = packageData.version;
+    packageData.version = version;
+    
+    if (writePackageJson(packageFile, packageData)) {
+      logSuccess(`✅ ${targetEnv}: ${oldVersion} → ${version}`);
+      return true;
+    } else {
+      logError(`Erreur lors de la mise à jour de la version de ${targetEnv}`);
+      return false;
+    }
+  } else {
+    // Mettre à jour tous les environnements
+    logInfo(`Définition de la version ${version} pour tous les environnements...`);
+    const result = updateVersions(version);
+    
+    if (result.errorCount === 0) {
+      logSuccess(`✅ Toutes les versions ont été définies à ${version}`);
+      return true;
+    } else {
+      logError(`${result.errorCount} erreur(s) lors de la mise à jour`);
+      return false;
+    }
+  }
+}
+
+// Fonction pour synchroniser prod avec dev
+function syncProd() {
+  logInfo('Synchronisation de prod avec la version de dev...');
+  
+  const devPackage = readPackageJson(DEV_PACKAGE_FILE);
+  if (!devPackage) {
+    logError('Impossible de lire la version de dev');
+    return false;
+  }
+  
+  const devVersion = devPackage.version;
+  return setVersion(devVersion, 'prod');
 }
 
 // Fonction pour afficher l'aide
@@ -192,19 +233,28 @@ function showHelp() {
   log('');
   log('Commandes:', 'bright');
   log('  show                    Afficher les versions actuelles');
-  log('  patch                   Incrémenter la version patch (0.2.0 → 0.2.1)');
-  log('  minor                   Incrémenter la version minor (0.2.0 → 0.3.0)');
-  log('  major                   Incrémenter la version major (0.2.0 → 1.0.0)');
-  log('  set <version>           Définir une version spécifique (ex: 1.0.0)');
+  log('  patch                   Incrémenter la version patch de dev (0.2.0 → 0.2.1)');
+  log('  minor                   Incrémenter la version minor de dev (0.2.0 → 0.3.0)');
+  log('  major                   Incrémenter la version major de dev (0.2.0 → 1.0.0)');
+  log('  set <version> [env]     Définir une version spécifique (ex: 1.0.0)');
+  log('  sync-prod               Synchroniser prod avec la version de dev');
   log('  help                    Afficher cette aide');
   log('');
   log('Exemples:', 'bright');
   log('  node scripts/version-manager.js show');
-  log('  node scripts/version-manager.js minor');
+  log('  node scripts/version-manager.js patch');
   log('  node scripts/version-manager.js set 1.0.0');
+  log('  node scripts/version-manager.js set 1.0.0 dev');
+  log('  node scripts/version-manager.js set 1.0.0 prod');
+  log('  node scripts/version-manager.js sync-prod');
   log('');
   log('Environnements gérés:', 'bright');
   ENVIRONMENTS.forEach(env => log(`  - ${env}`, 'cyan'));
+  log('');
+  log('Notes:', 'bright');
+  log('  - Les commandes patch/minor/major ne modifient que dev');
+  log('  - Utilisez sync-prod pour synchroniser prod avec dev');
+  log('  - Utilisez set <version> <env> pour cibler un environnement spécifique');
 }
 
 // Fonction principale
@@ -230,11 +280,16 @@ function main() {
       
     case 'set':
       const version = args[1];
+      const targetEnv = args[2];
       if (!version) {
-        logError('Version manquante. Usage: set <version>');
+        logError('Version manquante. Usage: set <version> [env]');
         process.exit(1);
       }
-      setVersion(version);
+      setVersion(version, targetEnv);
+      break;
+      
+    case 'sync-prod':
+      syncProd();
       break;
       
     default:

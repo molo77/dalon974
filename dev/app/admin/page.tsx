@@ -161,7 +161,23 @@ export default function AdminPage() {
     }
     return ()=>{ if (pollingRef.current){ clearInterval(pollingRef.current); pollingRef.current=null; } };
   },[activeTab, scraperRuns, showScraperLogs]);
-  const updateCfgField = (k:string,v:string) => setScraperConfig(prev=>({ ...prev, [k]: v }));
+  const updateCfgField = async (k:string,v:string) => {
+    setScraperConfig(prev=>({ ...prev, [k]: v }));
+    
+    // Sauvegarde automatique après un délai
+    setTimeout(async () => {
+      try {
+        setScraperSaving(true);
+        const body: Record<string,string> = {};
+        Object.entries({...scraperConfig, [k]: v}).forEach(([key,val])=>{ if(val!==undefined) body[key]=val; });
+        const res = await fetch('/api/admin/scraper/settings',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+        if(!res.ok) throw new Error('save fail');
+        showToast('success','Config sauvegardée automatiquement ✅');
+      } catch{ showToast('error','Erreur sauvegarde config'); }
+      finally { setScraperSaving(false); }
+    }, 1000); // Délai de 1 seconde pour éviter trop de requêtes
+  };
+  
   const saveConfig = async () => {
     try {
       setScraperSaving(true);
@@ -403,6 +419,15 @@ export default function AdminPage() {
       }
       setAdminSelected([]);
       showToast("success", "Annonces supprimées ✅");
+      
+      // Recharger la liste après suppression
+      const refreshRes = await fetch("/api/annonces?limit=200", { cache: "no-store" });
+      if (refreshRes.ok) {
+        const data = await refreshRes.json();
+        const items = data.items || [];
+        const mapped = items.map((a: any) => ({ ...a, titre: a.titre ?? a.title ?? "" }));
+        setAdminAnnonces(mapped);
+      }
     } catch (e) {
       console.error("[Admin][BulkDelete]", e);
       showToast("error", "Erreur suppression multiple.");
@@ -745,66 +770,70 @@ export default function AdminPage() {
             <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight">
               Administration
             </h1>
-            {/* Boutons de création d'exemples */}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    setAdminLoading(true);
-                    const villes = ['Saint-Denis', 'Saint-Paul', 'Saint-Pierre', 'Le Tampon', 'Saint-André', 'Saint-Louis', 'Le Port', 'La Possession', 'Saint-Joseph', 'Saint-Benoît'];
-                    const types = ['Appartement', 'Maison', 'Studio', 'T2', 'T3', 'T4'];
-                    const professions = ['Étudiant', 'Employé', 'Cadre', 'Artisan', 'Commerçant', 'Profession libérale'];
-                    
-                    let createdCount = 0;
-                    for (let i = 0; i < 20; i++) {
-                      const ville = villes[i % villes.length];
-                      const type = types[i % types.length];
-                      const profession = professions[i % professions.length];
-                      const prix = 350 + (i * 25) + Math.floor(Math.random() * 100);
-                      const surface = 15 + (i * 2) + Math.floor(Math.random() * 20);
+            {/* Boutons de création d'exemples - seulement en développement */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      setAdminLoading(true);
+                      const villes = ['Saint-Denis', 'Saint-Paul', 'Saint-Pierre', 'Le Tampon', 'Saint-André', 'Saint-Louis', 'Le Port', 'La Possession', 'Saint-Joseph', 'Saint-Benoît'];
+                      const types = ['Appartement', 'Maison', 'Studio', 'T2', 'T3', 'T4'];
+                      const professions = ['Étudiant', 'Employé', 'Cadre', 'Artisan', 'Commerçant', 'Profession libérale'];
                       
-                      const res = await fetch('/api/annonces', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          titre: `Colocation ${type} ${ville} - ${profession}`,
-                          description: `Belle colocation ${type.toLowerCase()} à ${ville}, idéal pour ${profession.toLowerCase()}. Logement meublé avec toutes commodités.`,
-                          ville: ville,
-                          prix: prix,
-                          surface: surface,
-                          nbChambres: 1 + (i % 3),
-                          typeBien: type,
-                          meuble: true,
-                          nbPieces: 2 + (i % 4)
-                        })
-                      });
-                      if (res.ok) {
-                        createdCount++;
+                      let createdCount = 0;
+                      for (let i = 0; i < 20; i++) {
+                        const ville = villes[i % villes.length];
+                        const type = types[i % types.length];
+                        const profession = professions[i % professions.length];
+                        const prix = 350 + (i * 25) + Math.floor(Math.random() * 100);
+                        const surface = 15 + (i * 2) + Math.floor(Math.random() * 20);
+                        
+                        const res = await fetch('/api/annonces', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            titre: `Colocation ${type} ${ville} - ${profession}`,
+                            description: `Belle colocation ${type.toLowerCase()} à ${ville}, idéal pour ${profession.toLowerCase()}. Logement meublé avec toutes commodités.`,
+                            ville: ville,
+                            prix: prix,
+                            surface: surface,
+                            nbChambres: 1 + (i % 3),
+                            typeBien: type,
+                            meuble: true,
+                            nbPieces: 2 + (i % 4)
+                          })
+                        });
+                        if (res.ok) {
+                          createdCount++;
+                        }
                       }
+                      
+                      showToast('success', `${createdCount} annonces exemples créées ✅`);
+                      // Recharger la liste
+                      const refreshRes = await fetch("/api/annonces?limit=200", { cache: "no-store" });
+                      if (refreshRes.ok) {
+                        const data = await refreshRes.json();
+                        // L'API retourne maintenant { items: [], total: number }
+                        const items = data.items || [];
+                        const mapped = items.map((a: any) => ({ ...a, titre: a.titre ?? a.title ?? "" }));
+                        setAdminAnnonces(mapped);
+                      }
+                    } catch (e) {
+                      console.error('[Admin][CreateExampleAnnonces]', e);
+                      showToast('error', 'Erreur création annonces exemples');
+                    } finally {
+                      setAdminLoading(false);
                     }
-                    
-                    showToast('success', `${createdCount} annonces exemples créées ✅`);
-                    // Recharger la liste
-                    const refreshRes = await fetch("/api/annonces?limit=200", { cache: "no-store" });
-                    if (refreshRes.ok) {
-                      const items = await refreshRes.json();
-                      const mapped = (Array.isArray(items) ? items : []).map((a: any) => ({ ...a, titre: a.titre ?? a.title ?? "" }));
-                      setAdminAnnonces(mapped);
-                    }
-                  } catch (e) {
-                    console.error('[Admin][CreateExampleAnnonces]', e);
-                    showToast('error', 'Erreur création annonces exemples');
-                  } finally {
-                    setAdminLoading(false);
-                  }
-                }}
-                disabled={adminLoading}
-                className="bg-green-600 text-white px-3 py-1.5 text-sm rounded hover:bg-green-700 disabled:opacity-60"
-              >
-                {adminLoading ? "Création..." : "Créer 20 exemples annonces"}
-              </button>
-            </div>
+                  }}
+                  disabled={adminLoading}
+                  className="bg-green-600 text-white px-3 py-1.5 text-sm rounded hover:bg-green-700 disabled:opacity-60"
+                >
+                  {adminLoading ? "Création..." : "Créer 20 exemples annonces"}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-xl shadow-lg p-8">
@@ -955,6 +984,15 @@ export default function AdminPage() {
                   Object.keys(payload).forEach((k) => (payload[k] === "" || payload[k] === null) && delete payload[k]);
                   await updateAnnonce(editAnnonce.id, payload);
                   showToast("success", "Annonce mise à jour ✅");
+                  
+                  // Recharger la liste après mise à jour
+                  const refreshRes = await fetch("/api/annonces?limit=200", { cache: "no-store" });
+                  if (refreshRes.ok) {
+                    const data = await refreshRes.json();
+                    const items = data.items || [];
+                    const mapped = items.map((a: any) => ({ ...a, titre: a.titre ?? a.title ?? "" }));
+                    setAdminAnnonces(mapped);
+                  }
                 } catch (e: any) {
                   console.error("[Admin][UpdateAnnonce]", e);
                   showToast("error", "Erreur lors de la mise à jour.");
@@ -1052,71 +1090,73 @@ export default function AdminPage() {
             >
               {adminLoading ? "Suppression..." : `Supprimer la sélection (${adminColocsSelected.length})`}
             </button>
-            {/* Boutons de création d'exemples */}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    setAdminLoading(true);
-                    const villes = ['Saint-Denis', 'Saint-Paul', 'Saint-Pierre', 'Le Tampon', 'Saint-André', 'Saint-Louis', 'Le Port', 'La Possession', 'Saint-Joseph', 'Saint-Benoît'];
-                    const professions = ['Étudiant', 'Employé', 'Cadre', 'Artisan', 'Commerçant', 'Profession libérale', 'Développeur', 'Infirmier', 'Enseignant', 'Médecin'];
-                    const noms = ['Alex', 'Marie', 'Thomas', 'Sophie', 'Lucas', 'Emma', 'Hugo', 'Léa', 'Nathan', 'Chloé', 'Louis', 'Jade', 'Gabriel', 'Inès', 'Raphaël', 'Zoé', 'Antoine', 'Lola', 'Maxime', 'Camille'];
-                    const zones = [['Nord'], ['Ouest'], ['Sud'], ['Est'], ['Intérieur'], ['Nord', 'Ouest'], ['Sud', 'Est'], ['Ouest', 'Sud'], ['Nord', 'Est'], ['Intérieur', 'Nord']];
-                    
-                    let createdCount = 0;
-                    for (let i = 0; i < 20; i++) {
-                      const ville = villes[i % villes.length];
-                      const profession = professions[i % professions.length];
-                      const nom = noms[i % noms.length];
-                      const zone = zones[i % zones.length];
-                      const budget = 350 + (i * 30) + Math.floor(Math.random() * 150);
-                      const age = 20 + (i % 15) + Math.floor(Math.random() * 10);
+            {/* Boutons de création d'exemples - seulement en développement */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      setAdminLoading(true);
+                      const villes = ['Saint-Denis', 'Saint-Paul', 'Saint-Pierre', 'Le Tampon', 'Saint-André', 'Saint-Louis', 'Le Port', 'La Possession', 'Saint-Joseph', 'Saint-Benoît'];
+                      const professions = ['Étudiant', 'Employé', 'Cadre', 'Artisan', 'Commerçant', 'Profession libérale', 'Développeur', 'Infirmier', 'Enseignant', 'Médecin'];
+                      const noms = ['Alex', 'Marie', 'Thomas', 'Sophie', 'Lucas', 'Emma', 'Hugo', 'Léa', 'Nathan', 'Chloé', 'Louis', 'Jade', 'Gabriel', 'Inès', 'Raphaël', 'Zoé', 'Antoine', 'Lola', 'Maxime', 'Camille'];
+                      const zones = [['Nord'], ['Ouest'], ['Sud'], ['Est'], ['Intérieur'], ['Nord', 'Ouest'], ['Sud', 'Est'], ['Ouest', 'Sud'], ['Nord', 'Est'], ['Intérieur', 'Nord']];
                       
-                      const res = await fetch('/api/coloc', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          description: `Jeune ${profession.toLowerCase()} de ${age} ans, je recherche une colocation sympa à ${ville}. Je suis ${profession.toLowerCase()}, propre et respectueux.`,
-                          ville: ville,
-                          budget: budget,
-                          age: age,
-                          profession: profession,
-                          nom: nom,
-                          zones: zone,
-                          communesSlugs: [ville.toLowerCase().replace(/\s+/g, '-')],
-                          bioCourte: `${profession} de ${age} ans, recherche colocation à ${ville}`,
-                          genre: i % 2 === 0 ? 'Homme' : 'Femme',
-                          accepteFumeurs: i % 3 === 0,
-                          accepteAnimaux: i % 4 === 0,
-                          sportif: i % 2 === 0,
-                          vegetarien: i % 5 === 0,
-                          soirees: i % 3 === 0,
-                          musique: i % 2 === 0 ? 'Pop/Rock' : 'Jazz/Classique'
-                        })
-                      });
-                      if (res.ok) {
-                        createdCount++;
+                      let createdCount = 0;
+                      for (let i = 0; i < 20; i++) {
+                        const ville = villes[i % villes.length];
+                        const profession = professions[i % professions.length];
+                        const nom = noms[i % noms.length];
+                        const zone = zones[i % zones.length];
+                        const budget = 350 + (i * 30) + Math.floor(Math.random() * 150);
+                        const age = 20 + (i % 15) + Math.floor(Math.random() * 10);
+                        
+                        const res = await fetch('/api/coloc', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            description: `Jeune ${profession.toLowerCase()} de ${age} ans, je recherche une colocation sympa à ${ville}. Je suis ${profession.toLowerCase()}, propre et respectueux.`,
+                            ville: ville,
+                            budget: budget,
+                            age: age,
+                            profession: profession,
+                            nom: nom,
+                            zones: zone,
+                            communesSlugs: [ville.toLowerCase().replace(/\s+/g, '-')],
+                            bioCourte: `${profession} de ${age} ans, recherche colocation à ${ville}`,
+                            genre: i % 2 === 0 ? 'Homme' : 'Femme',
+                            accepteFumeurs: i % 3 === 0,
+                            accepteAnimaux: i % 4 === 0,
+                            sportif: i % 2 === 0,
+                            vegetarien: i % 5 === 0,
+                            soirees: i % 3 === 0,
+                            musique: i % 2 === 0 ? 'Pop/Rock' : 'Jazz/Classique'
+                          })
+                        });
+                        if (res.ok) {
+                          createdCount++;
+                        }
                       }
+                      
+                      showToast('success', `${createdCount} profils coloc exemples créés ✅`);
+                      // Recharger la liste
+                      const result = await listColoc({ limit: 200 });
+                      setAdminColocs(result.items);
+                    } catch (e) {
+                      console.error('[Admin][CreateExampleColocs]', e);
+                      showToast('error', 'Erreur création profils coloc exemples');
+                    } finally {
+                      setAdminLoading(false);
                     }
-                    
-                    showToast('success', `${createdCount} profils coloc exemples créés ✅`);
-                    // Recharger la liste
-                    const result = await listColoc({ limit: 200 });
-                    setAdminColocs(result.items);
-                  } catch (e) {
-                    console.error('[Admin][CreateExampleColocs]', e);
-                    showToast('error', 'Erreur création profils coloc exemples');
-                  } finally {
-                    setAdminLoading(false);
-                  }
-                }}
-                disabled={adminLoading}
-                className="bg-green-600 text-white px-3 py-1.5 text-sm rounded hover:bg-green-700 disabled:opacity-60"
-              >
-                {adminLoading ? "Création..." : "Créer 20 exemples colocs"}
-              </button>
-            </div>
+                  }}
+                  disabled={adminLoading}
+                  className="bg-green-600 text-white px-3 py-1.5 text-sm rounded hover:bg-green-700 disabled:opacity-60"
+                >
+                  {adminLoading ? "Création..." : "Créer 20 exemples colocs"}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Liste profils */}
@@ -1506,7 +1546,7 @@ export default function AdminPage() {
                 {showScraperConfig ? '🔽 Masquer config' : '🔼 Afficher config'}
               </button>
               <button disabled={scraperLoading} onClick={loadScraper} className='px-3 py-1.5 text-sm rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-50'>Rafraîchir</button>
-              <button disabled={scraperSaving} onClick={saveConfig} className='px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'>{scraperSaving? 'Sauvegarde...' : 'Sauvegarder config'}</button>
+
               <button disabled={scraperLaunching} onClick={launchScraper} className='px-3 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50'>{scraperLaunching? 'Lancement...' : 'Lancer scraper'}</button>
               <button disabled={scraperCancelling} onClick={cancelRun} className='px-3 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50'>{scraperCancelling? 'Annulation...' : 'Annuler'}</button>
               <button disabled={scraperPurging} onClick={()=>openPurge('runs')} className='px-3 py-1.5 text-sm rounded bg-slate-600 text-white hover:bg-slate-700 disabled:opacity-50'>{scraperPurging? 'Purging...' : 'Purge runs'}</button>
@@ -1530,7 +1570,14 @@ export default function AdminPage() {
           </div>
           {scraperLoading ? <p>Chargement config…</p> : showScraperConfig && (
             <div className='border border-slate-200 rounded-lg p-4 bg-slate-50'>
-              <h3 className='text-lg font-semibold mb-3 text-slate-700'>Configuration du Scraper</h3>
+              <div className='flex items-center justify-between mb-3'>
+                <h3 className='text-lg font-semibold text-slate-700'>Configuration du Scraper</h3>
+                {scraperSaving && (
+                  <span className='text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded'>
+                    💾 Sauvegarde automatique...
+                  </span>
+                )}
+              </div>
               <div className='grid md:grid-cols-2 gap-4'>
                 {fields.map(k => {
                   const isSens = sensitive.has(k);

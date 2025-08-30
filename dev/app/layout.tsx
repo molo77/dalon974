@@ -6,6 +6,7 @@ import MaintenanceAlert from '@/components/maintenance/MaintenanceAlert'
 import Header from '@/components/layout/Header'
 import LeafletStyles from '@/components/map/LeafletStyles'
 import DevIndicator from '@/components/layout/DevIndicator'
+import { GlobalToast } from '@/components/ui/feedback/Toast'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -37,6 +38,8 @@ export default function RootLayout({
           />
           {/* Styles Leaflet pour la carte */}
           <LeafletStyles />
+          {/* Toast global */}
+          <GlobalToast />
         </AuthProvider>
       </body>
     </html>

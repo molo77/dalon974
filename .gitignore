@@ -196,6 +196,9 @@ test-*.json
 temp-*.js
 debug-*.txt
 
+# Fichiers de suivi des démarrages
+.last-dev-start
+
 # ========================================
 # EXCEPTIONS (FICHIERS À CONSERVER)
 # ========================================

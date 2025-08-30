@@ -33,7 +33,14 @@
     "version:major": "node scripts/version-manager.js major",
     "version:set": "node scripts/version-manager.js set",
     "commit:version": "node scripts/commit-version.js show",
-    "commit:generate": "node scripts/commit-version.js generate"
+    "commit:generate": "node scripts/commit-version.js generate",
+    "test:auto-version": "node scripts/test-auto-version.js",
+    "test:version-increment": "node scripts/test-version-increment.js",
+    "version:show": "node scripts/version-manager.js show",
+    "version:patch": "node scripts/version-manager.js patch",
+    "version:minor": "node scripts/version-manager.js minor",
+    "version:major": "node scripts/version-manager.js major",
+    "version:sync-prod": "node scripts/version-manager.js sync-prod"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",
