@@ -71,3 +71,6 @@ functions/serviceAccount*.json
 
 
 lbc-simple-result.png
+prod/
+backups/
+dev/public/uploads/*
