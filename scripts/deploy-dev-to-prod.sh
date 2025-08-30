@@ -66,21 +66,21 @@ clean_prod() {
     # Arrêt des processus
     check_process 3000
     
-    # Nettoyage des fichiers
-    rm -rf .next node_modules package-lock.json
-    log_success "Environnement de production nettoyé"
+    # Nettoyage des fichiers (garder .next pour copier le build de dev)
+    rm -rf node_modules package-lock.json
+    log_success "Environnement de production nettoyé (build .next conservé)"
 }
 
 # Copie des fichiers
 copy_files() {
     log_info "Copie des fichiers de dev vers prod..."
     
-    # Fichiers applicatifs
-    rsync -av --exclude='node_modules' --exclude='.next' --exclude='logs' \
+    # Fichiers applicatifs (incluant le build .next)
+    rsync -av --exclude='node_modules' --exclude='logs' \
         --exclude='public/uploads' \
         "$DEV_DIR/" "$PROD_DIR/"
     
-    log_success "Fichiers copiés avec succès"
+    log_success "Fichiers copiés avec succès (incluant le build .next)"
 }
 
 # Installation des dépendances
@@ -167,7 +167,9 @@ main() {
     clean_prod
     copy_files
     install_dependencies
-    build_application
+    
+    # Note: Pas de build nécessaire car on copie le .next de dev
+    log_info "Build copié depuis dev, pas de rebuild nécessaire"
     
     # Synchronisation de la structure de base de données
     log_info "Synchronisation de la structure MySQL..."

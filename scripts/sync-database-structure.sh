@@ -216,15 +216,9 @@ stop_servers() {
 restart_servers() {
     log_info "Redémarrage des serveurs après synchronisation MySQL..."
     
-    # Redémarrage du serveur de développement
-    log_info "Redémarrage du serveur de développement..."
-    bash "$DEV_DIR/scripts/dev-start.sh" &
-    sleep 5
-    
-    # Redémarrage du serveur de production
-    log_info "Redémarrage du serveur de production..."
-    bash "$PROD_DIR/scripts/prod-start.sh" &
-    sleep 5
+    # Utiliser le script server-manager.sh unifié
+    local script_dir=$(dirname "$(readlink -f "$0")")
+    "$script_dir/server-manager.sh" both
     
     log_success "Serveurs redémarrés après synchronisation MySQL"
 }
