@@ -1,11 +1,11 @@
 {
-  "name": "dalon974",
-  "version": "0.3.2",
+  "name": "dalon974-dev",
+  "version": "0.3.12",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "dev": "next dev -H 0.0.0.0 -p 3001",
     "build": "next build",
-    "start": "next start -H 0.0.0.0 -p 3000",
+    "start": "next start -H 0.0.0.0 -p 3001",
     "lint": "next lint",
     "prebuild": "node scripts/utils/build-reunion-geo.mjs",
     "prisma:generate": "prisma generate",

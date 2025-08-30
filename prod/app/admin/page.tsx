@@ -162,7 +162,23 @@ export default function AdminPage() {
     }
     return ()=>{ if (pollingRef.current){ clearInterval(pollingRef.current); pollingRef.current=null; } };
   },[activeTab, scraperRuns, showScraperLogs]);
-  const updateCfgField = (k:string,v:string) => setScraperConfig(prev=>({ ...prev, [k]: v }));
+  const updateCfgField = async (k:string,v:string) => {
+    setScraperConfig(prev=>({ ...prev, [k]: v }));
+    
+    // Sauvegarde automatique après un délai
+    setTimeout(async () => {
+      try {
+        setScraperSaving(true);
+        const body: Record<string,string> = {};
+        Object.entries({...scraperConfig, [k]: v}).forEach(([key,val])=>{ if(val!==undefined) body[key]=val; });
+        const res = await fetch('/api/admin/scraper/settings',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+        if(!res.ok) throw new Error('save fail');
+        showToast('success','Config sauvegardée automatiquement ✅');
+      } catch{ showToast('error','Erreur sauvegarde config'); }
+      finally { setScraperSaving(false); }
+    }, 1000); // Délai de 1 seconde pour éviter trop de requêtes
+  };
+  
   const saveConfig = async () => {
     try {
       setScraperSaving(true);
@@ -1531,7 +1547,7 @@ export default function AdminPage() {
                 {showScraperConfig ? '🔽 Masquer config' : '🔼 Afficher config'}
               </button>
               <button disabled={scraperLoading} onClick={loadScraper} className='px-3 py-1.5 text-sm rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-50'>Rafraîchir</button>
-              <button disabled={scraperSaving} onClick={saveConfig} className='px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'>{scraperSaving? 'Sauvegarde...' : 'Sauvegarder config'}</button>
+
               <button disabled={scraperLaunching} onClick={launchScraper} className='px-3 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50'>{scraperLaunching? 'Lancement...' : 'Lancer scraper'}</button>
               <button disabled={scraperCancelling} onClick={cancelRun} className='px-3 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50'>{scraperCancelling? 'Annulation...' : 'Annuler'}</button>
               <button disabled={scraperPurging} onClick={()=>openPurge('runs')} className='px-3 py-1.5 text-sm rounded bg-slate-600 text-white hover:bg-slate-700 disabled:opacity-50'>{scraperPurging? 'Purging...' : 'Purge runs'}</button>
@@ -1555,7 +1571,14 @@ export default function AdminPage() {
           </div>
           {scraperLoading ? <p>Chargement config…</p> : showScraperConfig && (
             <div className='border border-slate-200 rounded-lg p-4 bg-slate-50'>
-              <h3 className='text-lg font-semibold mb-3 text-slate-700'>Configuration du Scraper</h3>
+              <div className='flex items-center justify-between mb-3'>
+                <h3 className='text-lg font-semibold text-slate-700'>Configuration du Scraper</h3>
+                {scraperSaving && (
+                  <span className='text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded'>
+                    💾 Sauvegarde automatique...
+                  </span>
+                )}
+              </div>
               <div className='grid md:grid-cols-2 gap-4'>
                 {fields.map(k => {
                   const isSens = sensitive.has(k);

@@ -2,6 +2,7 @@
 set -e
 
 # Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEV_DIR="/data/dalon974/dev"
 PROD_DIR="/data/dalon974/prod"
 BACKUP_DIR="/data/dalon974/backups"

@@ -7,7 +7,7 @@ export async function GET() {
     // Fonction pour lire la version depuis package.json
     function getPackageVersion(): string {
       try {
-        // Lire depuis le package.json de prod (répertoire prod)
+        // Lire depuis le package.json de dev (répertoire dev)
         const packagePath = path.join(process.cwd(), 'package.json');
         console.log('[API][version] Lecture package.json depuis:', packagePath);
         const packageContent = fs.readFileSync(packagePath, 'utf8');
