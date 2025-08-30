@@ -1,14 +1,35 @@
 import { NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export async function GET() {
   try {
+    // Vérification de la base de données
+    const dbStartTime = Date.now();
+    let dbStatus = 'error';
+    let dbResponseTime = 0;
+    let dbMessage = 'Database connection failed';
+
+    try {
+      // Test de connexion à la base de données
+      await prisma.$queryRaw`SELECT 1`;
+      dbStatus = 'connected';
+      dbResponseTime = Date.now() - dbStartTime;
+      dbMessage = 'Database connection successful';
+    } catch (dbError) {
+      dbStatus = 'error';
+      dbResponseTime = Date.now() - dbStartTime;
+      dbMessage = dbError instanceof Error ? dbError.message : 'Database connection failed';
+    }
+
     return NextResponse.json({
       status: 'healthy',
       timestamp: new Date().toISOString(),
       database: {
-        status: 'not_configured',
-        responseTime: 0,
-        message: 'Database not configured for development'
+        status: dbStatus,
+        responseTime: dbResponseTime,
+        message: dbMessage
       },
       server: {
         status: 'running',
@@ -26,5 +47,7 @@ export async function GET() {
     }, {
       status: 500
     });
+  } finally {
+    await prisma.$disconnect();
   }
 }

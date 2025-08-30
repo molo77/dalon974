@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/authOptions';
+import fs from 'fs';
+import path from 'path';
 
 export async function GET() {
   try {
@@ -10,10 +12,24 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Fonction pour lire la version depuis package.json
+    function getPackageVersion(): string {
+      try {
+        // Lire depuis le package.json de dev (répertoire courant)
+        const packagePath = path.join(process.cwd(), 'package.json');
+        const packageContent = fs.readFileSync(packagePath, 'utf8');
+        const packageData = JSON.parse(packageContent);
+        return packageData.version || '0.2.0';
+      } catch (error) {
+        console.error('[API][admin][version] Erreur lecture package.json:', error);
+        return '0.2.0';
+      }
+    }
+
     // Récupération des informations de version
     const versionInfo = {
       environment: process.env.NODE_ENV || 'unknown',
-      version: process.env.npm_package_version || '0.2.0',
+      version: getPackageVersion(),
       buildTime: new Date().toLocaleString('fr-FR', {
         timeZone: 'Europe/Paris',
         year: 'numeric',

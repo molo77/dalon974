@@ -3,6 +3,10 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
+    "dev": "./scripts/start-dev.sh",
+    "prod": "./scripts/start-prod.sh",
+    "both": "./scripts/start-both.sh",
+    "stop": "./scripts/stop-servers.sh",
     "dev:start": "./dev/scripts/dev-start.sh",
     "prod:start": "./prod/scripts/prod-start.sh",
     "deploy:dev-to-prod": "./scripts/deploy-dev-to-prod.sh",
