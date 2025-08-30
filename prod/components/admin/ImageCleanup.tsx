@@ -29,13 +29,13 @@ export default function ImageCleanup() {
 
       if (response.ok) {
         setLastResult(result);
-        toast.success(`Nettoyage terminé${dryRun ? ' (mode test)' : ''} ✅`);
+        showToast('success', `Nettoyage terminé${dryRun ? ' (mode test)' : ''} ✅`);
       } else {
-        toast.error(`Erreur: ${result.error || 'Erreur inconnue'} ❌`);
+        showToast('error', `Erreur: ${result.error || 'Erreur inconnue'} ❌`);
       }
     } catch (error) {
       console.error('Erreur lors du nettoyage:', error);
-      toast.error('Erreur lors du nettoyage ❌');
+      showToast('error', 'Erreur lors du nettoyage ❌');
     } finally {
       setIsLoading(false);
     }
@@ -61,12 +61,13 @@ export default function ImageCleanup() {
 
       if (response.ok) {
         setLastResult(result);
-        showToast('Test de nettoyage terminé ✅');
+        showToast('success', 'Test de nettoyage terminé ✅');
       } else {
-        toast.error(`Erreur: ${result.error || 'Erreur inconnue'} ❌`);
+        showToast('error', `Erreur: ${result.error || 'Erreur inconnue'} ❌`);
       }
     } catch (error) {
       console.error('Erreur lors du test ❌');
+      showToast('error', 'Erreur lors du test ❌');
     } finally {
       setIsLoading(false);
     }
