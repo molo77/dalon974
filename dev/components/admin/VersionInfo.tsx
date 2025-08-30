@@ -20,13 +20,17 @@ export default function VersionInfo() {
   useEffect(() => {
     const fetchVersionInfo = async () => {
       try {
+        console.log('[VersionInfo] Début de la récupération des informations de version');
         const response = await fetch('/api/version');
+        console.log('[VersionInfo] Réponse reçue:', response.status, response.ok);
         if (!response.ok) {
           throw new Error('Erreur lors de la récupération des informations de version');
         }
         const data = await response.json();
+        console.log('[VersionInfo] Données reçues:', data);
         setVersionInfo(data);
       } catch (err) {
+        console.error('[VersionInfo] Erreur:', err);
         setError(err instanceof Error ? err.message : 'Erreur inconnue');
       } finally {
         setLoading(false);
