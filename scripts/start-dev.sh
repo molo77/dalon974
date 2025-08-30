@@ -245,24 +245,10 @@ pre_build_dev() {
         exit 1
     fi
     
-    # Vérifier si le build existe et s'il est à jour
-    if [ ! -d ".next" ]; then
-        log_warning "Build de développement non trouvé. Construction en cours..."
-        npm run build
-        log_success "Build de développement terminé"
-    else
-        # Vérifier si des fichiers ont été modifiés depuis le dernier build
-        local build_time=$(stat -c %Y .next 2>/dev/null || echo "0")
-        local latest_file_time=$(find . -type f -not -path "./node_modules/*" -not -path "./.next/*" -not -path "./.git/*" -exec stat -c %Y {} \; 2>/dev/null | sort -nr | head -1)
-        
-        if [ "$latest_file_time" -gt "$build_time" ]; then
-            log_warning "Fichiers modifiés détectés. Reconstruction en cours..."
-            npm run build
-            log_success "Build de développement mis à jour"
-        else
-            log_info "Build de développement à jour"
-        fi
-    fi
+    # Toujours reconstruire puisque le dossier .next a été supprimé
+    log_warning "Construction de l'application de développement..."
+    npm run build
+    log_success "Build de développement terminé"
     
     # Retourner au répertoire racine
     cd ..
@@ -295,6 +281,15 @@ main() {
     
     # Attendre un peu pour s'assurer que tout est arrêté
     sleep 2
+    
+    # Supprimer le dossier .next pour forcer un rebuild complet
+    log_info "🧹 Nettoyage du build précédent..."
+    if [ -d "dev/.next" ]; then
+        rm -rf dev/.next
+        log_success "Dossier .next supprimé"
+    else
+        log_info "Aucun dossier .next trouvé"
+    fi
     
     log_info "Démarrage du serveur de développement..."
     

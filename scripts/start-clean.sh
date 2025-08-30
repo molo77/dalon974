@@ -55,7 +55,18 @@ stop_all_servers() {
     # Attendre que tout soit arrêté
     sleep 3
     
-    log_success "Tous les processus serveur arrêtés"
+    # Supprimer les dossiers .next pour forcer un rebuild complet
+    log_info "🧹 Nettoyage des builds précédents..."
+    if [ -d "dev/.next" ]; then
+        rm -rf dev/.next
+        log_success "Dossier .next de dev supprimé"
+    fi
+    if [ -d "prod/.next" ]; then
+        rm -rf prod/.next
+        log_success "Dossier .next de prod supprimé"
+    fi
+    
+    log_success "Tous les processus serveur arrêtés et builds nettoyés"
 }
 
 # Fonction pour vérifier qu'aucun processus ne tourne
@@ -84,23 +95,9 @@ start_dev() {
     
     # Pré-build de développement
     log_info "🔨 Pré-build de développement..."
-    if [ ! -d ".next" ]; then
-        log_warning "Build de développement non trouvé. Construction en cours..."
-        npm run build
-        log_success "Build de développement terminé"
-    else
-        # Vérifier si des fichiers ont été modifiés depuis le dernier build
-        local build_time=$(stat -c %Y .next 2>/dev/null || echo "0")
-        local latest_file_time=$(find . -type f -not -path "./node_modules/*" -not -path "./.next/*" -not -path "./.git/*" -exec stat -c %Y {} \; 2>/dev/null | sort -nr | head -1)
-        
-        if [ "$latest_file_time" -gt "$build_time" ]; then
-            log_warning "Fichiers modifiés détectés. Reconstruction en cours..."
-            npm run build
-            log_success "Build de développement mis à jour"
-        else
-            log_info "Build de développement à jour"
-        fi
-    fi
+    log_warning "Construction de l'application de développement..."
+    npm run build
+    log_success "Build de développement terminé"
     
     log_success "Démarrage de Next.js en mode développement..."
     npm run dev

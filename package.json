@@ -36,10 +36,6 @@
     "commit:generate": "node scripts/commit-version.js generate",
     "test:auto-version": "node scripts/test-auto-version.js",
     "test:version-increment": "node scripts/test-version-increment.js",
-    "version:show": "node scripts/version-manager.js show",
-    "version:patch": "node scripts/version-manager.js patch",
-    "version:minor": "node scripts/version-manager.js minor",
-    "version:major": "node scripts/version-manager.js major",
     "version:sync-prod": "node scripts/version-manager.js sync-prod"
   },
   "dependencies": {
@@ -79,5 +75,6 @@
     "ts-node": "^10.9.2",
     "typescript": "^5",
     "typescript-eslint": "^8.39.1"
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

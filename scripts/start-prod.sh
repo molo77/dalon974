@@ -160,6 +160,15 @@ main() {
     # Attendre un peu pour s'assurer que tout est arrêté
     sleep 2
     
+    # Supprimer le dossier .next pour forcer un rebuild complet
+    log_info "🧹 Nettoyage du build précédent..."
+    if [ -d "prod/.next" ]; then
+        rm -rf prod/.next
+        log_success "Dossier .next supprimé"
+    else
+        log_info "Aucun dossier .next trouvé"
+    fi
+    
     log_info "Démarrage du serveur de production..."
     
     # Pré-build de production
