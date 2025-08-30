@@ -245,6 +245,15 @@ pre_build_dev() {
         exit 1
     fi
     
+    # Supprimer package-lock.json pour un build propre
+    log_info "🧹 Suppression de package-lock.json pour un build propre..."
+    if [ -f "package-lock.json" ]; then
+        rm -f package-lock.json
+        log_success "package-lock.json supprimé"
+    else
+        log_info "Aucun package-lock.json trouvé"
+    fi
+    
     # Toujours reconstruire puisque le dossier .next a été supprimé
     log_warning "Construction de l'application de développement..."
     npm run build

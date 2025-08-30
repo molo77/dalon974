@@ -95,6 +95,16 @@ start_dev() {
     
     # Pré-build de développement
     log_info "🔨 Pré-build de développement..."
+    
+    # Supprimer package-lock.json pour un build propre
+    log_info "🧹 Suppression de package-lock.json pour un build propre..."
+    if [ -f "package-lock.json" ]; then
+        rm -f package-lock.json
+        log_success "package-lock.json supprimé"
+    else
+        log_info "Aucun package-lock.json trouvé"
+    fi
+    
     log_warning "Construction de l'application de développement..."
     npm run build
     log_success "Build de développement terminé"
@@ -139,6 +149,16 @@ start_both() {
     
     # Pré-build de production
     log_info "🔨 Pré-build de production..."
+    
+    # Supprimer package-lock.json pour un build propre
+    log_info "🧹 Suppression de package-lock.json pour un build propre..."
+    if [ -f "package-lock.json" ]; then
+        rm -f package-lock.json
+        log_success "package-lock.json supprimé"
+    else
+        log_info "Aucun package-lock.json trouvé"
+    fi
+    
     log_warning "Reconstruction de l'application de production..."
     npm run build
     log_success "Build de production terminé"

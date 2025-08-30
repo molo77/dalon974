@@ -130,6 +130,15 @@ pre_build_prod() {
         exit 1
     fi
     
+    # Supprimer package-lock.json pour un build propre
+    log_info "🧹 Suppression de package-lock.json pour un build propre..."
+    if [ -f "package-lock.json" ]; then
+        rm -f package-lock.json
+        log_success "package-lock.json supprimé"
+    else
+        log_info "Aucun package-lock.json trouvé"
+    fi
+    
     # Toujours reconstruire en production pour s'assurer que tout est à jour
     log_warning "Reconstruction de l'application de production..."
     npm run build
