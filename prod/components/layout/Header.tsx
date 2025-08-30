@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
@@ -24,7 +24,8 @@ export default function Header() {
     <header className="bg-white shadow px-4 py-3 sticky top-0 z-[9999]">
       <div className="w-[85%] max-w-full mx-auto flex items-center justify-between">
         <Link href="/" className="text-xl font-bold text-blue-600">
-          Dalon974 <span className="text-xs bg-yellow-400 text-black px-2 py-1 rounded ml-2">DEV</span>
+          Dalon974
+          <DevBadge />
         </Link>
 
         <button
@@ -152,5 +153,42 @@ export default function Header() {
         </nav>
       )}
     </header>
+  );
+}
+
+// Composant séparé pour le badge DEV qui se charge côté client
+function DevBadge() {
+  const [isDev, setIsDev] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    
+    // Récupérer l'environnement via l'API
+    const fetchEnvironment = async () => {
+      try {
+        const response = await fetch('/api/version');
+        if (response.ok) {
+          const data = await response.json();
+          setIsDev(data.appEnv === 'development');
+        }
+      } catch (error) {
+        console.error('Erreur lors de la récupération de l\'environnement:', error);
+        // Fallback vers les variables d'environnement
+        const appEnv = process.env.NEXT_PUBLIC_APP_ENV || process.env.NODE_ENV;
+        setIsDev(appEnv === 'development');
+      }
+    };
+
+    fetchEnvironment();
+  }, []);
+
+  // Ne pas afficher pendant l'hydratation
+  if (!mounted) return null;
+
+  if (!isDev) return null;
+
+  return (
+    <span className="text-xs bg-yellow-400 text-black px-2 py-1 rounded ml-2">DEV</span>
   );
 }

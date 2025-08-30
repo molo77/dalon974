@@ -259,6 +259,20 @@ main() {
     log_info "🚀 Démarrage du serveur de développement"
     log_info "========================================"
     
+    # Arrêter tous les serveurs avant de démarrer
+    log_info "🛑 Arrêt de tous les serveurs existants..."
+    local script_dir=$(dirname "$(readlink -f "$0")")
+    if [ -f "$script_dir/start-clean.sh" ]; then
+        "$script_dir/start-clean.sh" stop
+    else
+        log_warning "Script start-clean.sh non trouvé, arrêt manuel..."
+        pkill -f "next.*dev" 2>/dev/null || true
+        pkill -f "next.*start" 2>/dev/null || true
+        sleep 2
+        pkill -9 -f "next.*dev" 2>/dev/null || true
+        pkill -9 -f "next.*start" 2>/dev/null || true
+    fi
+    
     # Vérifier si le serveur dev est déjà en cours
     if check_server_running 3001 "serveur de développement"; then
         log_info "🔄 Redémarrage du serveur de développement..."
@@ -272,15 +286,6 @@ main() {
         echo "$(date +%s)" > "$last_start_file"
         log_info "Fichier de référence créé pour le nouveau démarrage"
     fi
-    
-    # Arrêter tous les processus Next.js (méthode simple et efficace)
-    log_warning "Arrêt des processus Next.js..."
-    pkill -f "next.*dev" 2>/dev/null || true
-    sleep 2
-    pkill -9 -f "next.*dev" 2>/dev/null || true
-    
-    # Attendre un peu pour s'assurer que tout est arrêté
-    sleep 2
     
     # Supprimer le dossier .next pour forcer un rebuild complet
     log_info "🧹 Nettoyage du build précédent..."
