@@ -48,7 +48,9 @@ create_backup() {
     mkdir -p "$BACKUP_DIR"
     
     if [ -d "$PROD_DIR" ]; then
-        cp -r "$PROD_DIR" "$BACKUP_DIR/$BACKUP_NAME"
+        rsync -av --exclude='node_modules' --exclude='.next' --exclude='logs' \
+            --exclude='public/uploads' \
+            "$PROD_DIR/" "$BACKUP_DIR/$BACKUP_NAME/"
         log_success "Sauvegarde créée: $BACKUP_DIR/$BACKUP_NAME"
     else
         log_warning "Aucune production existante à sauvegarder"
@@ -74,6 +76,7 @@ copy_files() {
     
     # Fichiers applicatifs
     rsync -av --exclude='node_modules' --exclude='.next' --exclude='logs' \
+        --exclude='public/uploads' \
         "$DEV_DIR/" "$PROD_DIR/"
     
     log_success "Fichiers copiés avec succès"
@@ -130,20 +133,71 @@ cleanup_backups() {
     log_success "Anciennes sauvegardes supprimées"
 }
 
+# Arrêt des serveurs
+stop_servers() {
+    log_info "Arrêt des serveurs avant synchronisation..."
+    
+    # Arrêt du serveur de développement
+    log_info "Arrêt du serveur de développement..."
+    pkill -f "next dev.*:3001" || true
+    sleep 2
+    
+    # Arrêt du serveur de production
+    log_info "Arrêt du serveur de production..."
+    pkill -f "next start.*:3000" || true
+    sleep 2
+    
+    log_success "Serveurs arrêtés"
+}
+
+# Redémarrage des serveurs
+restart_servers() {
+    log_info "Redémarrage des serveurs après synchronisation..."
+    
+    # Redémarrage du serveur de développement
+    log_info "Redémarrage du serveur de développement..."
+    bash "$DEV_DIR/scripts/dev-start.sh" &
+    sleep 5
+    
+    # Redémarrage du serveur de production
+    log_info "Redémarrage du serveur de production..."
+    bash "$PROD_DIR/scripts/prod-start.sh" &
+    sleep 5
+    
+    log_success "Serveurs redémarrés"
+}
+
 # Fonction principale
 main() {
     log_info "=== Déploiement Dev vers Prod ==="
+    
+    # Arrêt des serveurs avant synchronisation
+    stop_servers
     
     create_backup
     clean_prod
     copy_files
     install_dependencies
     build_application
-    start_application
+    
+    # Synchronisation de la structure de base de données
+    log_info "Synchronisation de la structure MySQL..."
+    if bash "$SCRIPT_DIR/sync-database-structure.sh"; then
+        log_success "Structure MySQL synchronisée avec succès"
+    else
+        log_warning "Échec de la synchronisation MySQL (vérifiez les logs)"
+    fi
+    
+    # Redémarrage des serveurs après synchronisation
+    restart_servers
+    
+    # Vérification de santé après redémarrage
     health_check
+    
     cleanup_backups
     
     log_success "Déploiement terminé avec succès !"
+    log_info "URL Development: http://localhost:3001"
     log_info "URL Production: http://localhost:3000"
     log_info "Sauvegarde: $BACKUP_DIR/$BACKUP_NAME"
 }

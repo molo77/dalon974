@@ -10,7 +10,18 @@
     "manage:prod": "./scripts/manage-environments.sh prod",
     "manage:all": "./scripts/manage-environments.sh all",
     "health-check:dev": "curl -f http://localhost:3001/api/health || exit 1",
-    "health-check:prod": "curl -f http://localhost:3000/api/health || exit 1"
+    "health-check:prod": "curl -f http://localhost:3000/api/health || exit 1",
+    "sync-db-structure": "./scripts/sync-database-structure.sh",
+    "copy-users": "./scripts/copy-users-to-prod.sh",
+    "deploy-fast": "./scripts/deploy-dev-to-prod-fast.sh",
+    "deploy-ultra-fast": "./scripts/deploy-dev-to-prod-ultra-fast.sh",
+    "update-passwords": "node scripts/update-user-passwords.js",
+    "uploads:stats": "./scripts/manage-uploads.sh stats",
+    "uploads:sync": "./scripts/manage-uploads.sh sync",
+    "uploads:clean": "./scripts/manage-uploads.sh clean",
+    "uploads:backup": "./scripts/manage-uploads.sh backup",
+    "uploads:restore": "./scripts/manage-uploads.sh restore",
+    "copy-passwords": "./scripts/copy-user-passwords.sh"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",
