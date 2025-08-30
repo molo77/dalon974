@@ -232,6 +232,42 @@ auto_increment_dev_version() {
     fi
 }
 
+# Fonction pour pré-build de développement
+pre_build_dev() {
+    log_info "🔨 Pré-build de développement..."
+    
+    # Aller dans le répertoire dev
+    cd dev
+    
+    # Vérifier que le répertoire existe
+    if [ ! -f "package.json" ]; then
+        log_error "Répertoire dev non trouvé ou package.json manquant"
+        exit 1
+    fi
+    
+    # Vérifier si le build existe et s'il est à jour
+    if [ ! -d ".next" ]; then
+        log_warning "Build de développement non trouvé. Construction en cours..."
+        npm run build
+        log_success "Build de développement terminé"
+    else
+        # Vérifier si des fichiers ont été modifiés depuis le dernier build
+        local build_time=$(stat -c %Y .next 2>/dev/null || echo "0")
+        local latest_file_time=$(find . -type f -not -path "./node_modules/*" -not -path "./.next/*" -not -path "./.git/*" -exec stat -c %Y {} \; 2>/dev/null | sort -nr | head -1)
+        
+        if [ "$latest_file_time" -gt "$build_time" ]; then
+            log_warning "Fichiers modifiés détectés. Reconstruction en cours..."
+            npm run build
+            log_success "Build de développement mis à jour"
+        else
+            log_info "Build de développement à jour"
+        fi
+    fi
+    
+    # Retourner au répertoire racine
+    cd ..
+}
+
 # Fonction principale
 main() {
     log_info "🚀 Démarrage du serveur de développement"
@@ -262,14 +298,11 @@ main() {
     
     log_info "Démarrage du serveur de développement..."
     
+    # Pré-build de développement
+    pre_build_dev
+    
     # Aller dans le répertoire dev et démarrer
     cd dev
-    
-    # Vérifier que le répertoire existe
-    if [ ! -f "package.json" ]; then
-        log_error "Répertoire dev non trouvé ou package.json manquant"
-        exit 1
-    fi
     
     # Démarrer le serveur de développement
     log_success "Démarrage de Next.js en mode développement..."

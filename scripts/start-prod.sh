@@ -117,15 +117,26 @@ stop_all_next_servers() {
     fi
 }
 
-# Fonction pour vérifier si le build existe
-check_build() {
-    if [ ! -d ".next" ]; then
-        log_warning "Build de production non trouvé. Construction en cours..."
-        npm run build
-        log_success "Build terminé"
-    else
-        log_info "Build de production trouvé"
+# Fonction pour pré-build de production
+pre_build_prod() {
+    log_info "🔨 Pré-build de production..."
+    
+    # Aller dans le répertoire prod
+    cd prod
+    
+    # Vérifier que le répertoire existe
+    if [ ! -f "package.json" ]; then
+        log_error "Répertoire prod non trouvé ou package.json manquant"
+        exit 1
     fi
+    
+    # Toujours reconstruire en production pour s'assurer que tout est à jour
+    log_warning "Reconstruction de l'application de production..."
+    npm run build
+    log_success "Build de production terminé"
+    
+    # Retourner au répertoire racine
+    cd ..
 }
 
 # Fonction principale
@@ -151,17 +162,11 @@ main() {
     
     log_info "Démarrage du serveur de production..."
     
-    # Aller dans le répertoire prod
+    # Pré-build de production
+    pre_build_prod
+    
+    # Aller dans le répertoire prod et démarrer
     cd prod
-    
-    # Vérifier que le répertoire existe
-    if [ ! -f "package.json" ]; then
-        log_error "Répertoire prod non trouvé ou package.json manquant"
-        exit 1
-    fi
-    
-    # Vérifier et construire si nécessaire
-    check_build
     
     # Démarrer le serveur de production
     log_success "Démarrage de Next.js en mode production..."
