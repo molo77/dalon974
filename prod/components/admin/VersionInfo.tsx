@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 
 interface VersionInfo {
   environment: string;
+  appEnv: string;
   version: string;
   buildTime: string;
   nodeVersion: string;
@@ -93,6 +94,17 @@ export default function VersionInfo() {
     }
   };
 
+  const getEnvironmentDisplayName = (env: string) => {
+    switch (env.toLowerCase()) {
+      case 'development':
+        return 'Développement';
+      case 'production':
+        return 'Production';
+      default:
+        return env;
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <h3 className="text-lg font-semibold mb-4">📊 Informations de Version</h3>
@@ -101,8 +113,8 @@ export default function VersionInfo() {
         {/* Environnement */}
         <div className="flex items-center justify-between">
           <span className="font-medium">Environnement:</span>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getEnvironmentColor(versionInfo.environment)}`}>
-            {getEnvironmentIcon(versionInfo.environment)} {versionInfo.environment}
+          <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getEnvironmentColor(versionInfo.appEnv)}`}>
+            {getEnvironmentIcon(versionInfo.appEnv)} {getEnvironmentDisplayName(versionInfo.appEnv)}
           </span>
         </div>
 

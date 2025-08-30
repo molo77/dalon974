@@ -23,6 +23,7 @@ export async function GET() {
     // Récupération des informations de version
     const versionInfo = {
       environment: process.env.NODE_ENV || 'unknown',
+      appEnv: process.env.NEXT_PUBLIC_APP_ENV || process.env.NODE_ENV || 'unknown',
       version: getPackageVersion(),
       buildTime: new Date().toLocaleString('fr-FR', {
         timeZone: 'Indian/Reunion',
