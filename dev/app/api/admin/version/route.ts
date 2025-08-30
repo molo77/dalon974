@@ -8,7 +8,9 @@ export async function GET() {
   try {
     // Vérification des permissions admin
     const session: any = await getServerSession(authOptions as any);
+    console.log('[API][admin][version] Session:', session?.user);
     if ((session?.user as any)?.role !== 'admin') {
+      console.log('[API][admin][version] Accès refusé - utilisateur non admin');
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -17,8 +19,10 @@ export async function GET() {
       try {
         // Lire depuis le package.json de dev (répertoire dev)
         const packagePath = path.join(process.cwd(), 'package.json');
+        console.log('[API][admin][version] Lecture package.json depuis:', packagePath);
         const packageContent = fs.readFileSync(packagePath, 'utf8');
         const packageData = JSON.parse(packageContent);
+        console.log('[API][admin][version] Version trouvée:', packageData.version);
         return packageData.version || '0.2.0';
       } catch (error) {
         console.error('[API][admin][version] Erreur lecture package.json:', error);

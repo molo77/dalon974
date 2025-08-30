@@ -20,6 +20,7 @@ import { updateColoc, deleteColoc, getColoc, listColoc } from "@/lib/services/co
 import Link from "next/link"; // + import
 import Image from "next/image";
 import { toast as appToast } from "@/components/ui/feedback/Toast";
+import { formatDateReunion } from "@/lib/utils/dateUtils";
 
 // données seed retirées (non utilisées pendant la migration)
 
@@ -96,11 +97,11 @@ export default function AdminPage() {
           if (lastRun.rawLog && lastRun.rawLog.trim()) {
             setScraperLogs(lastRun.rawLog);
           } else {
-            setScraperLogs(`=== RUN ${lastRun.id} ===\nStatut: ${lastRun.status}\nDébut: ${lastRun.startedAt ? new Date(lastRun.startedAt).toLocaleString() : 'inconnu'}\nFin: ${lastRun.finishedAt ? new Date(lastRun.finishedAt).toLocaleString() : 'inconnu'}\n\nAucun log détaillé disponible pour ce run.\n\nPour voir des logs détaillés :\n1. Lancer un nouveau scraper\n2. Attendre qu\'il commence\n3. Recharger les logs`);
+            setScraperLogs(`=== RUN ${lastRun.id} ===\nStatut: ${lastRun.status}\nDébut: ${lastRun.startedAt ? formatDateReunion(lastRun.startedAt) : 'inconnu'}\nFin: ${lastRun.finishedAt ? formatDateReunion(lastRun.finishedAt) : 'inconnu'}\n\nAucun log détaillé disponible pour ce run.\n\nPour voir des logs détaillés :\n1. Lancer un nouveau scraper\n2. Attendre qu\'il commence\n3. Recharger les logs`);
           }
         } else {
           console.log('[Admin][Scraper] Aucun run terminé trouvé');
-          setScraperLogs('=== LOGS DU SCRAPER ===\n\nAucun run terminé trouvé.\n\nRuns disponibles :\n' + scraperRuns.map(r => `- ${r.id}: ${r.status} (${r.startedAt ? new Date(r.startedAt).toLocaleString() : 'inconnu'})`).join('\n'));
+          setScraperLogs('=== LOGS DU SCRAPER ===\n\nAucun run terminé trouvé.\n\nRuns disponibles :\n' + scraperRuns.map(r => `- ${r.id}: ${r.status} (${r.startedAt ? formatDateReunion(r.startedAt) : 'inconnu'})`).join('\n'));
         }
       }
     } catch(e) { 
@@ -311,14 +312,14 @@ export default function AdminPage() {
     if (!v) return "-";
     try {
       // Timestamp Firestore avec toDate()
-      if (v && typeof v.toDate === "function") return v.toDate().toLocaleString();
+      if (v && typeof v.toDate === "function") return formatDateReunion(v.toDate());
       // Timestamp Firestore brut { seconds, nanoseconds }
-      if (v?.seconds) return new Date(v.seconds * 1000).toLocaleString();
+      if (v?.seconds) return formatDateReunion(v.seconds * 1000);
       // Nombre (ms)
-      if (typeof v === "number") return new Date(v).toLocaleString();
+      if (typeof v === "number") return formatDateReunion(v);
       // String/Date
       const d = new Date(v);
-      return isNaN(d.getTime()) ? "-" : d.toLocaleString();
+      return isNaN(d.getTime()) ? "-" : formatDateReunion(d);
     } catch {
       return "-";
     }
@@ -1627,8 +1628,8 @@ export default function AdminPage() {
                   }
                   return (
                   <tr key={r.id} className='border-t hover:bg-slate-50'>
-                    <td className='p-2'>{r.startedAt ? new Date(r.startedAt).toLocaleString() : '-'}</td>
-                    <td className='p-2'>{r.finishedAt ? new Date(r.finishedAt).toLocaleString() : (r.status==='running'?'…':'-')}</td>
+                                    <td className='p-2'>{r.startedAt ? formatDateReunion(r.startedAt) : '-'}</td>
+                <td className='p-2'>{r.finishedAt ? formatDateReunion(r.finishedAt) : (r.status==='running'?'…':'-')}</td>
           <td className='p-2'><span className={`px-2 py-0.5 rounded text-xs font-medium ${r.status==='success'?'bg-green-100 text-green-700': r.status==='error'?'bg-rose-100 text-rose-700': r.status==='aborted' ? 'bg-gray-200 text-gray-700':'bg-amber-100 text-amber-700'}`}>{r.status||'-'}</span></td>
           <td className='p-2 text-center w-32'>
             {r.status==='running' ? (

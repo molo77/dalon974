@@ -1,6 +1,7 @@
 'use client';
 
 import { useDatabaseHealth } from '@/hooks/useDatabaseHealth';
+import { formatTimeReunion } from '@/lib/utils/dateUtils';
 
 interface SystemStatusProps {
   showDetails?: boolean;
@@ -58,7 +59,7 @@ export default function SystemStatus({
           )}
           {lastCheck && (
             <span>
-              Dernière vérification: {lastCheck.toLocaleTimeString()}
+              Dernière vérification: {formatTimeReunion(lastCheck)}
             </span>
           )}
         </div>
