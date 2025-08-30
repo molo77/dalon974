@@ -20,7 +20,7 @@ export default function VersionInfo() {
   useEffect(() => {
     const fetchVersionInfo = async () => {
       try {
-        const response = await fetch('/api/admin/version');
+        const response = await fetch('/api/version');
         if (!response.ok) {
           throw new Error('Erreur lors de la récupération des informations de version');
         }
