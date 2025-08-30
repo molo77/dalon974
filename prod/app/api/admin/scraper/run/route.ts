@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       console.log('[API][scraper][run] Démarrage du scraper avec ProtonVPN manuel');
     console.log('[API][scraper][run] Connexion manuelle à ProtonVPN au démarrage');
     console.log('[API][scraper][run] Suivez les instructions pour vous connecter à ProtonVPN');
-    const scriptPath = path.join(process.cwd(), 'scripts', 'scrape-lbc-simple.js');
+    const scriptPath = path.join(process.cwd(), 'scripts', 'scraper', 'leboncoin', 'scrape-lbc-simple-fixed.js');
   const child = spawn(process.execPath, [scriptPath], {
     env: childEnv,
     stdio: ['pipe','pipe','pipe'] // Permettre l'interaction avec stdin pour le CAPTCHA
