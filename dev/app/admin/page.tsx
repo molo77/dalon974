@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import AdminUsers from "@/components/admin/AdminUsers";
 import AdminAds from "@/components/admin/AdminAds";
 import ImageCleanup from "@/components/admin/ImageCleanup";
+import VersionInfo from "@/components/admin/VersionInfo";
 import ExpandableImage from "@/components/ui/ExpandableImage"; // New import
 // import AdminAnnonces from "@/components/admin/AdminAnnonces"; // affichage remplacé par une liste intégrée
 import useAdminGate from "@/hooks/useAdminGate";
@@ -1681,6 +1682,27 @@ export default function AdminPage() {
         </div>
       );
     }
+    
+    if (activeTab === "maintenance") {
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between mb-8">
+            <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight">
+              Maintenance
+            </h1>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Informations de version */}
+            <VersionInfo />
+            
+            {/* Nettoyage des images */}
+            <ImageCleanup />
+          </div>
+        </div>
+      );
+    }
+    
     return <AdminUsers showToast={showToast} />;
   };
 

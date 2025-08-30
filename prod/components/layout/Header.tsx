@@ -24,7 +24,7 @@ export default function Header() {
     <header className="bg-white shadow px-4 py-3 sticky top-0 z-[9999]">
       <div className="w-[85%] max-w-full mx-auto flex items-center justify-between">
         <Link href="/" className="text-xl font-bold text-blue-600">
-          Dalon974
+          Dalon974 <span className="text-xs bg-yellow-400 text-black px-2 py-1 rounded ml-2">DEV</span>
         </Link>
 
         <button

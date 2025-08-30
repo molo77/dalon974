@@ -5,6 +5,7 @@ import AuthProvider from '@/components/auth/AuthProvider'
 import MaintenanceAlert from '@/components/maintenance/MaintenanceAlert'
 import Header from '@/components/layout/Header'
 import LeafletStyles from '@/components/map/LeafletStyles'
+import DevIndicator from '@/components/layout/DevIndicator'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -22,6 +23,8 @@ export default function RootLayout({
     <html lang="fr" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
         <AuthProvider>
+          {/* Indicateur de développement */}
+          <DevIndicator />
           <Header />
           <main>
             {children}
