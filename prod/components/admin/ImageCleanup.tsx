@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { toast } from 'react-hot-toast';
+import { showToast } from "@/lib/toast";
 
 export default function ImageCleanup() {
   const [isLoading, setIsLoading] = useState(false);
@@ -61,7 +61,7 @@ export default function ImageCleanup() {
 
       if (response.ok) {
         setLastResult(result);
-        toast('Test de nettoyage terminé ✅');
+        showToast('Test de nettoyage terminé ✅');
       } else {
         toast.error(`Erreur: ${result.error || 'Erreur inconnue'} ❌`);
       }

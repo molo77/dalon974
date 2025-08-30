@@ -83,6 +83,94 @@ copy_files() {
     log_success "Fichiers copiés avec succès (incluant le build .next)"
 }
 
+# Reconstruction du fichier .env.local pour la production
+rebuild_env_prod() {
+    log_info "Reconstruction du fichier .env.local pour la production..."
+    
+    if [ ! -f "$DEV_DIR/.env.local" ]; then
+        log_warning "Fichier .env.local manquant en dev, création d'un fichier par défaut"
+        cat > "$PROD_DIR/.env.local" << 'EOF'
+# Variables d'environnement pour la production
+NODE_ENV=production
+NEXT_PUBLIC_APP_ENV=production
+
+# DATABASE_URL : chaîne de connexion MySQL pour la production
+DATABASE_URL="mysql://molo:Bulgroz%401977@192.168.1.200:3306/dalon974_prod"
+
+# NextAuth config
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="TZgJKrIdZ5KDmx48KQ84iOuSMQq2SN+EmGdG3bqeyO8="
+
+# Compte démo (credentials login)
+DEMO_EMAIL="molo77@gmail.com"
+DEMO_PASSWORD="Bulgroz@1977"
+
+# OAuth providers
+GOOGLE_CLIENT_ID="48015729035-oedf65tb7q75orhti3nul4fnsfrp2aks.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="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"
+
+# Image d'accueil
+NEXT_PUBLIC_HOMEPAGE_IMAGE=/images/home-hero.png
+
+# Google AdSense
+NEXT_PUBLIC_ADSENSE_CLIENT=9563918255
+NEXT_PUBLIC_ADSENSE_SLOT=1234567890
+
+# Scraper Leboncoin
+LBC_DEBUG=false
+LBC_SEARCH_URL="https://www.leboncoin.fr/recherche?category=11&locations=r_26"
+LBC_BROWSER_HEADLESS=true
+LBC_MAX=100
+LBC_FETCH_DETAILS=true
+LBC_DETAIL_LIMIT=all
+LBC_DETAIL_SLEEP=500
+LBC_PAGES=4
+LBC_VERBOSE_LIST=false
+LBC_EXPORT_JSON=false
+LBC_NO_DB=false
+LBC_UPDATE_COOLDOWN_HOURS=0
+LBC_EXTRA_SLEEP=0
+LBC_USE_PROTONVPN=false
+LBC_DATADOME=9VQvc8E96v_De6xYlgvI4waevp_3zDqgr6KBX0ev_5XTkyZDinqOKde7jIFFl_QvPmCmfPFHfZBWUokuD4juQq~Ui_57m0cNbQ0bNdmvDO1NNVR3ru4Bjy3ENkfvR7rc
+DATADOME_TOKEN=9VQvc8E96v_De6xYlgvI4waevp_3zDqgr6KBX0ev_5XTkyZDinqOKde7jIFFl_QvPmCmfPFHfZBWUokuD4juQq~Ui_57m0cNbQ0bNdmvDO1NNVR3ru4Bjy3ENkfvR7rc
+EOF
+        log_success "Fichier .env.local de production créé avec configuration par défaut"
+        return
+    fi
+    
+    # Lire le fichier .env.local de dev et le transformer pour la production
+    cd "$PROD_DIR"
+    
+    # Créer le nouveau fichier .env.local pour la production
+    {        
+        # Copier le contenu du fichier dev en modifiant les variables appropriées
+        while IFS= read -r line; do
+            # Ignorer les lignes de commentaires et les lignes vides
+            if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "$line" ]]; then
+                echo "$line"
+                continue
+            fi
+            
+            # Modifier les variables spécifiques à la production
+            if [[ "$line" =~ ^NODE_ENV= ]]; then
+                echo "NODE_ENV=production"
+            elif [[ "$line" =~ ^NEXT_PUBLIC_APP_ENV= ]]; then
+                echo "NEXT_PUBLIC_APP_ENV=production"
+            elif [[ "$line" =~ ^DATABASE_URL=.*dalon974_dev ]]; then
+                echo 'DATABASE_URL="mysql://molo:Bulgroz%401977@192.168.1.200:3306/dalon974_prod"'
+            elif [[ "$line" =~ ^NEXTAUTH_URL=.*3001 ]]; then
+                echo 'NEXTAUTH_URL="http://localhost:3000"'
+            elif [[ "$line" =~ ^LBC_DEBUG=.*true ]]; then
+                echo "LBC_DEBUG=false"
+            else
+                echo "$line"
+            fi
+        done < "$DEV_DIR/.env.local"
+    } > .env.local
+    
+    log_success "Fichier .env.local de production reconstruit à partir de dev"
+}
+
 # Installation des dépendances
 install_dependencies() {
     log_info "Installation des dépendances de production..."
@@ -166,6 +254,7 @@ main() {
     create_backup
     clean_prod
     copy_files
+    rebuild_env_prod
     install_dependencies
     
     # Note: Pas de build nécessaire car on copie le .next de dev

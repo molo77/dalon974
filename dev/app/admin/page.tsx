@@ -30,6 +30,7 @@ export default function AdminPage() {
   const loading = status === "loading";
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"annonces" | "users" | "colocs" | "ads" | "scraper" | "maintenance">("annonces");
+  const [isDevEnvironment, setIsDevEnvironment] = useState<boolean | null>(null);
   // État config scraper
   const [scraperConfig, setScraperConfig] = useState<Record<string,string|undefined>>({});
   const [scraperLoading, setScraperLoading] = useState(false);
@@ -45,6 +46,28 @@ export default function AdminPage() {
   const [showScraperLogs, setShowScraperLogs] = useState(false); // Caché par défaut
   const [scraperLogs, setScraperLogs] = useState<string>('');
   const toggleSecret = (k:string)=> setShowSecret(s=>({ ...s, [k]: !s[k] }));
+
+  // Fonction pour récupérer l'environnement via l'API
+  const fetchEnvironment = async () => {
+    try {
+      const response = await fetch('/api/version');
+      if (response.ok) {
+        const data = await response.json();
+        setIsDevEnvironment(data.appEnv === 'development');
+      } else {
+        console.error('Erreur lors de la récupération de l\'environnement:', response.status);
+        setIsDevEnvironment(false); // Fallback vers production
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération de l\'environnement:', error);
+      setIsDevEnvironment(false); // Fallback vers production
+    }
+  };
+  // Récupérer l'environnement au chargement du composant
+  useEffect(() => {
+    fetchEnvironment();
+  }, []);
+
   const loadScraper = async () => {
     try {
       setScraperLoading(true);
@@ -772,7 +795,7 @@ export default function AdminPage() {
               Administration
             </h1>
             {/* Boutons de création d'exemples - seulement en développement */}
-            {process.env.NEXT_PUBLIC_APP_ENV === 'development' && (
+            {isDevEnvironment === true && (
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -1092,7 +1115,7 @@ export default function AdminPage() {
               {adminLoading ? "Suppression..." : `Supprimer la sélection (${adminColocsSelected.length})`}
             </button>
             {/* Boutons de création d'exemples - seulement en développement */}
-            {process.env.NEXT_PUBLIC_APP_ENV === 'development' && (
+            {isDevEnvironment === true && (
               <div className="flex gap-2">
                 <button
                   type="button"
