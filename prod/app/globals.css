@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Styles Leaflet */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+}
+
+.leaflet-div-icon {
+  background: transparent;
+  border: none;
+}
+
+.leaflet-tooltip-own {
+  background: transparent !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8) !important;
+  white-space: nowrap !important;
+  z-index: 1000 !important;
+  box-shadow: none !important;
+  letter-spacing: 0.5px !important;
+}
+
+/* Eclaircissement du fond satellite */
+.leaflet-tile.tile-bright {
+  filter: brightness(1.08) saturate(1.06) contrast(1.02);
+}

@@ -1,0 +1,132 @@
+# ========================================
+# .gitignore - Environnement DEV
+# ========================================
+# Configuration spécifique à l'environnement de développement
+# ========================================
+
+# ========================================
+# ARTEACTS NEXT.JS
+# ========================================
+
+# Build Next.js
+.next/
+.next.fixture/
+out/
+dist/
+build/
+
+# Cache et optimisation
+.turbo/
+.swc/
+.vercel/
+.vercel/output/
+
+# ========================================
+# DÉPENDANCES
+# ========================================
+
+# Node modules
+node_modules/
+
+# ========================================
+# LOGS ET DEBUG
+# ========================================
+
+# Logs de développement
+logs/
+*.log
+debug.log
+error.log
+combined.log
+
+# Logs npm/yarn
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ========================================
+# UPLOADS ET DONNÉES TEMPORAIRES
+# ========================================
+
+# Uploads utilisateurs
+public/uploads/
+uploads/
+
+# Données temporaires
+temp/
+tmp/
+*.tmp
+*.temp
+
+# ========================================
+# CACHES
+# ========================================
+
+# Caches généraux
+.cache/
+.tmp/
+
+# TypeScript
+*.tsbuildinfo
+.tsbuildinfo
+
+# Autres caches
+.eslintcache
+.stylelintcache
+
+# ========================================
+# ENVIRONNEMENT
+# ========================================
+
+# Variables d'environnement
+.env
+.env.local
+.env.development
+.env.*.local
+
+# ========================================
+# TESTS
+# ========================================
+
+# Couverture de tests
+coverage/
+.nyc_output/
+jest-html-reporters-*.html
+*.lcov
+test-results/
+
+# ========================================
+# FICHIERS SPÉCIFIQUES AU DÉVELOPPEMENT
+# ========================================
+
+# Résultats de scraping (dev uniquement)
+scraping-results/
+scraper-output/
+lbc-simple-result.png
+
+# Fichiers de test temporaires
+test-*.json
+temp-*.js
+debug-*.txt
+
+# ========================================
+# EXCEPTIONS (FICHIERS À CONSERVER)
+# ========================================
+
+# Lockfiles
+!package-lock.json
+!yarn.lock
+!pnpm-lock.yaml
+
+# Configuration
+!tsconfig.json
+!next.config.js
+!tailwind.config.js
+!postcss.config.js
+!.eslintrc.js
+!prisma/schema.prisma
+
+# ========================================
+# FIN DU FICHIER
+# ========================================

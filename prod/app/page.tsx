@@ -1,0 +1,1612 @@
+"use client";
+import ColocProfileModal from "@/components/modals/ColocProfileModal";
+import AnnonceDetailModal from "@/components/modals/AnnonceDetailModal";
+
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useSession } from "next-auth/react";
+import Image from "next/image";
+// Firestore shim uniquement pour la branche coloc (temporaire)
+// Firestore supprimé: tout passe par les APIs internes
+import { listAnnoncesPage } from "@/lib/services/homeService";
+import { listColoc } from "@/lib/services/colocService";
+import dynamic from "next/dynamic";
+import ExpandableImage from "@/components/ui/ExpandableImage";
+import AnnonceCard from "@/components/cards/AnnonceCard";
+import ColocProfileCard from "@/components/cards/ColocProfileCard";
+import ConfirmModal from "@/components/modals/ConfirmModal";
+import AnnonceModal from "@/components/modals/AnnonceModal";
+// AdSense via AdSlot
+import AdSlot from "@/components/ads/AdSlot";
+// Rôle admin désormais fourni par le contexte d'auth
+// AuthProvider n'exporte pas useAuth dans ce projet; on neutralise l'usage pour déverrouiller la build
+import { showToast } from "@/lib/toast";
+import CommuneZoneSelector from "@/components/map/CommuneZoneSelector";
+import { preloadReunionFeatures } from "@/lib/reunionGeo";
+const ImageLightbox = dynamic(() => import("@/components/modals/ImageLightbox"), { ssr: false });
+
+
+// === Utilitaires partagés (déplacés hors composant pour éviter recréations) ===
+function sameIds(a: string[] | undefined | null, b: string[] | undefined | null): boolean {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return false;
+  return true;
+}
+// Normalise un champ createdAt potentiellement Firestore-like ou date string/number
+function toMsAny(x: any): number {
+  const v = x?.createdAt ?? x; // autoriser passage direct de l'objet ou de la valeur
+  if (!v) return 0;
+  if (typeof v === 'number') return v;
+  if (v?.seconds) return (v.seconds * 1000) + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+  const p = Date.parse(v);
+  return isNaN(p) ? 0 : p;
+}
+
+export default function HomePage() {
+  // Image d'accueil configurable via env (placer l'image dans public/ et utiliser un chemin commençant par "/")
+  const homepageImageSrc = process.env.NEXT_PUBLIC_HOMEPAGE_IMAGE || "/images/home-hero.jpg";
+  // Rôle admin depuis la session NextAuth
+  const { data: session } = useSession();
+  const isAdmin = (session as any)?.user?.role === 'admin';
+  const [editAnnonce, setEditAnnonce] = useState<any|null>(null);
+  const [annonceDetail, setAnnonceDetail] = useState<any|null>(null);
+  const [deleteAnnonceId, setDeleteAnnonceId] = useState<string|null>(null);
+  const [editColoc, setEditColoc] = useState<any|null>(null);
+  const [deleteColocId, setDeleteColocId] = useState<string|null>(null);
+
+  // Rôle fourni par useAuth(); plus besoin de récupérer manuellement
+  const [annonces, setAnnonces] = useState<any[]>([]);
+  const [galleryIndex, setGalleryIndex] = useState<number>(0);
+  const [lightboxOpen, setLightboxOpen] = useState<boolean>(false);
+
+  // État détail profil coloc nécessaire pour la navigation clavier sur lightbox
+  const [colocDetail, setColocDetail] = useState<any | null>(null);
+  const [colocDetailOpen, setColocDetailOpen] = useState(false);
+  const [colocDetailLoading, setColocDetailLoading] = useState(false);
+
+  // Critères spécifiques à l'onglet colocataires
+  const [critAgeMin, setCritAgeMin] = useState<number | null>(null);
+  const [critAgeMax, setCritAgeMax] = useState<number | null>(null);
+  const [critProfession, setCritProfession] = useState<string>("");
+  
+  // Filtres de surface
+  const [surfaceMin, setSurfaceMin] = useState<number | null>(null);
+  const [surfaceMax, setSurfaceMax] = useState<number | null>(null);
+
+  // Constantes et helpers UI + géo
+  const defaultAnnonceImg = "/images/annonce-holder.svg";
+  const defaultColocImg = "/images/coloc-holder.svg";
+
+  const GROUPES = useMemo<Record<string, string[]>>(() => ({
+    "Nord": ["Saint-Denis","Sainte-Marie","Sainte-Suzanne"],
+    "Est": ["Saint-André","Bras-Panon","Salazie","Saint-Benoît","La Plaine-des-Palmistes","Sainte-Rose","Saint-Philippe"],
+    "Ouest": ["Le Port","La Possession","Saint-Paul","Trois-Bassins","Saint-Leu","Les Avirons","L'Étang-Salé"],
+    "Sud": ["Saint-Louis","Saint-Pierre","Le Tampon","Entre-Deux","Petite-Île","Saint-Joseph","Cilaos"],
+    "Intérieur": ["Cilaos","Salazie","La Plaine-des-Palmistes"],
+  }), []);
+  const SUB_COMMUNES = useMemo<{ name: string; parent: string }[]>(() => ([
+    { name: "Sainte-Clotilde", parent: "Saint-Denis" },
+    { name: "La Montagne", parent: "Saint-Denis" },
+    { name: "Saint-Gilles-les-Bains", parent: "Saint-Paul" },
+    { name: "L'Hermitage-les-Bains", parent: "Saint-Paul" },
+    { name: "Saint-Gilles-les-Hauts", parent: "Saint-Paul" },
+    { name: "La Saline", parent: "Saint-Paul" },
+    { name: "La Saline-les-Hauts", parent: "Saint-Paul" },
+    { name: "Bois-de-Nèfles Saint-Paul", parent: "Saint-Paul" },
+    { name: "Plateau-Caillou", parent: "Saint-Paul" },
+    { name: "La Chaloupe", parent: "Saint-Leu" },
+    { name: "Piton Saint-Leu", parent: "Saint-Leu" },
+    { name: "L'Étang-Salé-les-Bains", parent: "L'Étang-Salé" },
+    { name: "La Rivière", parent: "Saint-Louis" },
+    { name: "La Plaine des Cafres", parent: "Le Tampon" },
+    { name: "Terre-Sainte", parent: "Saint-Pierre" },
+    { name: "Dos d'Âne", parent: "La Possession" },
+  ]), []);
+  const slugify = (s: string) => (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  const COMMUNES: string[] = useMemo(() => {
+    const set = new Set<string>();
+    Object.values(GROUPES).forEach(list => list.forEach(n => set.add(n)));
+    return Array.from(set);
+  }, [GROUPES]);
+  const SLUG_TO_NAME = useMemo(() => (
+    COMMUNES.reduce<Record<string,string>>((acc, name) => { acc[slugify(name)] = name; return acc; }, {})
+  ), [COMMUNES]);
+  const ZONE_TO_SLUGS = useMemo(() => (
+    Object.fromEntries(Object.entries(GROUPES).map(([zone, names]) => [zone, names.map(n => slugify(n))]))
+  ), [GROUPES]);
+
+  // Mappings parent/alt
+  const parentSlugToName = SLUG_TO_NAME; // parents uniquement
+  const nameToParentSlug = useMemo(() => {
+    const map: Record<string, string> = {};
+    // communes -> elles-mêmes
+    Object.entries(SLUG_TO_NAME).forEach(([slug]) => { map[slug] = slug; });
+    // sous-communes -> parent
+    SUB_COMMUNES.forEach(({ name, parent }) => { map[slugify(name)] = slugify(parent); });
+    return map;
+  }, [SLUG_TO_NAME, SUB_COMMUNES]);
+  const altSlugToCanonical = nameToParentSlug;
+
+  // Index des sous-communes par commune parente (clé: parentSlug -> liste de noms de sous-communes)
+  const SUBS_BY_PARENT = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    SUB_COMMUNES.forEach(({ name, parent }) => {
+      const ps = slugify(parent);
+      if (!map[ps]) map[ps] = [];
+      map[ps].push(name);
+    });
+    return map;
+  }, [SUB_COMMUNES]);
+
+  // Extrait un label de sous-communes détectées dans les textes fournis, limité à quelques occurrences
+  const extractSubCommunesLabel = useCallback((texts: Array<string | null | undefined>, parentSlug?: string) => {
+    if (!parentSlug) return undefined;
+    const names = SUBS_BY_PARENT[parentSlug];
+    if (!names || names.length === 0) return undefined;
+    const found = new Set<string>();
+    for (const t of texts) {
+      const s = (t || '').toString();
+      if (!s) continue;
+      for (const n of names) {
+        if (s.includes(n)) found.add(n);
+      }
+    }
+    if (found.size === 0) return undefined;
+    const arr = Array.from(found);
+    arr.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+    return arr.slice(0, 3).join(', ');
+  }, [SUBS_BY_PARENT]);
+
+  // Etats UI et filtres
+  const [activeHomeTab, setActiveHomeTab] = useState<null | "annonces" | "colocataires">(null);
+  const [filtering, setFiltering] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [firestoreError, setFirestoreError] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<"date" | "prix" | "prix-desc">("date");
+  const [prixMax, setPrixMax] = useState<number | null>(null);
+  const [ville, setVille] = useState("");
+  const [codePostal, setCodePostal] = useState("");
+  const [communesSelected, setCommunesSelected] = useState<string[]>([]);
+  const [zonesSelected, setZonesSelected] = useState<string[]>([]);
+  const [zoneFilters, setZoneFilters] = useState<string[]>([]);
+  const [selectionSource, setSelectionSource] = useState<"map" | "zones" | "input" | null>(null);
+  const [countAnnoncesTotal, setCountAnnoncesTotal] = useState<number | null>(null);
+  const [countProfilsTotal, setCountProfilsTotal] = useState<number | null>(null);
+  const [countFiltered, setCountFiltered] = useState<number | null>(null);
+  const pageLimit = 20;
+  const offsetRef = useRef<number>(0);
+  // Permettre de masquer/afficher la barre de filtres
+  const [filtersCollapsed, setFiltersCollapsed] = useState<boolean>(false);
+
+  // Refs diverses
+  const resultsTopRef = useRef<HTMLDivElement | null>(null);
+  const tabsTopRef = useRef<HTMLDivElement | null>(null);
+  const mapWrapRef = useRef<HTMLDivElement | null>(null);
+  const selectedChipsRef = useRef<HTMLDivElement | null>(null);
+  const chipsRORef = useRef<ResizeObserver | null>(null);
+  const chipsPrevHRef = useRef<number>(0);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const filtersDebounceRef = useRef<any>(null);
+  const lastIoTriggerAtRef = useRef<number | null>(null);
+  const resetOnFirstSnapshotRef = useRef<boolean>(true);
+  const shouldScrollToResultsOnNextDataRef = useRef<boolean>(false);
+  const zonesBlockRef = useRef<HTMLDivElement | null>(null);
+  const communeBlockRef = useRef<HTMLDivElement | null>(null);
+  const budgetBlockRef = useRef<HTMLDivElement | null>(null);
+  const mapTopBeforeRef = useRef<number | null>(null);
+  const scrollPosBeforeFilterRef = useRef<number | null>(null);
+
+  const selectedParentSlugs = useMemo(() => {
+    const norm = (communesSelected || []).map((s) => altSlugToCanonical[s] || s);
+    return Array.from(new Set(norm));
+  }, [communesSelected, altSlugToCanonical]);
+  const showCommuneMap = true;
+
+  // Saisie par commune désactivée: sélection via carte et zones uniquement
+
+  const computeZonesFromSlugs = useCallback((slugs: string[]): string[] => {
+    const names = slugs.map((s) => parentSlugToName[s]).filter(Boolean) as string[];
+    const zones: string[] = [];
+    Object.entries(GROUPES).forEach(([zone, list]) => {
+      if (names.some((n) => list.includes(n))) zones.push(zone);
+    });
+    return zones;
+  }, [parentSlugToName, GROUPES]);
+
+  const getDocParentSlug = useCallback((d: any) => {
+    const s = d?.communeSlug ? String(d.communeSlug) : (d?.ville ? slugify(String(d.ville)) : "");
+    return nameToParentSlug[s] || s;
+  }, [nameToParentSlug]);
+
+  // Modes UI retirés: les sections sont désormais toujours visibles (secteur, budget, critères)
+  const hasMode = useCallback((_m: string) => true, []);
+
+  // Charge données via API
+  const loadAnnonces = useCallback(async (append: boolean = false) => {
+    if (activeHomeTab === null) return;
+    if (loadingMore) return;
+    setLoadingMore(true);
+    if (!append) setFiltering(true);
+    try {
+      const isColoc = activeHomeTab === 'colocataires';
+      const normalizedSlugs = Array.from(new Set((communesSelected || []).map((s) => altSlugToCanonical[s] || s))).filter(Boolean);
+      const currentOffset = append ? offsetRef.current : 0;
+      if (!append) offsetRef.current = 0;
+      if (isColoc) {
+        const result = await listColoc({
+          limit: pageLimit,
+          offset: currentOffset,
+          ville: ville || undefined,
+          prixMax: prixMax ?? null,
+          slugs: normalizedSlugs,
+          ageMin: critAgeMin ?? null,
+          ageMax: critAgeMax ?? null,
+        });
+        const all = result.items;
+        const totalCount = result.total;
+        
+        // Le filtrage est maintenant géré côté serveur par l'API
+        // On applique seulement le tri et le mapping
+        const mapped = all.map((p: any) => {
+          const budgetNum = Number(p.budget);
+          const head = [p.profession, typeof p.age === 'number' ? `${p.age} ans` : null].filter(Boolean).join(' • ');
+          const tail = (p.description || '').toString();
+          const short = head ? `${head}${tail ? ' • ' : ''}${tail}` : tail;
+          let parentSlug: string | undefined;
+          const slugsArr = Array.isArray(p.communesSlugs) ? p.communesSlugs.map((s: string) => altSlugToCanonical[s] || s) : [];
+          if (slugsArr.length > 0) parentSlug = slugsArr[0];
+          else if (p.ville) { const s = slugify(String(p.ville)); parentSlug = nameToParentSlug[s] || s; }
+          const zonesFromSlugs = slugsArr.length ? computeZonesFromSlugs(slugsArr) : [];
+          const zonesArr: string[] = Array.isArray(p.zones) && p.zones.length ? (p.zones as string[]) : zonesFromSlugs;
+          const zonesLabel = zonesArr && zonesArr.length ? zonesArr.map((z) => (z === 'Intérieur' ? 'Secteur Centre' : `Secteur ${z}`)).join(', ') : (p.ville || '-');
+          const subLabel = extractSubCommunesLabel([p.nom, p.description, p.ville], parentSlug);
+          return {
+            id: p.id,
+            titre: p.nom || 'Recherche colocation',
+            nom: p.nom || 'Recherche colocation',
+            ville: zonesLabel,
+            prix: Number.isFinite(budgetNum) ? budgetNum : undefined,
+            surface: undefined,
+            description: String(short).slice(0, 180),
+            imageUrl: p.imageUrl || defaultAnnonceImg,
+            createdAt: p.createdAt,
+            parentSlug,
+            zonesLabel,
+            subCommunesLabel: subLabel || undefined,
+            age: p.age,
+            profession: p.profession,
+          };
+        });
+        mapped.sort((a: any, b: any) => sortBy === 'date'
+          ? toMsAny(b) - toMsAny(a)
+          : (sortBy === 'prix-desc' ? (b.prix ?? 0) - (a.prix ?? 0) : (a.prix ?? 0) - (b.prix ?? 0))
+        );
+        setAnnonces((prev) => {
+          if (!append) return mapped;
+          const existing = new Set(prev.map((x: any) => x.id));
+          const additions = mapped.filter(i => !existing.has(i.id));
+          if (additions.length === 0) return prev;
+          return [...prev, ...additions];
+        });
+        
+        // Utiliser le total retourné par l'API
+        if (!append) {
+          setCountFiltered(totalCount);
+        } else {
+          setCountFiltered((prev) => (prev ?? 0) + mapped.length);
+        }
+        
+  offsetRef.current = currentOffset + mapped.length;
+  setHasMore(mapped.length === pageLimit);
+      } else {
+        const result = await listAnnoncesPage(pageLimit, currentOffset, {
+          ville: ville || undefined,
+          codePostal: codePostal || undefined,
+          prixMax: prixMax ?? undefined,
+          slugs: normalizedSlugs.length > 0 ? normalizedSlugs : undefined,
+          zones: zoneFilters.length > 0 ? zoneFilters : undefined
+        });
+        const all = result.items;
+        const totalCount = result.total;
+        
+        // Le filtrage est maintenant géré côté serveur par l'API
+        // On applique seulement le tri et le mapping
+        const mapped = all.map((d: any) => ({
+          id: d.id,
+          titre: d.titre ?? d.title ?? '',
+          ville: d.ville ?? null,
+          prix: typeof d.prix === 'number' ? d.prix : undefined,
+          surface: d.surface ?? null,
+          description: d.description ?? null,
+          imageUrl: d.imageUrl || defaultAnnonceImg,
+          createdAt: d.createdAt,
+          parentSlug: getDocParentSlug(d),
+          subCommunesLabel: extractSubCommunesLabel([d.titre ?? d.title, d.description], getDocParentSlug(d)) || undefined,
+        }));
+        mapped.sort((a, b) => sortBy === 'date'
+          ? toMsAny(b) - toMsAny(a)
+          : (sortBy === 'prix-desc' ? (b.prix ?? 0) - (a.prix ?? 0) : (a.prix ?? 0) - (b.prix ?? 0))
+        );
+        setAnnonces((prev) => {
+          if (!append) return mapped;
+          const existing = new Set(prev.map((x: any) => x.id));
+          const additions = mapped.filter(i => !existing.has(i.id));
+          if (additions.length === 0) return prev;
+          return [...prev, ...additions];
+        });
+        
+        // Utiliser le total retourné par l'API
+        if (!append) {
+          setCountFiltered(totalCount);
+        } else {
+          setCountFiltered((prev) => (prev ?? 0) + mapped.length);
+        }
+        
+  offsetRef.current = currentOffset + mapped.length;
+  setHasMore(mapped.length === pageLimit);
+      }
+      if (shouldScrollToResultsOnNextDataRef.current) {
+        try {
+          if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch { try { window.scrollTo(0, 0); } catch {} } finally {
+          shouldScrollToResultsOnNextDataRef.current = false;
+        }
+      }
+    } catch (err) {
+      console.error('[Accueil] loadAnnonces', err);
+    } finally {
+      setLoadingMore(false);
+      setFiltering(false);
+    }
+  }, [activeHomeTab, loadingMore, sortBy, prixMax, ville, codePostal, communesSelected, altSlugToCanonical, parentSlugToName, critAgeMin, critAgeMax, critProfession, computeZonesFromSlugs, getDocParentSlug, nameToParentSlug, pageLimit, ZONE_TO_SLUGS, extractSubCommunesLabel]);
+
+  // Gestion clavier pour la lightbox
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightboxOpen(false);
+      if (e.key === 'ArrowLeft') setGalleryIndex((i) => Math.max(0, i - 1));
+      if (e.key === 'ArrowRight') setGalleryIndex((i) => i + 1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxOpen]);
+
+  // Préchargement silencieux des features de carte (si utilisé)
+  useEffect(() => { try { preloadReunionFeatures(); } catch {} }, []);
+
+  // Reset quand on change d'onglet
+  useEffect(() => {
+    if (activeHomeTab === null) return;
+    // Si les onglets sont masqués derrière le header, remonter juste jusqu'à l'ancre
+    try {
+      const anchor = tabsTopRef.current;
+      if (anchor) {
+        const rect = anchor.getBoundingClientRect();
+        if (rect && rect.top < 12) {
+          anchor.scrollIntoView({ behavior: 'auto', block: 'start' });
+        }
+      }
+    } catch {}
+  setFirestoreError(null);
+    setAnnonces([]);
+  setHasMore(true);
+  // Tri par défaut selon l'onglet
+  setSortBy(activeHomeTab === 'colocataires' ? 'prix' : 'date');
+  // Réinitialiser tous les filtres
+  setPrixMax(null);
+  setCommunesSelected([]);
+  setZonesSelected([]);
+  setZoneFilters([]);
+  setSelectionSource(null);
+  setVille("");
+  setCodePostal("");
+  setCountFiltered(null);
+  // Réinitialiser critères coloc
+  setCritAgeMin(null);
+  setCritAgeMax(null);
+  setCritProfession("");
+  
+  // Réinitialiser filtres de surface
+  setSurfaceMin(null);
+  setSurfaceMax(null);
+    // Ne pas appeler loadAnnonces ici (il sera déclenché par l'effet "filtres")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeHomeTab]);
+
+  // Rechargement quand les filtres changent (sans vider la liste immédiatement)
+  useEffect(() => {
+    if (activeHomeTab === null) return;
+    // Marque pour scroller après le premier snapshot reçu
+    shouldScrollToResultsOnNextDataRef.current = true;
+    // Neutralise les anciennes compensations de scroll et d'ancrage carte
+    scrollPosBeforeFilterRef.current = null;
+    mapTopBeforeRef.current = null;
+    setHasMore(true);
+    setFiltering(true);
+    resetOnFirstSnapshotRef.current = true; // remplacera les cartes au premier snapshot
+    if (filtersDebounceRef.current) clearTimeout(filtersDebounceRef.current);
+    filtersDebounceRef.current = setTimeout(() => {
+      loadAnnonces(false);
+    }, 250);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortBy, prixMax, ville, codePostal, communesSelected, zoneFilters, critAgeMin, critAgeMax, critProfession, surfaceMin, surfaceMax]);
+
+  // Totaux globaux (premier affichage par onglet)
+  useEffect(() => {
+    let aborted = false;
+    (async () => {
+      try {
+        if (activeHomeTab === 'annonces' && countAnnoncesTotal === null) {
+          const res = await fetch('/api/annonces', { cache: 'no-store' });
+          if (!aborted && res.ok) {
+            const data = await res.json();
+            setCountAnnoncesTotal(data.total || 0);
+          }
+        } else if (activeHomeTab === 'colocataires' && countProfilsTotal === null) {
+          const res = await fetch('/api/coloc', { cache: 'no-store' });
+          if (!aborted && res.ok) {
+            const data = await res.json();
+            setCountProfilsTotal(data.total || 0);
+          }
+        }
+      } catch {}
+    })();
+    return () => { aborted = true; };
+  }, [activeHomeTab, countAnnoncesTotal, countProfilsTotal]);
+
+  // Liste affichée (filtrée + triée) utilisée à la fois pour l'entête et la grille
+  const displayedAnnonces = useMemo(() => {
+    let list = (Array.isArray(annonces) ? annonces : []);
+    
+         // Le filtrage par communes et prix est maintenant géré côté serveur par l'API
+     // On applique seulement le filtrage par prix si nécessaire (fallback)
+     if (prixMax !== null) {
+       list = list.filter((a: any) => {
+        if (typeof a?.prix !== "number") return false;
+        return a.prix <= prixMax;
+      });
+     }
+
+     // Filtrage par surface (côté client)
+     if (surfaceMin !== null) {
+       list = list.filter((a: any) => {
+         if (typeof a?.surface !== "number") return false;
+         return a.surface >= surfaceMin;
+       });
+     }
+     if (surfaceMax !== null) {
+       list = list.filter((a: any) => {
+         if (typeof a?.surface !== "number") return false;
+         return a.surface <= surfaceMax;
+       });
+     }
+
+    // Filtrage client additionnel pour l'onglet colocataires (critères)
+    if (activeHomeTab === 'colocataires') {
+      list = list.filter((a: any) => {
+        // Le mapping coloc place le "prix" dans a.prix (budget) et calcule un short desc dans a.description
+        const age = Number((a as any).age ?? (a as any).Age ?? NaN);
+        const profession = String((a as any).profession ?? '').toLowerCase();
+        if (critAgeMin !== null && !(Number.isFinite(age) && age >= critAgeMin)) return false;
+        if (critAgeMax !== null && !(Number.isFinite(age) && age <= critAgeMax)) return false;
+        if (critProfession && !profession.includes(critProfession.toLowerCase())) return false;
+        return true;
+      });
+    }
+
+    list = list.sort((a: any, b: any) => {
+      if (sortBy === "prix" || sortBy === "prix-desc") {
+        const pa = typeof a?.prix === "number" ? a.prix : Number.POSITIVE_INFINITY;
+        const pb = typeof b?.prix === "number" ? b.prix : Number.POSITIVE_INFINITY;
+        return sortBy === "prix-desc" ? pb - pa : pa - pb;
+      }
+      return toMsAny(b) - toMsAny(a);
+    });
+    return list;
+  }, [annonces, selectedParentSlugs, prixMax, sortBy, activeHomeTab, critAgeMin, critAgeMax, critProfession, surfaceMin, surfaceMax]);
+
+  // Quand le filtrage se termine, restaurer la position de scroll initiale
+  useEffect(() => {
+    // Nouveau comportement: ne restaure pas l'ancienne position; rester en haut de la liste
+    if (!filtering) {
+      scrollPosBeforeFilterRef.current = null;
+      mapTopBeforeRef.current = null;
+    }
+  }, [filtering]);
+
+  // Observer la hauteur du bloc des chips et compenser instantanément les variations
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Si la source est la carte, les chips sont masqués: débrancher l'observer
+    if (selectionSource === "map") {
+      if (chipsRORef.current) {
+        chipsRORef.current.disconnect();
+        chipsRORef.current = null;
+      }
+      chipsPrevHRef.current = 0;
+      return;
+    }
+    const el = selectedChipsRef.current;
+    // Nettoyage si pas de bloc
+    if (!el) {
+      if (chipsRORef.current) {
+        chipsRORef.current.disconnect();
+        chipsRORef.current = null;
+      }
+      chipsPrevHRef.current = 0;
+      return;
+    }
+    // Installer un ResizeObserver
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const newH = entry.contentRect?.height ?? el.offsetHeight;
+      if (chipsPrevHRef.current === 0) {
+        chipsPrevHRef.current = newH;
+        return; // ignorer la première mesure
+      }
+      const delta = newH - chipsPrevHRef.current;
+      if (delta !== 0) {
+        const mapEl = mapWrapRef.current;
+        if (mapEl) {
+          const rect = mapEl.getBoundingClientRect();
+          const visible = rect.top < window.innerHeight && rect.bottom > 0;
+          if (visible) {
+            try {
+              window.scrollBy({ top: delta, behavior: "auto" });
+            } catch {
+              window.scrollBy(0, delta);
+            }
+          }
+        }
+      }
+      chipsPrevHRef.current = newH;
+    });
+    ro.observe(el);
+    chipsRORef.current = ro;
+    return () => {
+      ro.disconnect();
+      chipsRORef.current = null;
+      chipsPrevHRef.current = 0;
+    };
+  }, [communesSelected.length, selectionSource]);
+
+  // Scroll infini: observer le sentinel en bas de page
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+  try { console.debug('[Accueil] IntersectionObserver', { isIntersecting: entry?.isIntersecting, time: Date.now(), hasMore, loadingMore, filtering }); } catch {}
+      if (!entry?.isIntersecting) return;
+      // Throttle: au moins 400ms entre deux déclenchements
+      const now = Date.now();
+      if (now - (lastIoTriggerAtRef.current || 0) < 400) return;
+      // Charger la page suivante si possible
+      if (!loadingMore && hasMore && !filtering) {
+        lastIoTriggerAtRef.current = now;
+        loadAnnonces(true);
+      }
+    }, { root: null, rootMargin: '200px', threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, loadingMore, filtering, activeHomeTab, sortBy, prixMax, ville, codePostal, communesSelected.length, critAgeMin, critAgeMax, critProfession, surfaceMin, surfaceMax, loadAnnonces]);
+
+  // Nettoyage global à l'unmount
+  useEffect(() => {
+    return () => {
+     if (filtersDebounceRef.current) clearTimeout(filtersDebounceRef.current);
+    };
+  }, []);
+
+  // NOUVEAU: ouvrir le détail du profil colocataire (via API)
+  const openColocDetail = async (id: string) => {
+    try {
+      setColocDetailOpen(true);
+      setColocDetailLoading(true);
+      setColocDetail(null);
+      const res = await fetch(`/api/coloc/${id}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setColocDetail(data);
+      } else {
+        setColocDetail(null);
+      }
+    } catch (e) {
+      console.error("[Accueil][ColocDetail] load error", e);
+      setColocDetail(null);
+    } finally {
+      setColocDetailLoading(false);
+    }
+  };
+  // NOUVEAU: fermer le détail du profil colocataire
+  const closeColocDetail = () => {
+    setColocDetailOpen(false);
+    setColocDetail(null);
+    setColocDetailLoading(false);
+  };
+
+  // Toggle d'un filtre zone (OU)
+  const toggleZoneFilter = (zone: string) => {
+    setZoneFilters((prev) => {
+      const next = prev.includes(zone) ? prev.filter((z) => z !== zone) : [...prev, zone];
+      // Union des slugs pour les zones choisies
+      const zoneSlugs = Array.from(new Set(next.flatMap((z) => ZONE_TO_SLUGS[z] || [])));
+      // Tri stable par nom officiel pour éviter les variations d'ordre
+      zoneSlugs.sort((a, b) =>
+        (SLUG_TO_NAME[a] || a).localeCompare(SLUG_TO_NAME[b] || b, "fr", { sensitivity: "base" })
+      );
+      // MAJ groupée pour cohérence UI + requêtes
+  setSelectionSource("zones");
+      setCommunesSelected((prevSlugs) => (sameIds(prevSlugs, zoneSlugs) ? prevSlugs : zoneSlugs));
+      setZonesSelected((prevZones) => (sameIds(prevZones, next) ? prevZones : next));
+      return next;
+    });
+  };
+
+  return (
+    <>
+  <main className="min-h-screen p-2 sm:p-6 flex flex-col items-center scroll-pt-28 md:scroll-pt-32">
+      {/* Ecran de CHOIX initial */}
+      {activeHomeTab === null ? (
+  <section className="w-full max-w-[1440px] flex flex-col items-center">
+          <h1 className="text-3xl font-bold mb-2 text-center">Que souhaitez-vous rechercher ?</h1>
+          <p className="text-slate-600 mb-8 text-center">Choisissez un type de recherche pour commencer.</p>
+          {/* Illustration kaz réunionnaise (page d'accueil initiale) */}
+      <div className="w-full max-w-2xl mx-auto mb-8 px-2">
+            <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-gradient-to-b from-sky-50 to-white">
+              <Image
+                src={homepageImageSrc}
+                alt="Colocation à La Réunion, colocs sur la terrasse d'une kaz"
+                width={1280}
+                height={853}
+                priority
+        sizes="(max-width: 640px) 92vw, (max-width: 1024px) 70vw, 640px"
+                className="w-full h-auto"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full">
+            <button
+              className="group bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition text-left"
+              onClick={() => setActiveHomeTab("annonces")}
+            >
+              <div className="text-2xl mb-2">🏠</div>
+              <h2 className="text-xl font-semibold mb-1">Je cherche une colocation</h2>
+              <p className="text-slate-600">Voir les annonces de logements à partager.</p>
+              <div className="mt-4 inline-flex items-center gap-2 text-blue-600 group-hover:underline">
+                Commencer
+                <span>→</span>
+              </div>
+            </button>
+            <button
+              className="group bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition text-left"
+              onClick={() => setActiveHomeTab("colocataires")}
+            >
+              <div className="text-2xl mb-2">👥</div>
+              <h2 className="text-xl font-semibold mb-1">Je cherche colocataire(s) </h2>
+              <p className="text-slate-600">Voir les profils des personnes recherchant une colocation.</p>
+              <div className="mt-4 inline-flex items-center gap-2 text-blue-600 group-hover:underline">
+                Commencer
+                <span>→</span>
+              </div>
+            </button>
+          </div>
+          {/* Bandeau publicitaire (AdSense) géré par le back-office */}
+          <div className="w-full max-w-5xl mx-auto mt-6">
+            <AdSlot placementKey="home.initial.belowHero" className="my-2" />
+          </div>
+        </section>
+      ) : (
+        <>
+          {/* Bouton "Changer de type de recherche" retiré */}
+
+          {/* Ancre au-dessus des onglets */}
+          <div ref={tabsTopRef} className="h-0 scroll-mt-28 md:scroll-mt-32" aria-hidden="true" />
+          {/* Onglets Accueil — version légèrement agrandie et centrée */}
+          <div className="w-full max-w-[1440px] mb-4 flex justify-center">
+            <div
+              role="tablist"
+              aria-label="Type de recherche"
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white shadow-sm overflow-hidden"
+            >
+              <button
+                role="tab"
+                aria-selected={activeHomeTab === "annonces"}
+                className={`px-4 sm:px-5 py-1.5 sm:py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  activeHomeTab === "annonces"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-700 hover:bg-slate-50"
+                }`}
+                onClick={() => setActiveHomeTab("annonces")}
+              >
+                🏠 <span className="ml-1.5">Annonces</span>
+              </button>
+              <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
+              <button
+                role="tab"
+                aria-selected={activeHomeTab === "colocataires"}
+                className={`px-4 sm:px-5 py-1.5 sm:py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  activeHomeTab === "colocataires"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-700 hover:bg-slate-50"
+                }`}
+                onClick={() => setActiveHomeTab("colocataires")}
+              >
+                👥 <span className="ml-1.5">Colocataires</span>
+              </button>
+            </div>
+          </div>
+
+          
+
+          {firestoreError && (
+            <div className="w-full max-w-7xl mb-4 px-4 py-3 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-sm">
+              {firestoreError}
+            </div>
+          )}
+
+          <h1 className="text-3xl font-bold mb-6 text-center">
+            {activeHomeTab === "annonces" ? "Annonces de colocation" : "Profils de colocataires"}
+          </h1>
+
+          {/* Layout 2 colonnes (desktop): filtres | annonces */}
+          <div className="w-full max-w-[1440px] flex flex-col md:flex-row md:items-start gap-6">
+            {/* Colonne annonces (droite en ≥md) */}
+            <div className="flex-1 min-w-0 md:order-2">
+              {/* Indicateur de filtrage en cours */}
+              {filtering && (
+                <div className="w-full mb-3 text-center text-slate-600 text-sm">
+                  Filtrage en cours…
+                </div>
+              )}
+
+        {/* Entête: libellé : compteur (total si aucun filtre au 1er affichage, sinon nombre filtré) + suffixe "trouvé(e)s" */}
+              <div className="flex items-center mb-2">
+                <div className="text-sm text-slate-700">
+                  {activeHomeTab === 'annonces' ? 'Nombre d\'annonces' : 'Nombre de profils'}
+                  {" : "}
+                  {(() => {
+                    // Si en cours de chargement, afficher "Chargement..."
+                    if (filtering) {
+                      return 'Chargement...';
+                    }
+                    
+                    const hasCommuneSel = selectedParentSlugs.length > 0;
+                    const hasBudget = prixMax !== null;
+                    const hasVille = !!ville || !!codePostal;
+                    const hasCriteres = activeHomeTab === 'colocataires' && (critAgeMin !== null || critAgeMax !== null || !!critProfession);
+                     const hasSurface = surfaceMin !== null || surfaceMax !== null;
+                     const anyFilter = hasCommuneSel || hasBudget || hasVille || hasCriteres || hasSurface;
+                    // Si aucun filtre, montrer le total global par onglet
+                    if (!anyFilter) {
+                      return activeHomeTab === 'annonces' ? (countAnnoncesTotal ?? '…') : (countProfilsTotal ?? '…');
+                    }
+                    // Sinon, montrer le nombre d'annonces réellement affichées après filtrage côté client
+                    return displayedAnnonces.length;
+                  })()}
+          {" "}
+          {activeHomeTab === 'annonces' ? 'trouvées' : 'trouvés'}
+                </div>
+              </div>
+
+              <div ref={resultsTopRef} className="h-0 scroll-mt-28 md:scroll-mt-32" aria-hidden="true" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 prevent-anchor">
+                {(!filtering && displayedAnnonces.length === 0) ? (
+                  <p className="text-slate-500 text-center mt-4 col-span-full">Aucune annonce trouvée.</p>
+                ) : (
+                  displayedAnnonces.flatMap((annonce: any, idx: number) => {
+                    // isAdmin non utilisé ici
+                    const card = (
+                      <div
+                        key={annonce.id}
+                        style={activeHomeTab === "annonces" ? { cursor: 'pointer' } : {}}
+                        tabIndex={0}
+                        role="button"
+                        onClick={(e) => {
+                          if (activeHomeTab === "annonces") {
+                            e.preventDefault();
+                            setAnnonceDetail(annonce);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (activeHomeTab === "annonces" && (e.key === "Enter" || e.key === " ")) {
+                            e.preventDefault();
+                            setAnnonceDetail(annonce);
+                          }
+                        }}
+                      >
+            {activeHomeTab === "colocataires" ? (
+                          <ColocProfileCard
+                            id={annonce.id}
+                            nom={annonce.nom}
+                            ville={annonce.ville}
+                            age={annonce.age}
+                            description={annonce.description}
+                            createdAt={annonce.createdAt}
+                            imageUrl={annonce.imageUrl}
+              zonesLabel={annonce.zonesLabel}
+                            onClick={() => {
+                              setColocDetail(annonce);
+                              setColocDetailOpen(true);
+                            }}
+                          />
+                        ) : (
+                          <AnnonceCard
+                            id={annonce.id}
+                            titre={annonce.titre}
+                            ville={annonce.ville}
+                            prix={annonce.prix}
+                            surface={annonce.surface}
+                            description={annonce.description}
+                            createdAt={annonce.createdAt}
+                            imageUrl={annonce.imageUrl || defaultAnnonceImg}
+                            zonesLabel={annonce.zonesLabel}
+                            onEdit={isAdmin ? () => setEditAnnonce(annonce) : undefined}
+                            onDelete={isAdmin ? () => setDeleteAnnonceId(annonce.id) : undefined}
+                          />
+                        )}
+                      </div>
+                    );
+                    const rendered: React.ReactNode[] = [];
+                    if (activeHomeTab === "colocataires") {
+                      rendered.push(
+                        <div
+                          key={`wrap-${annonce.id}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            const target = e.target as HTMLElement;
+                            const link = target.closest && target.closest("a");
+                            if (link) e.preventDefault();
+                            openColocDetail(annonce.id);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") openColocDetail(annonce.id);
+                          }}
+                          className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg select-none [&_a]:pointer-events-none"
+                        >
+                          {card}
+                        </div>
+                      );
+                    } else {
+                      rendered.push(card);
+                    }
+                    // Insérer une pub inline toutes les 16 cartes (annonces et profils)
+                    if ((idx + 1) % 16 === 0) {
+                      rendered.push(
+                        <div key={`ad-inline-${idx}`} className="col-span-full">
+                          <AdSlot placementKey="listing.inline.1" />
+                        </div>
+                      );
+                    }
+                    return rendered;
+                  })
+                )}
+
+                {loadingMore && (
+                  <p className="text-slate-500 text-center mt-4 col-span-full">Chargement...</p>
+                )}
+
+                {/* Sentinel pour scroll infini */}
+                <div ref={loadMoreRef} className="col-span-full h-8" aria-hidden="true" />
+
+                {!hasMore && !loadingMore && displayedAnnonces.length > 0 && (
+                  <p className="text-slate-400 text-center text-xs mt-2 col-span-full">Fin de liste</p>
+                )}
+
+                {/* Message de fin de liste retiré à la demande */}
+              </div>
+              {/* Style local: empêche l'ancrage automatique qui peut déplacer la page quand du contenu est inséré */}
+              <style jsx>{`
+                .prevent-anchor { overflow-anchor: none; }
+              `}</style>
+
+              {/* Modaux globaux au niveau page (hors boucle) */}
+              {activeHomeTab === "annonces" && annonceDetail && (
+                <AnnonceDetailModal
+                  open={!!annonceDetail}
+                  onClose={() => setAnnonceDetail(null)}
+                  annonce={annonceDetail}
+                  isAdmin={!!isAdmin}
+                  onEdit={(a) => { setEditAnnonce(a); setAnnonceDetail(null); }}
+                  onDelete={(id) => { setDeleteAnnonceId(id); setAnnonceDetail(null); }}
+                />
+              )}
+
+              <ConfirmModal
+                isOpen={!!deleteAnnonceId}
+                onClose={() => setDeleteAnnonceId(null)}
+                onConfirm={async () => {
+                  if (deleteAnnonceId) {
+                    try {
+                      const res = await fetch(`/api/annonces/${deleteAnnonceId}`, { method: 'DELETE' });
+                      if (!res.ok) throw new Error('Erreur lors de la suppression');
+                      showToast('success', "Annonce supprimée ✅");
+                      setDeleteAnnonceId(null);
+                      await loadAnnonces(false);
+                    } catch {
+                      showToast('error', "Erreur lors de la suppression ❌");
+                      setDeleteAnnonceId(null);
+                    }
+                  } else {
+                    setDeleteAnnonceId(null);
+                  }
+                }}
+                title="Supprimer l'annonce ?"
+                description="Voulez-vous vraiment supprimer cette annonce ? Cette action est irréversible."
+              />
+
+              <ConfirmModal
+                isOpen={!!deleteColocId}
+                onClose={() => setDeleteColocId(null)}
+                onConfirm={async () => {
+                  if (deleteColocId) {
+                    try {
+                      const res = await fetch(`/api/coloc/${deleteColocId}`, { method: 'DELETE' });
+                      if (!res.ok) throw new Error('Erreur lors de la suppression');
+                      showToast('success', "Profil colocataire supprimé ✅");
+                      setDeleteColocId(null);
+                      await loadAnnonces(false);
+                    } catch {
+                      showToast('error', "Erreur lors de la suppression ❌");
+                      setDeleteColocId(null);
+                    }
+                  } else {
+                    setDeleteColocId(null);
+                  }
+                }}
+                title="Supprimer le profil colocataire ?"
+                description="Voulez-vous vraiment supprimer ce profil ? Cette action est irréversible."
+              />
+
+              <AnnonceModal
+                isOpen={!!editAnnonce}
+                onClose={() => setEditAnnonce(null)}
+                onSubmit={async (data) => {
+                  if (editAnnonce?.id) {
+                    try {
+                      const res = await fetch(`/api/annonces/${editAnnonce.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data),
+                      });
+                      if (!res.ok) throw new Error('Erreur lors de la modification');
+                      showToast('success', "Annonce modifiée ✅");
+                      setEditAnnonce(null);
+                      await loadAnnonces(false);
+                    } catch {
+                      showToast('error', "Erreur lors de la modification ❌");
+                      setEditAnnonce(null);
+                    }
+                  } else {
+                    setEditAnnonce(null);
+                  }
+                }}
+                annonce={editAnnonce}
+              />
+
+              <ColocProfileModal
+                open={!!editColoc}
+                onClose={() => setEditColoc(null)}
+                profile={editColoc}
+                onSubmit={async (data) => {
+                  if (editColoc?.id) {
+                    try {
+                      const res = await fetch(`/api/coloc/${editColoc.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data),
+                      });
+                      if (!res.ok) throw new Error('Erreur lors de la modification');
+                      showToast('success', "Profil colocataire modifié ✅");
+                      setEditColoc(null);
+                      await loadAnnonces(false);
+                    } catch {
+                      showToast('error', "Erreur lors de la modification ❌");
+                      setEditColoc(null);
+                    }
+                  } else {
+                    setEditColoc(null);
+                  }
+                }}
+              />
+            </div>
+
+            {/* Colonne filtres (gauche en ≥md) */}
+            <div className="w-full md:order-1 md:basis-[24%] lg:basis-[26%] md:flex-shrink-0">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault(); // mise à jour auto: pas d'appel manuel
+                }}
+                className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4"
+              >
+                {/* Titre Affiner la recherche */}
+                <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 -mx-4 -mt-4 mb-4 rounded-t-2xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-center gap-3 flex-1">
+                      <span className="hidden md:block h-px w-8 bg-slate-200" />
+                      <div className="text-base md:text-lg font-semibold text-slate-700 tracking-tight">Affiner la recherche</div>
+                      <span className="hidden md:block h-px w-8 bg-slate-200" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFirestoreError(null);
+                        setVille("");
+                        setCodePostal("");
+                        setPrixMax(null);
+                        setSortBy("date");
+                        setCommunesSelected([]);
+                        setZonesSelected([]);
+                        setAnnonces([]);
+                        setHasMore(true);
+                        setZoneFilters([]);
+                        setSelectionSource(null);
+                        // Remplacement au 1er snapshot pour éviter les doublons
+                        resetOnFirstSnapshotRef.current = true;
+                        setFiltering(true);
+                        // pas d'appel direct à loadAnnonces: l'effet "filtres" va relancer proprement
+                      }}
+                      className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors"
+                    >
+                      Réinitialiser
+                    </button>
+                  </div>
+                </div>
+                <div className="hidden">
+                  {/* anciennement: <div className="grid grid-cols-3 gap-2"> ... */}
+                </div>
+
+                {/* Contenu des filtres, masquable */}
+                <div id="filters-content" className={filtersCollapsed ? "hidden" : "block"}>
+                {/* Zones rapides (OU) tout en haut - visibles seulement en mode carte */}
+                {hasMode('map') && (
+                  <div ref={zonesBlockRef}>
+                    <div className="mb-2 text-xs font-medium text-slate-600">Secteur de recherche</div>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1 text-center justify-items-stretch">
+                      {Object.keys(GROUPES).map((z) => (
+                        <button
+                          key={z}
+                          type="button"
+                          onClick={() => toggleZoneFilter(z)}
+                          className={`w-full px-2 py-1 rounded-full text-xs leading-none border transition ${
+                            zoneFilters.includes(z)
+                              ? "bg-blue-600 text-white border-blue-600"
+                              : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                          }`}
+                        >
+                          {z === "Intérieur" ? "Secteur Centre" : `Secteur ${z}`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Carte (déplacée en bas) */}
+                <div ref={communeBlockRef} className="flex flex-col gap-4 items-stretch justify-center">
+                  {/* Budget (toujours visible) */}
+                  <div ref={budgetBlockRef}>
+                    <label className="block text-sm font-medium mb-1">
+                      {activeHomeTab === "annonces" ? "Prix max (€)" : "Budget max (€)"}
+                    </label>
+                    <input
+                      type="number"
+                      value={prixMax ?? ""}
+                      onChange={(e) => setPrixMax(Number(e.target.value) || null)}
+                      className="border border-gray-300 rounded px-3 py-2 w-full"
+                      placeholder={activeHomeTab === "annonces" ? "Ex: 600" : "Ex: 600"}
+                    />
+                  </div>
+
+                   {/* Surface (toujours visible) */}
+                   <div className="grid grid-cols-2 gap-3 w-full">
+                     <div>
+                       <label className="block text-sm font-medium mb-1">Surface min (m²)</label>
+                       <input
+                         type="number"
+                         value={surfaceMin ?? ""}
+                         onChange={(e) => setSurfaceMin(Number(e.target.value) || null)}
+                         className="border border-gray-300 rounded px-3 py-2 w-full"
+                         placeholder="Ex: 20"
+                       />
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium mb-1">Surface max (m²)</label>
+                       <input
+                         type="number"
+                         value={surfaceMax ?? ""}
+                         onChange={(e) => setSurfaceMax(Number(e.target.value) || null)}
+                         className="border border-gray-300 rounded px-3 py-2 w-full"
+                         placeholder="Ex: 80"
+                       />
+                     </div>
+                   </div>
+
+                                     {/* Critères (visibles seulement pour les colocataires) */}
+                   {activeHomeTab === 'colocataires' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Âge min</label>
+                      <input type="number" className="border border-gray-300 rounded px-3 py-2 w-full" value={critAgeMin ?? ''} onChange={(e) => setCritAgeMin(Number(e.target.value) || null)} placeholder="Ex: 20" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Âge max</label>
+                      <input type="number" className="border border-gray-300 rounded px-3 py-2 w-full" value={critAgeMax ?? ''} onChange={(e) => setCritAgeMax(Number(e.target.value) || null)} placeholder="Ex: 35" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Profession</label>
+                      <input type="text" className="border border-gray-300 rounded px-3 py-2 w-full" value={critProfession} onChange={(e) => setCritProfession(e.target.value)} placeholder="Ex: Étudiant, CDI..." />
+                    </div>
+                  </div>
+                   )}
+                </div>
+
+              {/* Tri retiré de la barre gauche */}
+
+              {/* Mise à jour automatique silencieuse */}
+
+              {/* Le bouton Réinitialiser est déplacé près de la carte */}
+              </div>
+            </form>
+
+              {/* Zone pub au-dessus de la carte (juste au-dessus des boutons Réinitialiser / Zoom sélection de la carte) */}
+              <div className="sticky top-[calc(1rem+0px)] z-0 space-y-2 mt-2 mb-2">
+                <AdSlot placementKey="home.list.rightSidebar" />
+              </div>
+
+              {/* Carte (sous la pub et, si visible, le bouton) */}
+              {showCommuneMap && !filtersCollapsed && (
+                <div>
+                  <div id="map-section" ref={mapWrapRef} className="rounded-2xl border border-slate-200 overflow-hidden">
+                    <div className="bg-slate-50 px-3 py-2 border-b border-slate-200">
+                      <div className="flex items-center justify-center gap-3">
+                        <span className="hidden md:block h-px w-8 bg-slate-200" />
+                        <div className="text-base md:text-lg font-semibold text-slate-700 tracking-tight">Rechercher par secteur</div>
+                        <span className="hidden md:block h-px w-8 bg-slate-200" />
+                      </div>
+                    </div>
+                    <div className="p-3">
+                  <CommuneZoneSelector
+                    value={communesSelected}
+                    computeZonesFromSlugs={computeZonesFromSlugs}
+                    onChange={(slugs, zones = []) => {
+                      setSelectionSource("map");
+                      setCommunesSelected((prev) => (sameIds(prev, slugs as string[]) ? prev : (slugs as string[])));
+                      setZonesSelected((prev) => (sameIds(prev, zones as string[]) ? prev : (zones as string[])));
+                    }}
+                    height={420}
+                    className="w-full"
+                    alwaysMultiSelect
+                    // Masque le résumé de sélection sous la carte
+                    hideSelectionSummary
+                  />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Bouton Réinitialiser filtre (placé sous la carte) */}
+              {!filtersCollapsed && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFirestoreError(null);
+                      setVille("");
+                      setCodePostal("");
+                      setPrixMax(null);
+                      setSortBy("date");
+                      setCommunesSelected([]);
+                      setZonesSelected([]);
+                      setAnnonces([]);
+                      setHasMore(true);
+                      setZoneFilters([]);
+                      setSelectionSource(null);
+                      // Remplacement au 1er snapshot pour éviter les doublons
+                      resetOnFirstSnapshotRef.current = true;
+                      setFiltering(true);
+                      // pas d'appel direct à loadAnnonces: l'effet "filtres" va relancer proprement
+                    }}
+                    className="border border-slate-300 text-slate-700 px-3 py-1.5 rounded-md hover:bg-slate-50 text-sm"
+                  >
+                    Réinitialiser filtre
+                  </button>
+                </div>
+              )}
+
+              {/* Blocs de sélection — masqués si filtres repliés */}
+              {!filtersCollapsed && (zonesSelected.length > 0 || communesSelected.length > 0) && (
+                <div className="space-y-3 mt-3">
+                  <div className="bg-white rounded-xl border border-slate-200 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs font-medium text-slate-600">Secteurs sélectionnés</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{zoneFilters.length}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setZoneFilters([]);
+                            setCommunesSelected([]);
+                            setZonesSelected([]);
+                            setSelectionSource(null);
+                          }}
+                          disabled={zonesSelected.length === 0 && communesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0}
+                          className={`text-[11px] px-2 py-0.5 rounded border transition ${
+                            (zonesSelected.length === 0 && communesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0)
+                              ? "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
+                              : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                          }`}
+                          title="Tout effacer"
+                          aria-label="Tout effacer les zones et communes"
+                        >
+                          Tout effacer
+                        </button>
+                      </div>
+                    </div>
+                    <div className="max-h-[22vh] overflow-auto pr-1">
+                      <div className="flex flex-wrap gap-1">
+                        {zonesSelected.map((z) => (
+                          <span key={z} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                            {z === "Intérieur" ? "Secteur Centre" : `Secteur ${z}`}
+                            <button
+                              type="button"
+                              aria-label={`Retirer le secteur ${z}`}
+                              title="Retirer"
+                              className="ml-1 rounded text-blue-700/80 hover:text-blue-900"
+                              onClick={() => {
+                                if (zoneFilters.includes(z)) {
+                                  const nextZF = zoneFilters.filter((x) => x !== z);
+                                  const union = Array.from(new Set(nextZF.flatMap((x) => ZONE_TO_SLUGS[x] || [])));
+                                  union.sort((a, b) => (SLUG_TO_NAME[a] || a).localeCompare(SLUG_TO_NAME[b] || b, "fr", { sensitivity: "base" }));
+                                  setSelectionSource("zones");
+                                  setZoneFilters(nextZF);
+                                  setCommunesSelected(union);
+                                  setZonesSelected(nextZF);
+                                } else {
+                                  const toRemove = new Set((ZONE_TO_SLUGS[z] || []).map((s) => altSlugToCanonical[s] || s));
+                                  setSelectionSource("zones");
+                                  setCommunesSelected((prev) => {
+                                    const next = (prev || []).filter((s) => !toRemove.has(altSlugToCanonical[s] || s));
+                                    setZonesSelected(computeZonesFromSlugs(next));
+                                    setZoneFilters([]);
+                                    return sameIds(prev || [], next) ? prev : next;
+                                  });
+                                }
+                              }}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-slate-200 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs font-medium text-slate-600">Communes sélectionnées</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{communesSelected.length}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVille("");
+                            setCodePostal("");
+                            setZoneFilters([]);
+                            setCommunesSelected([]);
+                            setZonesSelected([]);
+                            setSelectionSource(null);
+                          }}
+                          disabled={communesSelected.length === 0 && zonesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0}
+                          className={`text-[11px] px-2 py-0.5 rounded border transition ${
+                            (communesSelected.length === 0 && zonesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0)
+                              ? "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
+                              : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                          }`}
+                          title="Tout effacer"
+                          aria-label="Tout effacer les communes et zones"
+                        >
+                          Tout effacer
+                        </button>
+                      </div>
+                    </div>
+                    <div ref={selectedChipsRef} className="max-h-[22vh] overflow-auto pr-1">
+                      <div className="flex flex-wrap gap-1">
+                        {communesSelected.map((s) => (
+                          <span key={s} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200" title={parentSlugToName[s] || s}>
+                            {parentSlugToName[s] || s}
+                            <button
+                              type="button"
+                              aria-label={`Retirer ${parentSlugToName[s] || s}`}
+                              title="Retirer"
+                              className="ml-1 rounded text-slate-600 hover:text-slate-900"
+                              onClick={() => {
+                                const canon = altSlugToCanonical[s] || s;
+                                setSelectionSource("input");
+                                setCommunesSelected((prev) => {
+                                  const next = (prev || []).filter((x) => (altSlugToCanonical[x] || x) !== canon);
+                                  setZonesSelected(computeZonesFromSlugs(next));
+                                  setZoneFilters([]);
+                                  return sameIds(prev || [], next) ? prev : next;
+                                });
+                              }}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* fin blocs sélection */}
+            </div>
+          </div>
+
+
+          {/* Modal détail profil colocataire */}
+          {activeHomeTab === "colocataires" && colocDetailOpen && (
+            <div
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+              onMouseDown={(e) => { if (e.target === e.currentTarget) closeColocDetail(); }}
+            >
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 relative">
+                <button
+                  onClick={closeColocDetail}
+                  className="absolute top-3 right-3 text-slate-600 hover:text-slate-900"
+                  aria-label="Fermer"
+                >
+                  ✖
+                </button>
+                <h3 className="text-xl font-semibold mb-4">Profil colocataire</h3>
+                {colocDetailLoading ? (
+                  <p className="text-slate-600">Chargement…</p>
+                ) : !colocDetail ? (
+                  <p className="text-slate-600">Profil introuvable.</p>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    <div className="flex gap-4 items-start">
+                      <div className="flex-shrink-0 w-44">
+                        {/* Gallery: main image + thumbnails */}
+                        <div className="rounded-lg overflow-hidden bg-gray-100 w-44 h-44 relative group">
+                          <ExpandableImage
+                            src={
+                              Array.isArray(colocDetail.photos) && (colocDetail.photos as string[]).length
+                                ? (colocDetail.photos as string[])[galleryIndex] || colocDetail.imageUrl || defaultColocImg
+                                : colocDetail.imageUrl || defaultColocImg
+                            }
+                            images={Array.isArray(colocDetail.photos) && (colocDetail.photos as string[]).length ? (colocDetail.photos as string[]) : (colocDetail.imageUrl ? [colocDetail.imageUrl] : [defaultColocImg])}
+                            initialIndex={galleryIndex}
+                            className="w-full h-full"
+                            alt={colocDetail.nom || "Profil"}
+                          />
+                          {/* Hover/focus overlay: magnifier */}
+                          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 group-focus-within:bg-black/30 transition-colors" aria-hidden="true">
+                            <svg className="w-10 h-10 text-white opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="11" cy="11" r="6" />
+                              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                            </svg>
+                          </div>
+                          <button
+                            aria-label="Agrandir l'image"
+                            className="absolute right-2 top-2 bg-white/80 px-2 py-1 rounded text-sm text-slate-700"
+                            onClick={() => setLightboxOpen(true)}
+                          >
+                            Agrandir
+                          </button>
+                        </div>
+                        {Array.isArray(colocDetail.photos) && (colocDetail.photos as string[]).length > 1 && (
+                          <div className="mt-2 grid grid-cols-4 gap-2">
+                            {(colocDetail.photos as string[]).map((p: string, i: number) => (
+                              <button
+                                key={p + i}
+                                onClick={() => { setGalleryIndex(i); /* no modal open from thumbnail */ }}
+                                className={`w-10 h-10 overflow-hidden rounded-md border relative group ${i === galleryIndex ? 'border-blue-600' : 'border-slate-200'}`}
+                                aria-label={`Image ${i + 1}`}
+                              >
+                                <Image
+                                  src={p}
+                                  alt={`thumb-${i}`}
+                                  width={40}
+                                  height={40}
+                                  className="w-full h-full object-cover"
+                                  sizes="40px"
+                                />
+                                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors" aria-hidden="true">
+                                  <svg className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="11" cy="11" r="6" />
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                  </svg>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-2xl font-bold">
+                          {colocDetail.nom || "Recherche colocation"}
+                        </div>
+                        <div className="text-slate-700">
+                          {(() => {
+                            const zonesFromData = Array.isArray(colocDetail.zones) && colocDetail.zones.length
+                              ? colocDetail.zones as string[]
+                              : [];
+                            const zonesFromSlugs = Array.isArray(colocDetail.communesSlugs) && colocDetail.communesSlugs.length
+                              ? computeZonesFromSlugs((colocDetail.communesSlugs as string[]).map((s: string) => (altSlugToCanonical[s] || s)))
+                              : [];
+                            const zonesToShow = (zonesFromData.length ? zonesFromData : zonesFromSlugs);
+                            return zonesToShow.length ? zonesToShow.join(", ") : (colocDetail.ville || "-");
+                          })()}
+                          {typeof colocDetail.budget === "number" && (
+                            <span className="ml-2 text-blue-700 font-semibold">
+                              • Budget {colocDetail.budget} €
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-slate-600 text-sm mt-1">
+                          {colocDetail.profession ? colocDetail.profession : ""}
+                          {typeof colocDetail.age === "number" ? ` • ${colocDetail.age} ans` : ""}
+                          {colocDetail.dateDispo ? ` • Dispo: ${colocDetail.dateDispo}` : ""}
+                        </div>
+                      </div>
+                    </div>
+                    {lightboxOpen && (
+                      <ImageLightbox
+                        images={Array.isArray(colocDetail.photos) && (colocDetail.photos as string[]).length ? (colocDetail.photos as string[]) : (colocDetail.imageUrl ? [colocDetail.imageUrl] : [defaultColocImg])}
+                        initialIndex={galleryIndex}
+                        onClose={() => setLightboxOpen(false)}
+                      />
+                    )}
+
+                    {colocDetail.bioCourte && (
+                      <div className="text-slate-700">{colocDetail.bioCourte}</div>
+                    )}
+                    {(colocDetail.genre || colocDetail.orientation) && (
+                      <div className="text-sm text-slate-600">
+                        {colocDetail.genre ? `Genre: ${colocDetail.genre}` : ""} {colocDetail.orientation ? `• Orientation: ${colocDetail.orientation}` : ""}
+                      </div>
+                    )}
+                    {Array.isArray(colocDetail.langues) && colocDetail.langues.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Langues</div>
+                        <div className="flex flex-wrap gap-2">
+                          {colocDetail.langues.map((l: string) => (
+                            <span key={l} className="px-2 py-1 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">{l}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(colocDetail.prefGenre || colocDetail.prefAgeMin || colocDetail.prefAgeMax) && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Préférences</div>
+                        <div className="text-sm text-slate-600">
+                          {colocDetail.prefGenre ? `Colocs: ${colocDetail.prefGenre}` : ""}
+                          {(colocDetail.prefAgeMin || colocDetail.prefAgeMax) ? ` • Âge: ${colocDetail.prefAgeMin || "?"} - ${colocDetail.prefAgeMax || "?"}` : ""}
+                        </div>
+                      </div>
+                    )}
+                    {(typeof colocDetail.accepteFumeurs === "boolean" || typeof colocDetail.accepteAnimaux === "boolean" || colocDetail.rythme || colocDetail.proprete) && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Style de vie</div>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          {typeof colocDetail.accepteFumeurs === "boolean" && (
+                            <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
+                              {colocDetail.accepteFumeurs ? "Accepte fumeurs" : "Non fumeur de préférence"}
+                            </span>
+                          )}
+                          {typeof colocDetail.accepteAnimaux === "boolean" && (
+                            <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
+                              {colocDetail.accepteAnimaux ? "Accepte animaux" : "Sans animaux"}
+                            </span>
+                          )}
+                          {colocDetail.rythme && <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">Rythme: {colocDetail.rythme}</span>}
+                          {colocDetail.proprete && <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">Propreté: {colocDetail.proprete}</span>}
+                          {colocDetail.sportif && <span className="px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">Sportif</span>}
+                          {colocDetail.vegetarien && <span className="px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">Végétarien</span>}
+                          {colocDetail.soirees && <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Aime les soirées</span>}
+                          {colocDetail.musique && <span className="px-2 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200">Musique: {colocDetail.musique}</span>}
+                        </div>
+                      </div>
+                    )}
+                    {colocDetail.instagram && (
+                      <div className="text-sm">
+                        <span className="font-medium text-slate-700">Instagram:</span>{" "}
+                        <a href={`https://instagram.com/${String(colocDetail.instagram).replace(/^@/,"")}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                          {colocDetail.instagram}
+                        </a>
+                      </div>
+                    )}
+
+                    {Array.isArray(colocDetail.zones) && colocDetail.zones.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Zones recherchées</div>
+                        <div className="flex flex-wrap gap-2">
+                          {colocDetail.zones.map((z: string) => (
+                            <span key={z} className="px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                              {z}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {Array.isArray(colocDetail.communesSlugs) && colocDetail.communesSlugs.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">Communes ciblées</div>
+                        <div className="flex flex-wrap gap-2">
+                          {colocDetail.communesSlugs.map((s: string) => (
+                            <span key={s} className="px-2 py-1 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {colocDetail.telephone && (
+                      <div className="text-sm">
+                        <span className="font-medium text-slate-700">Téléphone:</span>{" "}
+                        <span className="text-slate-800">{colocDetail.telephone}</span>
+                      </div>
+                    )}
+
+                    {colocDetail.email && (
+                      <div className="text-sm">
+                        <span className="font-medium text-slate-700">Email:</span>{" "}
+                        <span className="text-slate-800">{colocDetail.email}</span>
+                      </div>
+                    )}
+
+                    {colocDetail.description && (
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 mb-1">À propos</div>
+                        <p className="text-slate-800 whitespace-pre-line">{colocDetail.description}</p>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2">
+                      {isAdmin && (
+                        <>
+                          <button
+                            onClick={() => { setEditColoc(colocDetail); closeColocDetail(); }}
+                            className="px-4 py-2 rounded bg-yellow-500 text-white hover:bg-yellow-600"
+                          >
+                            Modifier
+                          </button>
+                          <button
+                            onClick={() => { setDeleteColocId(colocDetail.id); closeColocDetail(); }}
+                            className="px-4 py-2 rounded bg-rose-600 text-white hover:bg-rose-700"
+                          >
+                            Supprimer
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={closeColocDetail}
+                        className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+                      >
+                        Fermer
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </main>
+    </>
+  );
+}
+

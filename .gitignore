@@ -1,76 +1,259 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ========================================
+# .gitignore - Dalon974 Project
+# ========================================
+# Configuration pour la structure dev/prod
+# ========================================
 
-# Env et secrets (ne jamais versionner)
+# ========================================
+# ENVIRONNEMENTS ET SECRETS
+# ========================================
+
+# Variables d'environnement (ne jamais versionner)
 .env
 .env.local
 .env.*.local
 *.env
 *.env.local
+.env.production
+.env.development
+.env.test
+
+# Configuration npm/yarn
 .npmrc
 .yarnrc
 .yarnrc.yml
 
-# Artefacts Next.js / caches
+# Clés et secrets
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+serviceAccount*.json
+.secret*
+.secrets/
+
+# ========================================
+# ARTEACTS NEXT.JS
+# ========================================
+
+# Build Next.js
 .next/
 .next.fixture/
 out/
 dist/
+build/
+
+# Cache et optimisation
 .turbo/
 .swc/
 .vercel/
+.vercel/output/
 
-# Dépendances
+# ========================================
+# DÉPENDANCES
+# ========================================
+
+# Node modules (racine et environnements)
 node_modules/
+*/node_modules/
 
-# Firebase (caches locaux, logs, exports)
+# ========================================
+# ENVIRONNEMENTS DEV/PROD
+# ========================================
+
+# Logs des environnements
+dev/logs/
+prod/logs/
+*/logs/
+*.log
+
+# Uploads et données temporaires
+dev/public/uploads/
+prod/public/uploads/
+*/public/uploads/
+uploads/
+
+# Sauvegardes
+backups/
+backup/
+*/backup/
+*/backups/
+
+# Caches spécifiques aux environnements
+dev/.next/
+prod/.next/
+dev/.cache/
+prod/.cache/
+
+# ========================================
+# FIREBASE (si utilisé)
+# ========================================
+
 .firebase/
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
 emulator-data/
 firestore-export*/
+firebase-debug.*.log
 
-# IDE/OS divers
+# ========================================
+# IDE ET SYSTÈME
+# ========================================
+
+# VSCode
 .vscode/
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+
+# IntelliJ/WebStorm
 .idea/
 *.iml
+*.ipr
+*.iws
+
+# Système d'exploitation
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
+
+# Éditeurs
 *.swp
 *.swo
+*~
+.vim/
+.emacs/
 
-# Tests / couverture
+# ========================================
+# TESTS ET COUVERTURE
+# ========================================
+
+# Tests
 coverage/
 .nyc_output/
 jest-html-reporters-*.html
 *.lcov
+test-results/
+playwright-report/
+playwright/.cache/
 
-# Logs
+# ========================================
+# LOGS ET DEBUG
+# ========================================
+
+# Logs npm/yarn
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-debug.log
+lerna-debug.log*
 
-# Caches divers
+# Logs applicatifs
+debug.log
+error.log
+combined.log
+*.log
+
+# ========================================
+# CACHES ET TEMPORAIRES
+# ========================================
+
+# Caches généraux
 .cache/
 .tmp/
 temp/
+tmp/
+*.tmp
+*.temp
+
+# TypeScript
 *.tsbuildinfo
+.tsbuildinfo
 
-# Admin SDK clés (si utilisées côté tools/scripts)
-functions/.env
-functions/.env.local
-functions/.secret*
-functions/serviceAccount*.json
+# Autres caches
+.eslintcache
+.stylelintcache
+.cache/
 
-# Conserver les lockfiles (ne pas ignorer)
+# ========================================
+# FICHIERS SPÉCIFIQUES AU PROJET
+# ========================================
+
+# Résultats de scraping
+lbc-simple-result.png
+scraping-results/
+scraper-output/
+
+# Fichiers de test temporaires
+test-*.json
+temp-*.js
+debug-*.txt
+
+# ========================================
+# EXCEPTIONS (FICHIERS À CONSERVER)
+# ========================================
+
+# Lockfiles (toujours versionner)
 !package-lock.json
 !yarn.lock
 !pnpm-lock.yaml
 
+# Configuration TypeScript
+!tsconfig.json
+!tsconfig.*.json
 
-lbc-simple-result.png
-prod/
-backups/
-dev/public/uploads/*
+# Configuration Next.js
+!next.config.js
+!next.config.ts
+
+# Configuration Tailwind
+!tailwind.config.js
+!tailwind.config.ts
+
+# Configuration PostCSS
+!postcss.config.js
+!postcss.config.ts
+
+# Configuration ESLint
+!.eslintrc.js
+!.eslintrc.json
+!.eslintrc.yml
+
+# Configuration Prisma
+!prisma/schema.prisma
+!prisma/migrations/
+
+# ========================================
+# STRUCTURE SPÉCIFIQUE DALON974
+# ========================================
+
+# Ignorer les répertoires prod et dev à la racine (ancienne structure)
+# Mais permettre les sous-répertoires dev/ et prod/
+/prod/
+/dev/
+
+# Permettre les nouveaux répertoires dev/ et prod/
+!dev/
+!prod/
+
+# Ignorer les fichiers de configuration SSL
+*.conf
+*.ssl
+*.cert
+*.pem
+
+# Ignorer les fichiers de déploiement temporaires
+deploy-*.sh
+deploy-*.js
+*.deploy
+
+# ========================================
+# FIN DU FICHIER
+# ========================================
