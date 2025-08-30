@@ -1,7 +1,7 @@
 # ========================================
-# .gitignore - Environnement PROD
+# .gitignore - Environnement DEV
 # ========================================
-# Configuration spécifique à l'environnement de production
+# Configuration spécifique à l'environnement de développement
 # ========================================
 
 # ========================================
@@ -32,13 +32,12 @@ node_modules/
 # LOGS ET DEBUG
 # ========================================
 
-# Logs de production
+# Logs de développement
 logs/
 *.log
 debug.log
 error.log
 combined.log
-access.log
 
 # Logs npm/yarn
 npm-debug.log*
@@ -47,10 +46,10 @@ yarn-error.log*
 pnpm-debug.log*
 
 # ========================================
-# UPLOADS ET DONNÉES
+# UPLOADS ET DONNÉES TEMPORAIRES
 # ========================================
 
-# Uploads utilisateurs (production)
+# Uploads utilisateurs
 public/uploads/
 uploads/
 
@@ -83,43 +82,33 @@ tmp/
 # Variables d'environnement
 .env
 .env.local
-.env.production
+.env.development
 .env.*.local
 
 # ========================================
-# SÉCURITÉ PRODUCTION
+# TESTS
 # ========================================
 
-# Clés SSL/TLS
-*.pem
-*.key
-*.crt
-*.p12
-*.pfx
-
-# Configuration serveur
-*.conf
-*.ssl
-*.cert
+# Couverture de tests
+coverage/
+.nyc_output/
+jest-html-reporters-*.html
+*.lcov
+test-results/
 
 # ========================================
-# SAUVEGARDES
+# FICHIERS SPÉCIFIQUES AU DÉVELOPPEMENT
 # ========================================
 
-# Sauvegardes automatiques
-backups/
-backup/
-*.backup
-*.bak
+# Résultats de scraping (dev uniquement)
+scraping-results/
+scraper-output/
+lbc-simple-result.png
 
-# ========================================
-# MONITORING
-# ========================================
-
-# Fichiers de monitoring
-monitoring/
-metrics/
-*.metrics
+# Fichiers de test temporaires
+test-*.json
+temp-*.js
+debug-*.txt
 
 # ========================================
 # EXCEPTIONS (FICHIERS À CONSERVER)

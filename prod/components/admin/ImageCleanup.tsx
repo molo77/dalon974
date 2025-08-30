@@ -61,13 +61,13 @@ export default function ImageCleanup() {
 
       if (response.ok) {
         setLastResult(result);
-        appToast('success', 'Test de nettoyage terminé ✅');
+        toast.success( 'Test de nettoyage terminé ✅');
       } else {
-        appToast('error', `Erreur: ${result.error || 'Erreur inconnue'} ❌`);
+        toast.error( `Erreur: ${result.error || 'Erreur inconnue'} ❌`);
       }
     } catch (error) {
       console.error('Erreur lors du test:', error);
-      appToast('error', 'Erreur lors du test ❌');
+      toast.error( 'Erreur lors du test ❌');
     } finally {
       setIsLoading(false);
     }
