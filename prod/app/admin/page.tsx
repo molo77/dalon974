@@ -772,7 +772,7 @@ export default function AdminPage() {
               Administration
             </h1>
             {/* Boutons de création d'exemples - seulement en développement */}
-            {process.env.NODE_ENV === 'development' && (
+            {process.env.NEXT_PUBLIC_APP_ENV === 'development' && (
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -1092,7 +1092,7 @@ export default function AdminPage() {
               {adminLoading ? "Suppression..." : `Supprimer la sélection (${adminColocsSelected.length})`}
             </button>
             {/* Boutons de création d'exemples - seulement en développement */}
-            {process.env.NODE_ENV === 'development' && (
+            {process.env.NEXT_PUBLIC_APP_ENV === 'development' && (
               <div className="flex gap-2">
                 <button
                   type="button"
