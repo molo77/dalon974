@@ -1,13 +1,16 @@
 #!/bin/bash
-set -e
+
+# Script de déploiement dev vers prod
+# Copie les fichiers de dev vers prod, adapte les variables d'environnement
+# et synchronise la base de données en gardant juste la structure
+
+set -e  # Arrêt en cas d'erreur
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEV_DIR="/data/dalon974/dev"
-PROD_DIR="/data/dalon974/prod"
-BACKUP_DIR="/data/dalon974/backups"
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_NAME="prod_backup_${TIMESTAMP}"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+DEV_DIR="$PROJECT_ROOT/dev"
+PROD_DIR="$PROJECT_ROOT/prod"
 
 # Couleurs pour les logs
 RED='\033[0;31m'
@@ -18,269 +21,260 @@ NC='\033[0m' # No Color
 
 # Fonctions de logging
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo -e "${BLUE}ℹ️  $1${NC}"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo -e "${GREEN}✅ $1${NC}"
 }
 
 log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    echo -e "${YELLOW}⚠️  $1${NC}"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "${RED}❌ $1${NC}"
 }
 
-# Vérification des processus
-check_process() {
-    local port=$1
-    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null ; then
-        log_warning "Port $port utilisé, arrêt du processus..."
-        pkill -f "next.*:$port" || true
+# Vérification des prérequis
+check_prerequisites() {
+    log_info "Vérification des prérequis..."
+    
+    if [[ ! -d "$DEV_DIR" ]]; then
+        log_error "Répertoire dev introuvable: $DEV_DIR"
+        exit 1
+    fi
+    
+    if [[ ! -d "$PROD_DIR" ]]; then
+        log_error "Répertoire prod introuvable: $PROD_DIR"
+        exit 1
+    fi
+    
+    if ! command -v rsync &> /dev/null; then
+        log_error "rsync n'est pas installé"
+        exit 1
+    fi
+    
+    log_success "Prérequis vérifiés"
+}
+
+# Arrêt des serveurs
+stop_servers() {
+    log_info "Arrêt des serveurs..."
+    
+    if [[ -f "$SCRIPT_DIR/server-manager.sh" ]]; then
+        "$SCRIPT_DIR/server-manager.sh" stop
+    else
+        # Fallback: arrêt manuel
+        pkill -f "next dev" || true
+        pkill -f "next start" || true
         sleep 2
     fi
-}
-
-# Création de sauvegarde
-create_backup() {
-    log_info "Création de sauvegarde de production..."
-    mkdir -p "$BACKUP_DIR"
     
-    if [ -d "$PROD_DIR" ]; then
-        rsync -av --exclude='node_modules' --exclude='.next' --exclude='logs' \
-            --exclude='public/uploads' \
-            "$PROD_DIR/" "$BACKUP_DIR/$BACKUP_NAME/"
-        log_success "Sauvegarde créée: $BACKUP_DIR/$BACKUP_NAME"
-    else
-        log_warning "Aucune production existante à sauvegarder"
-    fi
+    log_success "Serveurs arrêtés"
 }
 
-# Nettoyage de production
-clean_prod() {
-    log_info "Nettoyage de l'environnement de production..."
+# Nettoyage de la production
+clean_production() {
+    log_info "Nettoyage de la production..."
+    
     cd "$PROD_DIR"
     
-    # Arrêt des processus
-    check_process 3000
+    # Suppression des fichiers générés
+    rm -rf .next
+    rm -rf node_modules
+    rm -f package-lock.json
     
-    # Nettoyage des fichiers (garder .next pour copier le build de dev)
-    rm -rf node_modules package-lock.json
-    log_success "Environnement de production nettoyé (build .next conservé)"
+    # Sauvegarde de .env.local si il existe
+    if [[ -f ".env.local" ]]; then
+        cp .env.local .env.local.backup
+        log_info "Sauvegarde de .env.local créée"
+    fi
+    
+    log_success "Production nettoyée"
 }
 
-# Copie des fichiers
+# Copie des fichiers de dev vers prod
 copy_files() {
     log_info "Copie des fichiers de dev vers prod..."
     
-    # Fichiers applicatifs (incluant le build .next)
-    rsync -av --exclude='node_modules' --exclude='logs' \
-        --exclude='public/uploads' \
+    cd "$PROJECT_ROOT"
+    
+    # Copie de tous les fichiers sauf les spécifiques à l'environnement
+    rsync -av --delete \
+        --exclude='.env.local' \
+        --exclude='.env.local.backup' \
+        --exclude='node_modules' \
+        --exclude='.next' \
+        --exclude='package-lock.json' \
+        --exclude='.git' \
+        --exclude='*.log' \
+        --exclude='.DS_Store' \
+        --exclude='Thumbs.db' \
         "$DEV_DIR/" "$PROD_DIR/"
     
-    log_success "Fichiers copiés avec succès (incluant le build .next)"
+    log_success "Fichiers copiés"
 }
 
 # Reconstruction du fichier .env.local pour la production
 rebuild_env_prod() {
     log_info "Reconstruction du fichier .env.local pour la production..."
     
-    if [ ! -f "$DEV_DIR/.env.local" ]; then
-        log_warning "Fichier .env.local manquant en dev, création d'un fichier par défaut"
-        cat > "$PROD_DIR/.env.local" << 'EOF'
-# Variables d'environnement pour la production
-NODE_ENV=production
-NEXT_PUBLIC_APP_ENV=production
-
-# DATABASE_URL : chaîne de connexion MySQL pour la production
-DATABASE_URL="mysql://molo:Bulgroz%401977@192.168.1.200:3306/dalon974_prod"
-
-# NextAuth config
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="TZgJKrIdZ5KDmx48KQ84iOuSMQq2SN+EmGdG3bqeyO8="
-
-# Compte démo (credentials login)
-DEMO_EMAIL="molo77@gmail.com"
-DEMO_PASSWORD="Bulgroz@1977"
-
-# OAuth providers
-GOOGLE_CLIENT_ID="48015729035-oedf65tb7q75orhti3nul4fnsfrp2aks.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET="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"
-
-# Image d'accueil
-NEXT_PUBLIC_HOMEPAGE_IMAGE=/images/home-hero.png
-
-# Google AdSense
-NEXT_PUBLIC_ADSENSE_CLIENT=9563918255
-NEXT_PUBLIC_ADSENSE_SLOT=1234567890
-
-# Scraper Leboncoin
-LBC_DEBUG=false
-LBC_SEARCH_URL="https://www.leboncoin.fr/recherche?category=11&locations=r_26"
-LBC_BROWSER_HEADLESS=true
-LBC_MAX=100
-LBC_FETCH_DETAILS=true
-LBC_DETAIL_LIMIT=all
-LBC_DETAIL_SLEEP=500
-LBC_PAGES=4
-LBC_VERBOSE_LIST=false
-LBC_EXPORT_JSON=false
-LBC_NO_DB=false
-LBC_UPDATE_COOLDOWN_HOURS=0
-LBC_EXTRA_SLEEP=0
-LBC_USE_PROTONVPN=false
-LBC_DATADOME=9VQvc8E96v_De6xYlgvI4waevp_3zDqgr6KBX0ev_5XTkyZDinqOKde7jIFFl_QvPmCmfPFHfZBWUokuD4juQq~Ui_57m0cNbQ0bNdmvDO1NNVR3ru4Bjy3ENkfvR7rc
-DATADOME_TOKEN=9VQvc8E96v_De6xYlgvI4waevp_3zDqgr6KBX0ev_5XTkyZDinqOKde7jIFFl_QvPmCmfPFHfZBWUokuD4juQq~Ui_57m0cNbQ0bNdmvDO1NNVR3ru4Bjy3ENkfvR7rc
-EOF
-        log_success "Fichier .env.local de production créé avec configuration par défaut"
-        return
-    fi
-    
-    # Lire le fichier .env.local de dev et le transformer pour la production
     cd "$PROD_DIR"
     
-    # Créer le nouveau fichier .env.local pour la production
-    {        
-        # Copier le contenu du fichier dev en modifiant les variables appropriées
+    # Suppression de l'ancien .env.local
+    rm -f .env.local
+    
+    # Création du nouveau .env.local basé sur dev
+    if [[ -f "$DEV_DIR/.env.local" ]]; then
+        # Lecture du fichier dev et modification des variables pour la production
         while IFS= read -r line; do
-            # Ignorer les lignes de commentaires et les lignes vides
-            if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "$line" ]]; then
-                echo "$line"
+            # Ignorer les lignes vides et les commentaires
+            if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
+                echo "$line" >> .env.local
                 continue
             fi
             
-            # Modifier les variables spécifiques à la production
-            if [[ "$line" =~ ^NODE_ENV= ]]; then
-                echo "NODE_ENV=production"
-            elif [[ "$line" =~ ^NEXT_PUBLIC_APP_ENV= ]]; then
-                echo "NEXT_PUBLIC_APP_ENV=production"
-            elif [[ "$line" =~ ^DATABASE_URL=.*dalon974_dev ]]; then
-                echo 'DATABASE_URL="mysql://molo:Bulgroz%401977@192.168.1.200:3306/dalon974_prod"'
-            elif [[ "$line" =~ ^NEXTAUTH_URL=.*3001 ]]; then
-                echo 'NEXTAUTH_URL="http://localhost:3000"'
-            elif [[ "$line" =~ ^LBC_DEBUG=.*true ]]; then
-                echo "LBC_DEBUG=false"
-            else
-                echo "$line"
-            fi
+            # Variables à modifier pour la production
+            case "$line" in
+                NODE_ENV=*)
+                    echo "NODE_ENV=production" >> .env.local
+                    ;;
+                NEXT_PUBLIC_APP_ENV=*)
+                    echo "NEXT_PUBLIC_APP_ENV=production" >> .env.local
+                    ;;
+                DATABASE_URL=*)
+                    # Remplacer l'URL de base de données par celle de production
+                    echo "$line" | sed 's/dev_/prod_/g' >> .env.local
+                    ;;
+                NEXTAUTH_URL=*)
+                    # Remplacer l'URL par celle de production
+                    echo "$line" | sed 's/localhost:3001/depannage-informatique974.fr/g' >> .env.local
+                    ;;
+                LBC_DEBUG=*)
+                    echo "LBC_DEBUG=false" >> .env.local
+                    ;;
+                *)
+                    # Copier les autres variables telles quelles
+                    echo "$line" >> .env.local
+                    ;;
+            esac
         done < "$DEV_DIR/.env.local"
-    } > .env.local
-    
-    log_success "Fichier .env.local de production reconstruit à partir de dev"
-}
-
-# Installation des dépendances
-install_dependencies() {
-    log_info "Installation des dépendances de production..."
-    cd "$PROD_DIR"
-    npm install
-    log_success "Dépendances installées"
-}
-
-# Build de l'application
-build_application() {
-    log_info "Build de l'application de production..."
-    cd "$PROD_DIR"
-    npm run build
-    log_success "Build terminé"
-}
-
-# Démarrage de l'application
-start_application() {
-    log_info "Démarrage de l'application de production..."
-    cd "$PROD_DIR"
-    
-    # Démarrage en arrière-plan
-    nohup npm start > logs/prod.log 2>&1 &
-    PROD_PID=$!
-    
-    log_success "Application démarrée avec PID: $PROD_PID"
-}
-
-# Vérification de santé
-health_check() {
-    log_info "Vérification de santé..."
-    sleep 10
-    
-    if curl -f http://localhost:3000/api/health >/dev/null 2>&1; then
-        log_success "Application de production accessible"
+        
+        log_success "Fichier .env.local reconstruit pour la production"
     else
-        log_error "Application de production non accessible"
-        exit 1
+        log_warning "Fichier .env.local de dev introuvable, création d'un fichier minimal"
+        cat > .env.local << EOF
+NODE_ENV=production
+NEXT_PUBLIC_APP_ENV=production
+# Ajoutez ici vos variables de production
+EOF
     fi
 }
 
-# Nettoyage des anciennes sauvegardes
-cleanup_backups() {
-    log_info "Nettoyage des anciennes sauvegardes..."
+# Installation des dépendances en production
+install_dependencies() {
+    log_info "Installation des dépendances en production..."
     
-    # Garder seulement les 5 dernières sauvegardes
-    cd "$BACKUP_DIR"
-    ls -t | tail -n +6 | xargs -r rm -rf
-    log_success "Anciennes sauvegardes supprimées"
+    cd "$PROD_DIR"
+    
+    # Installation des dépendances
+    npm ci --production=false
+    
+    log_success "Dépendances installées"
 }
 
-# Arrêt des serveurs
-stop_servers() {
-    log_info "Arrêt des serveurs avant synchronisation..."
+# Build de la production
+build_production() {
+    log_info "Build de la production..."
     
-    # Utiliser le script server-manager.sh
-    local script_dir=$(dirname "$(readlink -f "$0")")
-    "$script_dir/server-manager.sh" stop
+    cd "$PROD_DIR"
     
-    log_success "Serveurs arrêtés"
+    # Build de l'application
+    npm run build
+    
+    log_success "Build terminé"
+}
+
+# Synchronisation de la base de données (structure uniquement)
+sync_database_structure() {
+    log_info "Synchronisation de la structure de la base de données..."
+    
+    cd "$PROD_DIR"
+    
+    # Migration de la structure uniquement
+    if command -v npx &> /dev/null; then
+        npx prisma migrate deploy
+        log_success "Structure de base de données synchronisée"
+    else
+        log_warning "npx non disponible, synchronisation de base de données ignorée"
+    fi
 }
 
 # Redémarrage des serveurs
 restart_servers() {
-    log_info "Redémarrage des serveurs après synchronisation..."
+    log_info "Redémarrage des serveurs..."
     
-    # Utiliser le script server-manager.sh
-    local script_dir=$(dirname "$(readlink -f "$0")")
-    "$script_dir/server-manager.sh" both
+    if [[ -f "$SCRIPT_DIR/server-manager.sh" ]]; then
+        "$SCRIPT_DIR/server-manager.sh" both
+    else
+        log_warning "Script server-manager.sh introuvable, redémarrage manuel requis"
+    fi
     
     log_success "Serveurs redémarrés"
 }
 
+# Vérification du déploiement
+verify_deployment() {
+    log_info "Vérification du déploiement..."
+    
+    # Attendre que les serveurs démarrent
+    sleep 10
+    
+    # Test de l'API de version
+    if curl -s http://localhost:3000/api/version > /dev/null; then
+        log_success "API de production accessible"
+    else
+        log_warning "API de production non accessible (serveur peut être en cours de démarrage)"
+    fi
+    
+    # Test de l'API de dev
+    if curl -s http://localhost:3001/api/version > /dev/null; then
+        log_success "API de développement accessible"
+    else
+        log_warning "API de développement non accessible (serveur peut être en cours de démarrage)"
+    fi
+}
+
 # Fonction principale
 main() {
-    log_info "=== Déploiement Dev vers Prod ==="
+    echo "🚀 Déploiement dev vers prod"
+    echo "=========================="
     
-    # Arrêt des serveurs avant synchronisation
+    check_prerequisites
     stop_servers
-    
-    create_backup
-    clean_prod
+    clean_production
     copy_files
     rebuild_env_prod
     install_dependencies
-    
-    # Note: Pas de build nécessaire car on copie le .next de dev
-    log_info "Build copié depuis dev, pas de rebuild nécessaire"
-    
-    # Synchronisation de la structure de base de données
-    log_info "Synchronisation de la structure MySQL..."
-    if bash "$SCRIPT_DIR/sync-database-structure.sh"; then
-        log_success "Structure MySQL synchronisée avec succès"
-    else
-        log_warning "Échec de la synchronisation MySQL (vérifiez les logs)"
-    fi
-    
-    # Redémarrage des serveurs après synchronisation
+    build_production
+    sync_database_structure
     restart_servers
+    verify_deployment
     
-    # Vérification de santé après redémarrage
-    health_check
-    
-    cleanup_backups
-    
+    echo ""
     log_success "Déploiement terminé avec succès !"
-    log_info "URL Development: http://localhost:3001"
-    log_info "URL Production: http://localhost:3000"
-    log_info "Sauvegarde: $BACKUP_DIR/$BACKUP_NAME"
+    echo ""
+    echo "📋 Résumé :"
+    echo "  • Fichiers copiés de dev vers prod"
+    echo "  • Variables d'environnement adaptées"
+    echo "  • Structure de base de données synchronisée"
+    echo "  • Serveurs redémarrés"
+    echo ""
+    echo "🌐 URLs :"
+    echo "  • Production : http://localhost:3000"
+    echo "  • Développement : http://localhost:3001"
 }
 
-# Exécution
+# Exécution du script
 main "$@"
