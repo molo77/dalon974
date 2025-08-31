@@ -104,6 +104,15 @@ function LoginContent() {
               >
                 Se connecter
               </button>
+              <div className="text-center mt-2">
+                <button
+                  type="button"
+                  onClick={() => router.push("/reset-password")}
+                  className="text-sm text-blue-600 hover:text-blue-700 underline"
+                >
+                  Mot de passe oublié ?
+                </button>
+              </div>
             </form>
           )}
         </div>

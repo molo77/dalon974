@@ -1601,11 +1601,11 @@ export default function HomePage() {
                     {colocDetail.bioCourte && (
                       <div className="text-slate-700">{colocDetail.bioCourte}</div>
                     )}
-                    {(colocDetail.genre || colocDetail.orientation) && (
-                      <div className="text-sm text-slate-600">
-                        {colocDetail.genre ? `Genre: ${colocDetail.genre}` : ""} {colocDetail.orientation ? `• Orientation: ${colocDetail.orientation}` : ""}
-                      </div>
-                    )}
+                                            {colocDetail.genre && (
+                          <div className="text-sm text-slate-600">
+                            Genre: {colocDetail.genre}
+                          </div>
+                        )}
                     {Array.isArray(colocDetail.langues) && colocDetail.langues.length > 0 && (
                       <div>
                         <div className="text-sm font-medium text-slate-700 mb-1">Langues</div>

@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../auth/[...nextauth]/authOptions';
+import { auth } from '@/lib/auth';
 import prisma from '@/lib/prismaClient';
 import { spawn } from 'child_process';
 import path from 'path';
 
 export async function POST(req: Request) {
-  const session: any = await getServerSession(authOptions as any);
+  const session: any = await auth();
   if ((session?.user as any)?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const url = new URL(req.url);
   const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
@@ -140,7 +139,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE() {
-  const session: any = await getServerSession(authOptions as any);
+  const session: any = await auth();
   if ((session?.user as any)?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const running = await prisma.scraperRun.findFirst({ where: { status: 'running' }, orderBy: { startedAt: 'desc' } });
   if (!running) return NextResponse.json({ message: 'Aucun run actif' });
@@ -157,7 +156,7 @@ export async function DELETE() {
 }
 
 export async function GET() {
-  const session: any = await getServerSession(authOptions as any);
+  const session: any = await auth();
   if ((session?.user as any)?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const runs = await prisma.scraperRun.findMany({ orderBy: { startedAt: 'desc' }, take: 20 });
   return NextResponse.json(runs);

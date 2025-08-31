@@ -309,7 +309,7 @@ export default function AdminPage() {
   const [colocDateDispoEdit, setColocDateDispoEdit] = useState("");
   // Nouveaux champs type "Tinder"
   const [colocGenreEdit, setColocGenreEdit] = useState("");
-  const [colocOrientationEdit, setColocOrientationEdit] = useState("");
+
   const [colocBioCourteEdit, setColocBioCourteEdit] = useState("");
   const [colocLanguesEdit, setColocLanguesEdit] = useState(""); // CSV
   const [colocInstagramEdit, setColocInstagramEdit] = useState("");
@@ -541,7 +541,7 @@ export default function AdminPage() {
     setColocDateDispoEdit(p?.dateDispo || "");
     // Nouveaux champs
     setColocGenreEdit(p?.genre || "");
-    setColocOrientationEdit(p?.orientation || "");
+    
     setColocBioCourteEdit(p?.bioCourte || "");
     setColocLanguesEdit(Array.isArray(p?.langues) ? p.langues.join(", ") : (p?.langues || ""));
     setColocInstagramEdit(p?.instagram || "");
@@ -637,7 +637,7 @@ export default function AdminPage() {
         dateDispo: colocDateDispoEdit,
         // Nouveaux champs
         genre: colocGenreEdit || undefined,
-        orientation: colocOrientationEdit || undefined,
+
         bioCourte: colocBioCourteEdit || undefined,
         langues: colocLanguesEdit
           ? colocLanguesEdit.split(",").map(s => s.trim()).filter(Boolean)
@@ -763,7 +763,7 @@ export default function AdminPage() {
           communesSlugs: Array.isArray(d?.communesSlugs) ? d.communesSlugs : [],
          // Nouveaux champs "type Tinder" (si présents dans legacy)
          genre: d?.genre || undefined,
-         orientation: d?.orientation || undefined,
+ 
          bioCourte: d?.bioCourte || undefined,
          langues: toArray(d?.langues),
          instagram: d?.instagram || undefined,
@@ -1461,14 +1461,7 @@ export default function AdminPage() {
                     <option value="non-binaire">Non-binaire</option>
                     <option value="autre">Autre</option>
                   </select>
-                  <select className="border rounded px-3 py-2" value={colocOrientationEdit} onChange={e=>setColocOrientationEdit(e.target.value)}>
-                    <option value="">Orientation</option>
-                    <option value="hetero">Hétéro</option>
-                    <option value="homo">Homo</option>
-                    <option value="bi">Bi</option>
-                    <option value="asexuel">Asexuel</option>
-                    <option value="autre">Autre</option>
-                  </select>
+
                   <input className="border rounded px-3 py-2 sm:col-span-2" placeholder="Bio courte" value={colocBioCourteEdit} onChange={e=>setColocBioCourteEdit(e.target.value)} />
                   <input className="border rounded px-3 py-2 sm:col-span-2" placeholder="Langues (CSV, ex: fr,en,es)" value={colocLanguesEdit} onChange={e=>setColocLanguesEdit(e.target.value)} />
                   <input className="border rounded px-3 py-2" placeholder="Instagram (@handle)" value={colocInstagramEdit} onChange={e=>setColocInstagramEdit(e.target.value)} />
@@ -1587,7 +1580,7 @@ export default function AdminPage() {
                           {colocDetail.email && <div><span className="font-medium">Email:</span> {colocDetail.email}</div>}
                           {colocDetail.telephone && <div><span className="font-medium">Téléphone:</span> {colocDetail.telephone}</div>}
                           {colocDetail.genre && <div><span className="font-medium">Genre:</span> {colocDetail.genre}</div>}
-                          {colocDetail.orientation && <div><span className="font-medium">Orientation:</span> {colocDetail.orientation}</div>}
+          
                           {colocDetail.instagram && <div><span className="font-medium">Instagram:</span> {colocDetail.instagram}</div>}
                         </div>
                       </div>

@@ -7,7 +7,7 @@ import path from 'path';
 export async function GET() {
   try {
     // Vérification des permissions admin
-    const session: any = await getServerSession(authOptions as any);
+    const session: any = await auth();
     console.log('[API][admin][version] Session:', session?.user);
     if ((session?.user as any)?.role !== 'admin') {
       console.log('[API][admin][version] Accès refusé - utilisateur non admin');

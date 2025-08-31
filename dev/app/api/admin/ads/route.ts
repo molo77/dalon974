@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { auth } from "@/lib/auth";
 import type { Session } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/authOptions";
+
 import prisma from "@/lib/prismaClient";
 
 export async function GET() {
   try {
-    const session = (await getServerSession(authOptions as any)) as Session | null;
+    const session = (await auth()) as Session | null;
     const isAdmin = (session?.user as any)?.role === "admin";
     if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const client: any = prisma as any;
@@ -23,7 +23,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const session = (await getServerSession(authOptions as any)) as Session | null;
+    const session = (await auth()) as Session | null;
     const isAdmin = (session?.user as any)?.role === "admin";
     if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const body = await req.json();

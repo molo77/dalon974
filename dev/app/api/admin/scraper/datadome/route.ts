@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../auth/[...nextauth]/authOptions';
+import { auth } from '@/lib/auth';
 import puppeteer from 'puppeteer';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 export async function POST() {
-  const session: any = await getServerSession(authOptions as any);
+  const session: any = await auth();
   if ((session?.user as any)?.role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

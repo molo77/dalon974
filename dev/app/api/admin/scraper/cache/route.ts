@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../auth/[...nextauth]/authOptions';
+import { auth } from '@/lib/auth';
 import prisma from '@/lib/prismaClient';
 import fs from 'fs';
 import path from 'path';
 
 // DELETE /api/admin/scraper/cache?annonces=1 pour aussi purger les annonces source lbc
 export async function DELETE(req: Request) {
-  const session: any = await getServerSession(authOptions as any);
+  const session: any = await auth();
   if ((session?.user as any)?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const url = new URL(req.url);
   const purgeAnnonces = url.searchParams.get('annonces') === '1';

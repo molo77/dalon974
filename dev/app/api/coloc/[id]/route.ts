@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prismaClient";
-import { getServerSession } from "next-auth";
+import { auth } from "@/lib/auth";
 import type { Session } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/authOptions";
+
 
 export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -26,7 +26,6 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
         zones: true,
         bioCourte: true,
         genre: true,
-        orientation: true,
         langues: true,
         instagram: true,
         telephone: true,
@@ -58,7 +57,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
 
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const session = (await getServerSession(authOptions as any)) as Session | null;
+    const session = (await auth()) as Session | null;
     if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     
     const body = await req.json();
@@ -101,7 +100,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
 export async function DELETE(_req: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const session = (await getServerSession(authOptions as any)) as Session | null;
+    const session = (await auth()) as Session | null;
     if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await context.params;
   const p = await prisma.colocProfile.findUnique({ where: { id } });

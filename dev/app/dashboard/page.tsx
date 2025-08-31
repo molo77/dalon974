@@ -307,7 +307,7 @@ export default function DashboardPage() {
   const [colocCommunesSlugs, setColocCommunesSlugs] = useState<string[]>([]);
   // Nouveaux champs type Tinder
   const [colocGenre, setColocGenre] = useState("");
-  const [colocOrientation, setColocOrientation] = useState("");
+
   const [colocBioCourte, setColocBioCourte] = useState("");
   const [colocLanguesCsv, setColocLanguesCsv] = useState(""); // CSV vers tableau
   const [colocInstagram, setColocInstagram] = useState("");
@@ -507,7 +507,7 @@ export default function DashboardPage() {
           setColocZones(Array.isArray(d.zones) ? d.zones : []);
           setColocCommunesSlugs(Array.isArray(d.communesSlugs) ? d.communesSlugs : []);
           setColocGenre(d.genre || "");
-          setColocOrientation(d.orientation || "");
+  
           setColocBioCourte(d.bioCourte || "");
           setColocLanguesCsv(Array.isArray(d.langues) ? d.langues.join(", ") : (d.langues || ""));
           setColocInstagram(d.instagram || "");
@@ -540,7 +540,7 @@ export default function DashboardPage() {
           setColocTelephone("");
           setColocZones([]);
           setColocCommunesSlugs([]);
-          setColocGenre(""); setColocOrientation(""); setColocBioCourte(""); setColocLanguesCsv(""); setColocInstagram(""); setColocPhotosCsv("");
+          setColocGenre(""); setColocBioCourte(""); setColocLanguesCsv(""); setColocInstagram(""); setColocPhotosCsv("");
           setPrefGenre(""); setPrefAgeMin(""); setPrefAgeMax(""); setAccepteFumeurs(false); setAccepteAnimaux(false);
           setRythme(""); setProprete(""); setSportif(false); setVegetarien(false); setSoirees(false); setMusique("");
         }
@@ -588,7 +588,6 @@ export default function DashboardPage() {
         updatedAt: serverTimestamp(),
         // Nouveaux champs
         genre: colocGenre || undefined,
-        orientation: colocOrientation || undefined,
         bioCourte: colocBioCourte || undefined,
         langues: colocLanguesCsv ? colocLanguesCsv.split(",").map(s=>s.trim()).filter(Boolean) : undefined,
         instagram: colocInstagram || undefined,
@@ -639,7 +638,7 @@ export default function DashboardPage() {
     } catch {
       // silencieux
     }
-  }, [user, colocNom, colocBudget, colocImageUrl, colocDescription, colocAge, colocProfession, colocFumeur, colocAnimaux, colocDateDispo, colocQuartiers, colocTelephone, colocZones, colocCommunesSlugs, colocGenre, colocOrientation, colocBioCourte, colocLanguesCsv, colocInstagram, prefGenre, prefAgeMin, prefAgeMax, accepteFumeurs, accepteAnimaux, rythme, proprete, sportif, vegetarien, soirees, musique, hasColocDoc]);
+  }, [user, colocNom, colocBudget, colocImageUrl, colocDescription, colocAge, colocProfession, colocFumeur, colocAnimaux, colocDateDispo, colocQuartiers, colocTelephone, colocZones, colocCommunesSlugs, colocGenre, colocBioCourte, colocLanguesCsv, colocInstagram, prefGenre, prefAgeMin, prefAgeMax, accepteFumeurs, accepteAnimaux, rythme, proprete, sportif, vegetarien, soirees, musique, hasColocDoc]);
 
   // Déclenchement auto-save avec debounce (après déclaration pour éviter TDZ)
   useEffect(() => {
@@ -664,7 +663,6 @@ export default function DashboardPage() {
     colocZones,
     colocCommunesSlugs,
     colocGenre,
-    colocOrientation,
     colocBioCourte,
     colocLanguesCsv,
     colocInstagram,
@@ -711,7 +709,6 @@ export default function DashboardPage() {
         updatedAt: serverTimestamp(),
         // Nouveaux champs (mêmes conversions qu'autosave)
         genre: colocGenre || undefined,
-        orientation: colocOrientation || undefined,
         bioCourte: colocBioCourte || undefined,
         langues: colocLanguesCsv ? colocLanguesCsv.split(",").map(s=>s.trim()).filter(Boolean) : undefined,
         instagram: colocInstagram || undefined,
@@ -782,7 +779,7 @@ export default function DashboardPage() {
       setColocTelephone("");
       setColocZones([]);
       setColocCommunesSlugs([]);
-  setColocGenre(""); setColocOrientation(""); setColocBioCourte(""); setColocLanguesCsv(""); setColocInstagram(""); setColocPhotosCsv("");
+  setColocGenre(""); setColocBioCourte(""); setColocLanguesCsv(""); setColocInstagram(""); setColocPhotosCsv("");
   setColocPhotos([]);
       setPrefGenre(""); setPrefAgeMin(""); setPrefAgeMax(""); setAccepteFumeurs(false); setAccepteAnimaux(false);
       setRythme(""); setProprete(""); setSportif(false); setVegetarien(false); setSoirees(false); setMusique("");
@@ -1247,6 +1244,8 @@ export default function DashboardPage() {
                     await updateAnnonce(editAnnonce.id, annonceData);
                     showToast("success", "Annonce modifiée avec succès ✅");
                   } else {
+                    console.log("[Dashboard] Création annonce - User:", user);
+                    console.log("[Dashboard] Création annonce - AnnonceData:", annonceData);
                     await addAnnonce({ uid: user!.uid, email: user!.email }, annonceData);
                     showToast("success", "Annonce créée avec succès ✅");
                   }
@@ -1538,8 +1537,7 @@ export default function DashboardPage() {
                       <div className="font-medium">{colocGenre || '-'}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-slate-500">🧭 Orientation</div>
-                      <div className="font-medium">{colocOrientation || '-'}</div>
+                      
                     </div>
                     <div className="sm:col-span-2">
                       <div className="text-sm text-slate-500">📝 Bio courte</div>
@@ -1796,9 +1794,7 @@ export default function DashboardPage() {
                   <select className="border rounded px-3 py-2" value={colocGenre} onChange={e=>setColocGenre(e.target.value)}>
                     <option value="">Genre</option><option value="femme">Femme</option><option value="homme">Homme</option><option value="non-binaire">Non-binaire</option><option value="autre">Autre</option>
                   </select>
-                  <select className="border rounded px-3 py-2" value={colocOrientation} onChange={e=>setColocOrientation(e.target.value)}>
-                    <option value="">Orientation</option><option value="hetero">Hétéro</option><option value="homo">Homo</option><option value="bi">Bi</option><option value="asexuel">Asexuel</option><option value="autre">Autre</option>
-                  </select>
+                  
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Bio courte</label>

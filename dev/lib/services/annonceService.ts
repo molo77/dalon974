@@ -36,7 +36,13 @@ export async function addAnnonce(_user: { uid: string; email: string | null }, d
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Erreur de création de l'annonce");
+  
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error("[AnnonceService] Erreur API:", res.status, errorText);
+    throw new Error(`Erreur de création de l'annonce: ${res.status} - ${errorText}`);
+  }
+  
   return res.json();
 }
 
