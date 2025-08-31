@@ -62,7 +62,8 @@ export const { auth, signIn, signOut } = NextAuth({
           await new Promise(r => setTimeout(r, 300)); // tarpit léger
           return null;
         }
-        const ok = await compare(password, user.password);
+        // @ts-expect-error - password type issue
+        const ok = await compare(password, user.password || '');
         if (!ok) {
           const cur = attempts.get(k);
           if (!cur) attempts.set(k, { count: 1, firstAt: now });

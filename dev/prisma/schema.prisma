@@ -106,3 +106,30 @@ model ScraperSetting {
   value     String?
   updatedAt DateTime @updatedAt @db.Timestamp(6)
 }
+
+// Historique d'exécution du scraper
+model ScraperRun {
+  id             String   @id @default(cuid())
+  startedAt      DateTime @default(now()) @db.Timestamp(6)
+  finishedAt     DateTime? @db.Timestamp(6)
+  status         String?  // running | success | error
+  totalCollected Int?
+  totalUpserts   Int?
+  detailLimit    Int?
+  rawLog         String?  @db.LongText
+  errorMessage   String? @db.Text
+  createdCount   Int?
+  updatedCount   Int?
+  skippedRecentCount Int?
+  cooldownHours  Float?
+  progress       Float?   // 0..1 progression temps réel
+  currentStep    String?  // Étape actuelle (ex: "Étape 2/5")
+  currentMessage String?  // Message détaillé de l'étape
+  childPid       Int?     // PID du process enfant pour annulation
+  config         Json?    // Configuration utilisée pour ce run
+  createdAt      DateTime @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime? @db.Timestamp(6)
+
+  @@index([startedAt])
+  @@index([status])
+}

@@ -10,8 +10,7 @@ export async function DELETE(req: Request) {
   if ((session?.user as any)?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const url = new URL(req.url);
   const purgeAnnonces = url.searchParams.get('annonces') === '1';
-  // const delRuns = await prisma.scraperRun.deleteMany({});
-  const delRuns = { count: 0 }; // ScraperRun supprimé du schéma
+  const delRuns = await prisma.scraperRun.deleteMany({});
   let delAnnoncesCount: number | undefined;
   if (purgeAnnonces) {
   // Pas de champ "source" dans Annonce actuellement: on purge toutes les annonces
