@@ -16,7 +16,7 @@ export default function MaintenancePage() {
       try {
         const health = await checkDatabaseHealth();
         setHealthStatus(health);
-      } catch (error) {
+      } catch (_error) {
         setHealthStatus({
           isHealthy: false,
           error: 'Erreur lors de la vérification'
@@ -44,7 +44,7 @@ export default function MaintenancePage() {
         // Rediriger vers la page d'accueil si la DB est accessible
         window.location.href = '/';
       }
-    } catch (error) {
+    } catch (_error) {
       setHealthStatus({
         isHealthy: false,
         error: 'Erreur lors de la vérification'

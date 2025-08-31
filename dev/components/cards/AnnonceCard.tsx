@@ -78,7 +78,7 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onClick && onClick(e);
+          if (onClick) onClick(e);
         }
       }}
     >
@@ -155,7 +155,7 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
               </div>
             )}
             {/* Badges attributs */}
-      {props.typeBien || props.meuble != null || props.nbPieces || props.nbChambres ? (
+            {(props.typeBien || props.meuble != null || props.nbPieces || props.nbChambres) ? (
               <div className="mt-2 flex flex-wrap gap-2">
         {props.typeBien && <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-xs">{props.typeBien}</span>}
         {props.nbPieces && <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-xs">{props.nbPieces} pièces</span>}

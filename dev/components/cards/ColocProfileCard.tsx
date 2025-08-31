@@ -59,7 +59,7 @@ export default function ColocProfileCard({
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onClick && onClick(e);
+          if (onClick) onClick(e);
         }
       }}
     >

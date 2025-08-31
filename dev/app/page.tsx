@@ -178,11 +178,11 @@ export default function HomePage() {
   const [selectionSource, setSelectionSource] = useState<"map" | "zones" | "input" | null>(null);
   const [countAnnoncesTotal, setCountAnnoncesTotal] = useState<number | null>(null);
   const [countProfilsTotal, setCountProfilsTotal] = useState<number | null>(null);
-  const [countFiltered, setCountFiltered] = useState<number | null>(null);
+  // const [countFiltered, setCountFiltered] = useState<number | null>(null);
   const pageLimit = 20;
   const offsetRef = useRef<number>(0);
   // Permettre de masquer/afficher la barre de filtres
-  const [filtersCollapsed, setFiltersCollapsed] = useState<boolean>(false);
+  // const [filtersCollapsed, setFiltersCollapsed] = useState<boolean>(false);
 
   // Refs diverses
   const resultsTopRef = useRef<HTMLDivElement | null>(null);

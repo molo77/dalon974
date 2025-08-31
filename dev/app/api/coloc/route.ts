@@ -120,7 +120,7 @@ export async function POST(req: Request) {
     
     // Générer un id si manquant
     if (!data.id) {
-      data.id = (globalThis.crypto?.randomUUID?.() || require('crypto').randomUUID());
+      data.id = (globalThis.crypto?.randomUUID?.() || (await import('crypto')).randomUUID());
     }
     
     // Timestamp de création si pas fourni

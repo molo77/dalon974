@@ -21,7 +21,7 @@ export const onSnapshot = (
   onNext?: (snap: QuerySnapshot) => void,
   _onError?: (err: any) => void
 ) => {
-  try { onNext && onNext({ docs: [] } as any); } catch {}
+  try { if (onNext) onNext({ docs: [] } as any); } catch {}
   return () => {};
 };
 

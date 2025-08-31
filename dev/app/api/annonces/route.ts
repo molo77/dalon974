@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prismaClient";
 import { auth } from "@/lib/auth";
-import type { Session } from "next-auth";
+// import type { Session } from "next-auth";
 
 export async function GET(req: Request) {
   try {
@@ -165,7 +165,7 @@ export async function POST(req: Request) {
     const data: any = {};
     for (const k of allowed) if (k in input) data[k] = input[k];
     // Générer un id si manquant
-    if (!data.id) data.id = (globalThis.crypto?.randomUUID?.() || require('crypto').randomUUID());
+    if (!data.id) data.id = (globalThis.crypto?.randomUUID?.() || (await import('crypto')).randomUUID());
     // Vérifier que l'utilisateur est connecté
     if (!userId) {
       console.error("[API][annonces][POST] No user ID found");

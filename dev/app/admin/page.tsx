@@ -17,7 +17,7 @@ import AnnonceModal from "@/components/modals/AnnonceModal";
 const ColocPhotoSection = dynamic(() => import("@/components/ui/ColocPhotoSection"), { ssr: false });
 import { updateAnnonce, deleteAnnonce } from "@/lib/services/annonceService";
 import { updateColoc, deleteColoc, getColoc, listColoc } from "@/lib/services/colocService";
-import Link from "next/link"; // + import
+// import Link from "next/link"; // + import
 import Image from "next/image";
 import { toast as appToast } from "@/components/ui/feedback/Toast";
 import { formatDateReunion } from "@/lib/utils/dateUtils";
@@ -202,17 +202,17 @@ export default function AdminPage() {
     }, 1000); // Délai de 1 seconde pour éviter trop de requêtes
   };
   
-  const saveConfig = async () => {
-    try {
-      setScraperSaving(true);
-      const body: Record<string,string> = {};
-      Object.entries(scraperConfig).forEach(([k,v])=>{ if(v!==undefined) body[k]=v; });
-      const res = await fetch('/api/admin/scraper/settings',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-      if(!res.ok) throw new Error('save fail');
-      showToast('success','Config sauvegardée ✅');
-  } catch{ showToast('error','Erreur sauvegarde config'); }
-    finally { setScraperSaving(false); }
-  };
+  // const saveConfig = async () => {
+  //   try {
+  //     setScraperSaving(true);
+  //     const body: Record<string,string> = {};
+  //     Object.entries(scraperConfig).forEach(([k,v])=>{ if(v!==undefined) body[k]=v; });
+  //     const res = await fetch('/api/admin/scraper/settings',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  //     if(!res.ok) throw new Error('save fail');
+  //     showToast('success','Config sauvegardée ✅');
+  // } catch{ showToast('error','Erreur sauvegarde config'); }
+  //   finally { setScraperSaving(false); }
+  // };
   const launchScraper = async () => {
     try {
       setScraperLaunching(true);

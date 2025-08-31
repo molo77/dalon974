@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 
 // Import du script de nettoyage
-const { cleanupUnusedImages } = require('@/scripts/maintenance/cleanup-unused-images');
+import { cleanupUnusedImages } from '@/scripts/maintenance/cleanup-unused-images';
 
 export async function POST(request: NextRequest) {
   try {
