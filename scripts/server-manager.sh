@@ -111,12 +111,12 @@ clean_builds() {
     fi
 }
 
-# Fonction pour rebuild complet
-rebuild() {
+# Fonction pour préparer l'environnement (sans build)
+prepare_environment() {
     local dir=$1
     local env_name=$2
     
-    log_info "🔨 Rebuild complet de $env_name..."
+    log_info "🔧 Préparation de l'environnement $env_name..."
     
     cd "$dir"
     
@@ -130,10 +130,25 @@ rebuild() {
         npx prisma generate
     fi
     
+    cd ..
+    
+    log_success "Environnement $env_name préparé"
+}
+
+# Fonction pour rebuild complet (avec build)
+rebuild() {
+    local dir=$1
+    local env_name=$2
+    
+    log_info "🔨 Rebuild complet de $env_name..."
+    
+    # Préparer l'environnement
+    prepare_environment "$dir" "$env_name"
+    
     # Build
+    cd "$dir"
     log_info "🏗️  Build de $env_name..."
     npm run build
-    
     cd ..
     
     log_success "Rebuild de $env_name terminé"
@@ -165,12 +180,16 @@ start_dev() {
         return 1
     fi
     
-    # Rebuild complet
-    rebuild "$DEV_DIR" "développement"
+    # Préparer l'environnement
+    prepare_environment "$DEV_DIR" "développement"
+    
+    # Build de développement
+    cd "$DEV_DIR"
+    log_info "🔨 Build de développement..."
+    npm run build
     
     # Démarrer le serveur
     log_success "Démarrage du serveur de développement sur le port $DEV_PORT..."
-    cd "$DEV_DIR"
     npm run dev &
     cd ..
     
@@ -193,12 +212,16 @@ start_prod() {
         return 1
     fi
     
-    # Rebuild complet
-    rebuild "$PROD_DIR" "production"
+    # Préparer l'environnement
+    prepare_environment "$PROD_DIR" "production"
+    
+    # Build de production
+    cd "$PROD_DIR"
+    log_info "🔨 Build de production..."
+    npm run build
     
     # Démarrer le serveur
     log_success "Démarrage du serveur de production sur le port $PROD_PORT..."
-    cd "$PROD_DIR"
     npm run start &
     cd ..
     
