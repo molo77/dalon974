@@ -338,6 +338,20 @@ export default function AdminPage() {
   const [colocDetailOpen, setColocDetailOpen] = useState(false);
   const [colocDetailLoading, setColocDetailLoading] = useState(false);
   const [colocDetail, setColocDetail] = useState<any | null>(null);
+  
+  // États pour le modal de détail annonce
+  const [annonceDetailOpen, setAnnonceDetailOpen] = useState(false);
+  const [annonceDetailLoading, setAnnonceDetailLoading] = useState(false);
+  const [annonceDetail, setAnnonceDetail] = useState<any | null>(null);
+  
+  // Debug: surveiller les changements d'état du modal annonce
+  useEffect(() => {
+    console.log("[Admin][State] annonceDetailOpen changed to:", annonceDetailOpen);
+    console.log("[Admin][State] annonceDetail:", annonceDetail);
+    if (annonceDetailOpen) {
+      console.log("[Admin][Render] Modal annonce devrait être rendu");
+    }
+  }, [annonceDetailOpen, annonceDetail]);
 
   const { isAdmin, checkingAdmin } = useAdminGate({ user, loading, router });
 
@@ -394,6 +408,21 @@ export default function AdminPage() {
     return () => { stop = true; };
   }, [activeTab]);
 
+  // Fonction pour recharger les annonces
+  const reloadAnnonces = async () => {
+    try {
+      const res = await fetch("/api/annonces?limit=200", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        const items = data.items || [];
+        const mapped = items.map((a: any) => ({ ...a, titre: a.titre ?? a.title ?? "" }));
+        setAdminAnnonces(mapped);
+      }
+    } catch (error) {
+      console.error("[Admin][ReloadAnnonces]", error);
+    }
+  };
+
   // NOUVEAU: Abonnement temps réel aux utilisateurs pour résoudre les propriétaires
   useEffect(() => {
     if (activeTab !== "annonces") return;
@@ -445,13 +474,7 @@ export default function AdminPage() {
       showToast("success", "Annonces supprimées ✅");
       
       // Recharger la liste après suppression
-      const refreshRes = await fetch("/api/annonces?limit=200", { cache: "no-store" });
-      if (refreshRes.ok) {
-        const data = await refreshRes.json();
-        const items = data.items || [];
-        const mapped = items.map((a: any) => ({ ...a, titre: a.titre ?? a.title ?? "" }));
-        setAdminAnnonces(mapped);
-      }
+      await reloadAnnonces();
     } catch (e) {
       console.error("[Admin][BulkDelete]", e);
       showToast("error", "Erreur suppression multiple.");
@@ -557,16 +580,56 @@ export default function AdminPage() {
     setColocDetail(null);
     setColocDetailLoading(false);
   };
+  
+  // NOUVEAU: ouvrir/fermer le détail d'une annonce
+  const openAnnonceDetail = async (annonce: any) => {
+    console.log("[Admin][OpenAnnonceDetail] Début, annonce:", annonce);
+    try {
+      console.log("[Admin][OpenAnnonceDetail] Avant setAnnonceDetailOpen(true)");
+      setAnnonceDetailOpen(true);
+      console.log("[Admin][OpenAnnonceDetail] Après setAnnonceDetailOpen(true)");
+      setAnnonceDetailLoading(true);
+      setAnnonceDetail(null);
+      console.log("[Admin][OpenAnnonceDetail] États mis à jour, appel API...");
+      const res = await fetch(`/api/annonces/${annonce.id}`, { cache: "no-store" });
+      console.log("[Admin][OpenAnnonceDetail] Réponse API:", res.status, res.ok);
+      if (res.ok) {
+        const data = await res.json();
+        console.log("[Admin][OpenAnnonceDetail] Données reçues:", data);
+        setAnnonceDetail(data);
+      } else {
+        console.error("[Admin][OpenAnnonceDetail] Erreur API:", res.status);
+        showToast("error", "Erreur lors du chargement de l'annonce");
+      }
+    } catch (e) {
+      console.error("[Admin][AnnonceDetail] load error", e);
+      showToast("error", "Erreur lors du chargement de l'annonce");
+      setAnnonceDetail(null);
+    } finally {
+      setAnnonceDetailLoading(false);
+      console.log("[Admin][OpenAnnonceDetail] Fin de la fonction");
+    }
+  };
+  
+  const closeAnnonceDetail = () => {
+    console.log("[Admin][CloseAnnonceDetail] Fermeture du modal annonce");
+    setAnnonceDetailOpen(false);
+    setAnnonceDetail(null);
+    setAnnonceDetailLoading(false);
+  };
 
   // NOUVEAU: enregistrer un profil (modale)
   const saveColocEdit = async () => {
     if (!editColoc) return;
     try {
+      setAdminLoading(true);
+      console.log("[Admin][SaveColoc] Début de la sauvegarde pour:", editColoc.id);
+      
       const payload: any = {
         nom: colocNomEdit,
         ville: colocVilleEdit,
         budget: colocBudgetEdit ? Number(colocBudgetEdit) : null,
-  imageUrl: colocMainUrlEdit,
+        imageUrl: colocMainUrlEdit,
         description: colocDescriptionEdit,
         age: colocAgeEdit ? Number(colocAgeEdit) : null,
         profession: colocProfessionEdit,
@@ -579,10 +642,10 @@ export default function AdminPage() {
         langues: colocLanguesEdit
           ? colocLanguesEdit.split(",").map(s => s.trim()).filter(Boolean)
           : undefined,
-  instagram: colocInstagramEdit || undefined,
-  // photos stored via uploader/metadata instead of CSV
-  photos: undefined,
-  prefGenre: prefGenreEdit || undefined,
+        instagram: colocInstagramEdit || undefined,
+        // photos stored via uploader/metadata instead of CSV
+        photos: undefined,
+        prefGenre: prefGenreEdit || undefined,
         prefAgeMin: prefAgeMinEdit ? Number(prefAgeMinEdit) : undefined,
         prefAgeMax: prefAgeMaxEdit ? Number(prefAgeMaxEdit) : undefined,
         accepteFumeurs: !!accepteFumeursEdit,
@@ -595,6 +658,8 @@ export default function AdminPage() {
         musique: musiqueEdit || undefined,
         updatedAt: serverTimestamp(),
       };
+      
+      // Nettoyer les champs vides
       Object.keys(payload).forEach((k) => {
         const v = payload[k];
         if (
@@ -606,13 +671,44 @@ export default function AdminPage() {
           delete payload[k];
         }
       });
-  await updateColoc(editColoc.id, payload);
-  showToast("success", "Profil modifié ✅");
+      
+      console.log("[Admin][SaveColoc] Payload à envoyer:", payload);
+      
+      await updateColoc(editColoc.id, payload);
+      
+      console.log("[Admin][SaveColoc] Sauvegarde réussie");
+      showToast("success", "Profil modifié ✅");
+      
+      // Recharger la liste des profils
+      try {
+        const result = await listColoc({ limit: 200 });
+        setAdminColocs(result.items);
+        console.log("[Admin][SaveColoc] Liste rechargée:", result.items.length, "profils");
+      } catch (reloadError) {
+        console.error("[Admin][SaveColoc] Erreur rechargement liste:", reloadError);
+      }
+      
+      // Fermer le modal d'édition
       setColocModalOpen(false);
       setEditColoc(null);
+      
+      // Si on était dans le modal de détail, le rouvrir avec les données mises à jour
+      if (colocDetailOpen && editColoc) {
+        try {
+          const updatedDetail = await getColoc(editColoc.id);
+          if (updatedDetail) {
+            setColocDetail(updatedDetail);
+            console.log("[Admin][SaveColoc] Modal de détail mis à jour");
+          }
+        } catch (detailError) {
+          console.error("[Admin][SaveColoc] Erreur mise à jour détail:", detailError);
+        }
+      }
     } catch (e) {
-      console.error("[Admin][SaveColoc]", e);
+      console.error("[Admin][SaveColoc] Erreur:", e);
       showToast("error", "Erreur lors de la mise à jour du profil.");
+    } finally {
+      setAdminLoading(false);
     }
   };
 
@@ -898,6 +994,7 @@ export default function AdminPage() {
                   <thead className="bg-slate-50 sticky top-0">
                     <tr>
                       <th className="py-2 px-3 w-12 text-center select-none cursor-default" aria-label="Sélection"></th>
+                      <th className="py-2 px-3 text-left">Photo</th>
                       <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortAnnonces("titre")}>Titre <span className="text-xs opacity-60">{sortIcon("titre")}</span></th>
                       <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortAnnonces("ville")}>Ville <span className="text-xs opacity-60">{sortIcon("ville")}</span></th>
                       <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortAnnonces("prix")}>Prix <span className="text-xs opacity-60">{sortIcon("prix")}</span></th>
@@ -919,7 +1016,7 @@ export default function AdminPage() {
                         <tr
                           key={a.id}
                           className="hover:bg-blue-50/50 transition cursor-pointer"
-                          onClick={() => { setEditAnnonce(a); setModalOpen(true); }}
+                          onClick={() => { openAnnonceDetail(a); }}
                         >
                           <td
                             className="py-2 px-3 w-12 text-center select-none cursor-default"
@@ -939,16 +1036,27 @@ export default function AdminPage() {
                             </div>
                           </td>
                           <td className="py-2 px-3">
-                            <Link
-                              href={`/annonce/${a.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline"
-                              title="Ouvrir la fiche annonce dans un nouvel onglet"
-                              onClick={(e) => e.stopPropagation()}
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 border">
+                              <Image
+                                src={a.imageUrl || "/images/annonce-holder.svg"}
+                                alt="Photo principale"
+                                width={48}
+                                height={48}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.src = "/images/annonce-holder.svg";
+                                }}
+                              />
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span
+                              className="text-blue-600 hover:underline cursor-pointer"
+                              title="Cliquer pour voir le détail"
                             >
                               {a.titre || "(sans titre)"}
-                            </Link>
+                            </span>
                           </td>
                           <td className="py-2 px-3">{a.ville || "-"}</td>
                           <td className="py-2 px-3">{typeof a.prix === "number" ? `${a.prix} €` : "-"}</td>
@@ -958,6 +1066,28 @@ export default function AdminPage() {
                           <td className="py-2 px-3">{ownerLabel}</td>
                           <td className="py-2 px-3">{formatCreatedAt(a.createdAt)}</td>
                           <td className="py-2 px-3 flex items-center gap-2">
+                            <button
+                              type="button"
+                              title="Voir le détail"
+                              aria-label="Voir le détail"
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                console.log("Bouton cliqué, annonce:", a);
+                                openAnnonceDetail(a); 
+                              }}
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white hover:bg-blue-700"
+                            >
+                              👁️
+                            </button>
+                            <button
+                              type="button"
+                              title="Voir en public"
+                              aria-label="Voir en public"
+                              onClick={(e) => { e.stopPropagation(); window.open(`/annonce/${a.id}`, '_blank'); }}
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-600 text-white hover:bg-green-700"
+                            >
+                              🌐
+                            </button>
                             <button
                               type="button"
                               title="Modifier"
@@ -1010,12 +1140,20 @@ export default function AdminPage() {
                   showToast("success", "Annonce mise à jour ✅");
                   
                   // Recharger la liste après mise à jour
-                  const refreshRes = await fetch("/api/annonces?limit=200", { cache: "no-store" });
-                  if (refreshRes.ok) {
-                    const data = await refreshRes.json();
-                    const items = data.items || [];
-                    const mapped = items.map((a: any) => ({ ...a, titre: a.titre ?? a.title ?? "" }));
-                    setAdminAnnonces(mapped);
+                  await reloadAnnonces();
+                  
+                  // Si on était dans le modal de détail, le mettre à jour
+                  if (annonceDetailOpen && editAnnonce) {
+                    try {
+                      const updatedDetailRes = await fetch(`/api/annonces/${editAnnonce.id}`, { cache: "no-store" });
+                      if (updatedDetailRes.ok) {
+                        const updatedDetail = await updatedDetailRes.json();
+                        setAnnonceDetail(updatedDetail);
+                        console.log("[Admin][UpdateAnnonce] Modal de détail mis à jour");
+                      }
+                    } catch (detailError) {
+                      console.error("[Admin][UpdateAnnonce] Erreur mise à jour détail:", detailError);
+                    }
                   }
                 } catch (e: any) {
                   console.error("[Admin][UpdateAnnonce]", e);
@@ -1189,6 +1327,7 @@ export default function AdminPage() {
               <thead className="bg-slate-50 sticky top-0">
                 <tr>
                   <th className="py-2 px-3 w-12 text-center select-none cursor-default" aria-label="Sélection"></th>
+                  <th className="py-2 px-3 text-left">Photo</th>
                   <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortColocs("nom")}>Nom <span className="text-xs opacity-60">{sortIcon2("nom")}</span></th>
                   <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortColocs("ville")}>Ville <span className="text-xs opacity-60">{sortIcon2("ville")}</span></th>
                   <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortColocs("zones")}>Zone recherchée(s) <span className="text-xs opacity-60">{sortIcon2("zones")}</span></th>
@@ -1224,8 +1363,23 @@ export default function AdminPage() {
                             className="w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem] transition-colors"
                           />
                         </div>
-                      </td>
-                      <td className="py-2 px-3">{p.nom || "(sans nom)"}</td>
+                                                </td>
+                          <td className="py-2 px-3">
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 border">
+                              <Image
+                                src={p.imageUrl || "/images/coloc-holder.svg"}
+                                alt="Photo principale"
+                                width={48}
+                                height={48}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.src = "/images/coloc-holder.svg";
+                                }}
+                              />
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">{p.nom || "(sans nom)"}</td>
                       <td className="py-2 px-3">{p.ville || "-"}</td>
                       <td className="py-2 px-3">
                         {Array.isArray(p.zones) && p.zones.length > 0 ? (
@@ -1276,7 +1430,7 @@ export default function AdminPage() {
           {/* Modale édition profil colocataire */}
           {colocModalOpen && (
             <div
-              className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 overflow-y-auto"
+              className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4 overflow-y-auto"
               onMouseDown={(e) => { if (e.target === e.currentTarget) { setColocModalOpen(false); setEditColoc(null); } }}
             >
               <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto">
@@ -1343,208 +1497,298 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* NOUVEAU: Modal détail profil colocataire (même rendu que la Home) */}
+          {/* Modal détail profil colocataire complet */}
           {colocDetailOpen && (
             <div
               className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
               onMouseDown={(e) => { if (e.target === e.currentTarget) closeColocDetail(); }}
             >
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 relative max-h-[90vh] overflow-y-auto">
-                <button
-                  onClick={closeColocDetail}
-                  className="absolute top-3 right-3 text-slate-600 hover:text-slate-900"
-                  aria-label="Fermer"
-                >
-                  ✖
-                </button>
-                <h3 className="text-xl font-semibold mb-4">Profil colocataire</h3>
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl p-6 relative max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold">Détail complet du profil colocataire</h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        if (colocDetail) {
+                          openColocModal(colocDetail);
+                          // Ne pas fermer le modal de détail, il sera mis à jour après la sauvegarde
+                        }
+                      }}
+                      className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
+                      title="Modifier le profil"
+                    >
+                      ✏️ Modifier
+                    </button>
+                    <button
+                      onClick={closeColocDetail}
+                      className="text-slate-600 hover:text-slate-900 text-xl"
+                      aria-label="Fermer"
+                    >
+                      ✖
+                    </button>
+                  </div>
+                </div>
                 {colocDetailLoading ? (
                   <p className="text-slate-600">Chargement…</p>
                 ) : !colocDetail ? (
                   <p className="text-slate-600">Profil introuvable.</p>
                 ) : (
-                  <div className="flex flex-col gap-5">
-                    {/* En-tête avec image et infos principales */}
-                    <div className="flex gap-4 items-start">
-                      <div className="flex-shrink-0 w-28 h-28 rounded-lg overflow-hidden bg-gray-100">
-                        <ExpandableImage src={colocDetail.imageUrl || "/images/coloc-holder.svg"} images={Array.isArray(colocDetail.photos) && colocDetail.photos.length ? colocDetail.photos : (colocDetail.imageUrl ? [colocDetail.imageUrl] : ["/images/coloc-holder.svg"])} className="w-full h-full object-cover" alt={colocDetail.nom || "Profil"} />
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Colonne gauche - Informations principales */}
+                    <div className="space-y-4">
+                      {/* En-tête avec image et infos principales */}
+                      <div className="flex gap-4 items-start">
+                        <div className="flex-shrink-0 w-32 h-32 rounded-lg overflow-hidden bg-gray-100">
+                          <ExpandableImage 
+                            src={colocDetail.imageUrl || "/images/coloc-holder.svg"} 
+                            images={Array.isArray(colocDetail.photos) && colocDetail.photos.length ? colocDetail.photos : (colocDetail.imageUrl ? [colocDetail.imageUrl] : ["/images/coloc-holder.svg"])} 
+                            className="w-full h-full object-cover" 
+                            alt={colocDetail.nom || "Profil"} 
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-2xl font-bold">{colocDetail.nom || "Recherche colocation"}</div>
+                          <div className="text-slate-700">
+                            {colocDetail.ville || "-"}
+                            {typeof colocDetail.budget === "number" && (
+                              <span className="ml-2 text-blue-700 font-semibold">• Budget {colocDetail.budget} €</span>
+                            )}
+                          </div>
+                          <div className="text-slate-600 text-sm mt-1">
+                            {colocDetail.profession ? colocDetail.profession : ""}
+                            {typeof colocDetail.age === "number" ? ` • ${colocDetail.age} ans` : ""}
+                            {colocDetail.dateDispo ? ` • Dispo: ${colocDetail.dateDispo}` : ""}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            {colocDetail.createdAt ? `Créé le ${formatCreatedAt(colocDetail.createdAt)}` : ""}
+                            {colocDetail.updatedAt ? ` • Maj: ${formatCreatedAt(colocDetail.updatedAt)}` : ""}
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <div className="text-2xl font-bold">{colocDetail.nom || "Recherche colocation"}</div>
-                        <div className="text-slate-700">
-                          {colocDetail.ville || "-"}
-                          {typeof colocDetail.budget === "number" && (
-                            <span className="ml-2 text-blue-700 font-semibold">• Budget {colocDetail.budget} €</span>
+
+                      {/* Informations personnelles */}
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold text-slate-800">Informations personnelles</h4>
+                          <button
+                            onClick={() => {
+                              if (colocDetail) {
+                                openColocModal(colocDetail);
+                                // Ne pas fermer le modal de détail, il sera mis à jour après la sauvegarde
+                              }
+                            }}
+                            className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                            title="Modifier les informations personnelles"
+                          >
+                            ✏️
+                          </button>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          {colocDetail.email && <div><span className="font-medium">Email:</span> {colocDetail.email}</div>}
+                          {colocDetail.telephone && <div><span className="font-medium">Téléphone:</span> {colocDetail.telephone}</div>}
+                          {colocDetail.genre && <div><span className="font-medium">Genre:</span> {colocDetail.genre}</div>}
+                          {colocDetail.orientation && <div><span className="font-medium">Orientation:</span> {colocDetail.orientation}</div>}
+                          {colocDetail.instagram && <div><span className="font-medium">Instagram:</span> {colocDetail.instagram}</div>}
+                        </div>
+                      </div>
+
+                      {/* Bio et description */}
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <h4 className="font-semibold text-slate-800 mb-3">Bio et description</h4>
+                        <div className="space-y-2 text-sm">
+                          {colocDetail.bioCourte && (
+                            <div>
+                              <span className="font-medium">Bio courte:</span>
+                              <div className="mt-1 text-slate-700">{colocDetail.bioCourte}</div>
+                            </div>
+                          )}
+                          {colocDetail.description && (
+                            <div>
+                              <span className="font-medium">Description complète:</span>
+                              <div className="mt-1 text-slate-700">{colocDetail.description}</div>
+                            </div>
                           )}
                         </div>
-                        <div className="text-slate-600 text-sm mt-1">
-                          {colocDetail.profession ? colocDetail.profession : ""}
-                          {typeof colocDetail.age === "number" ? ` • ${colocDetail.age} ans` : ""}
-                          {colocDetail.dateDispo ? ` • Dispo: ${colocDetail.dateDispo}` : ""}
-                        </div>
-                        <div className="text-xs text-slate-500 mt-1">
-                          {colocDetail.createdAt ? `Créé le ${formatCreatedAt(colocDetail.createdAt)}` : ""}
-                          {colocDetail.updatedAt ? ` • Maj: ${formatCreatedAt(colocDetail.updatedAt)}` : ""}
-                        </div>
                       </div>
+
+                      {/* Langues */}
+                      {Array.isArray(colocDetail.langues) && colocDetail.langues.length > 0 && (
+                        <div className="bg-slate-50 rounded-lg p-4">
+                          <h4 className="font-semibold text-slate-800 mb-3">Langues</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {colocDetail.langues.map((l: string) => (
+                              <span key={l} className="px-2 py-1 rounded-full text-xs bg-white text-slate-700 border border-slate-200">
+                                {l}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Zones recherchées */}
+                      {Array.isArray(colocDetail.zones) && colocDetail.zones.length > 0 && (
+                        <div className="bg-slate-50 rounded-lg p-4">
+                          <h4 className="font-semibold text-slate-800 mb-3">Zones recherchées</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {colocDetail.zones.map((z: string) => (
+                              <span key={z} className="px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                                {z}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Communes recherchées */}
+                      {Array.isArray(colocDetail.communesSlugs) && colocDetail.communesSlugs.length > 0 && (
+                        <div className="bg-slate-50 rounded-lg p-4">
+                          <h4 className="font-semibold text-slate-800 mb-3">Communes recherchées</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {colocDetail.communesSlugs.map((c: string) => (
+                              <span key={c} className="px-2 py-1 rounded-full text-xs bg-green-50 text-green-700 border border-green-200">
+                                {c}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Bio courte */}
-                    {colocDetail.bioCourte && (
-                      <div className="text-slate-700">{colocDetail.bioCourte}</div>
-                    )}
-
-                    {/* Genre / Orientation */}
-                    {(colocDetail.genre || colocDetail.orientation) && (
-                      <div className="text-sm text-slate-600">
-                        {colocDetail.genre ? `Genre: ${colocDetail.genre}` : ""}{" "}
-                        {colocDetail.orientation ? `• Orientation: ${colocDetail.orientation}` : ""}
-                      </div>
-                    )}
-
-                    {/* Langues */}
-                    {Array.isArray(colocDetail.langues) && colocDetail.langues.length > 0 && (
-                      <div>
-                        <div className="text-sm font-medium text-slate-700 mb-1">Langues</div>
-                        <div className="flex flex-wrap gap-2">
-                          {colocDetail.langues.map((l: string) => (
-                            <span key={l} className="px-2 py-1 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
-                              {l}
-                            </span>
-                          ))}
+                    {/* Colonne droite - Préférences et critères */}
+                    <div className="space-y-4">
+                      {/* Préférences de colocataires */}
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold text-slate-800">Préférences de colocataires</h4>
+                          <button
+                            onClick={() => {
+                              if (colocDetail) {
+                                openColocModal(colocDetail);
+                                // Ne pas fermer le modal de détail, il sera mis à jour après la sauvegarde
+                              }
+                            }}
+                            className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                            title="Modifier les préférences"
+                          >
+                            ✏️
+                          </button>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          {colocDetail.prefGenre && <div><span className="font-medium">Genre préféré:</span> {colocDetail.prefGenre}</div>}
+                          {colocDetail.prefAgeMin && <div><span className="font-medium">Âge min:</span> {colocDetail.prefAgeMin} ans</div>}
+                          {colocDetail.prefAgeMax && <div><span className="font-medium">Âge max:</span> {colocDetail.prefAgeMax} ans</div>}
+                          {colocDetail.prefProfession && <div><span className="font-medium">Profession préférée:</span> {colocDetail.prefProfession}</div>}
                         </div>
                       </div>
-                    )}
 
-                    {/* Préférences */}
-                    {(colocDetail.prefGenre || colocDetail.prefAgeMin || colocDetail.prefAgeMax) && (
-                      <div>
-                        <div className="text-sm font-medium text-slate-700 mb-1">Préférences</div>
-                        <div className="text-sm text-slate-600">
-                          {colocDetail.prefGenre ? `Colocs: ${colocDetail.prefGenre}` : ""}
-                          {(colocDetail.prefAgeMin || colocDetail.prefAgeMax) ? ` • Âge: ${colocDetail.prefAgeMin || "?"} - ${colocDetail.prefAgeMax || "?"}` : ""}
+                      {/* Préférences de logement */}
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold text-slate-800">Préférences de logement</h4>
+                          <button
+                            onClick={() => {
+                              if (colocDetail) {
+                                openColocModal(colocDetail);
+                                // Ne pas fermer le modal de détail, il sera mis à jour après la sauvegarde
+                              }
+                            }}
+                            className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                            title="Modifier les préférences de logement"
+                          >
+                            ✏️
+                          </button>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          {typeof colocDetail.budget === "number" && <div><span className="font-medium">Budget:</span> {colocDetail.budget} €</div>}
+                          {colocDetail.surface && <div><span className="font-medium">Surface souhaitée:</span> {colocDetail.surface} m²</div>}
+                          {colocDetail.nbChambres && <div><span className="font-medium">Nombre de chambres:</span> {colocDetail.nbChambres}</div>}
+                          {colocDetail.dateDispo && <div><span className="font-medium">Disponibilité:</span> {colocDetail.dateDispo}</div>}
+                          {colocDetail.rythme && <div><span className="font-medium">Rythme de vie:</span> {colocDetail.rythme}</div>}
+                          {colocDetail.proprete && <div><span className="font-medium">Niveau de propreté:</span> {colocDetail.proprete}</div>}
                         </div>
                       </div>
-                    )}
 
-                    {/* Style de vie */}
-                    {(typeof colocDetail.accepteFumeurs === "boolean" || typeof colocDetail.accepteAnimaux === "boolean" || colocDetail.rythme || colocDetail.proprete || colocDetail.sportif || colocDetail.vegetarien || colocDetail.soirees || colocDetail.musique) && (
-                      <div>
-                        <div className="text-sm font-medium text-slate-700 mb-1">Style de vie</div>
-                        <div className="flex flex-wrap gap-2 text-xs">
-                          {typeof colocDetail.accepteFumeurs === "boolean" && (
-                            <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
-                              {colocDetail.accepteFumeurs ? "Accepte fumeurs" : "Non fumeur de préférence"}
-                            </span>
-                                                           )}
-                          {typeof colocDetail.accepteAnimaux === "boolean" && (
-                            <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
-                              {colocDetail.accepteAnimaux ? "Accepte animaux" : "Sans animaux"}
-                            </span>
-                          )}
-                          {colocDetail.rythme && <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">Rythme: {colocDetail.rythme}</span>}
-                          {colocDetail.proprete && <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">Propreté: {colocDetail.proprete}</span>}
-                          {colocDetail.sportif && <span className="px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">Sportif</span>}
-                          {colocDetail.vegetarien && <span className="px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">Végétarien</span>}
-                          {colocDetail.soirees && <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Aime les soirées</span>}
-                          {colocDetail.musique && <span className="px-2 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200">Musique: {colocDetail.musique}</span>}
+                      {/* Préférences de vie */}
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold text-slate-800">Préférences de vie</h4>
+                          <button
+                            onClick={() => {
+                              if (colocDetail) {
+                                openColocModal(colocDetail);
+                                // Ne pas fermer le modal de détail, il sera mis à jour après la sauvegarde
+                              }
+                            }}
+                            className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                            title="Modifier les préférences de vie"
+                          >
+                            ✏️
+                          </button>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          {colocDetail.musique && <div><span className="font-medium">Musique:</span> {colocDetail.musique}</div>}
+                          {colocDetail.accepteFumeurs && <div className="flex items-center gap-2"><span className="w-2 h-2 bg-green-500 rounded-full"></span>Accepte les fumeurs</div>}
+                          {colocDetail.accepteAnimaux && <div className="flex items-center gap-2"><span className="w-2 h-2 bg-green-500 rounded-full"></span>Accepte les animaux</div>}
+                          {colocDetail.sportif && <div className="flex items-center gap-2"><span className="w-2 h-2 bg-green-500 rounded-full"></span>Sportif</div>}
+                          {colocDetail.vegetarien && <div className="flex items-center gap-2"><span className="w-2 h-2 bg-green-500 rounded-full"></span>Végétarien</div>}
+                          {colocDetail.soirees && <div className="flex items-center gap-2"><span className="w-2 h-2 bg-green-500 rounded-full"></span>Aime les soirées</div>}
                         </div>
                       </div>
-                    )}
 
-                    {/* Réseaux */}
-                    {colocDetail.instagram && (
-                      <div className="text-sm">
-                        <span className="font-medium text-slate-700">Instagram:</span>{" "}
-                        <a
-                          href={`https://instagram.com/${String(colocDetail.instagram).replace(/^@/,"")}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 underline"
-                        >
-                          {colocDetail.instagram}
-                        </a>
-                      </div>
-                    )}
 
-                    {/* Zones recherchées */}
-                    {Array.isArray(colocDetail.zones) && colocDetail.zones.length > 0 && (
-                      <div>
-                        <div className="text-sm font-medium text-slate-700 mb-1">Zones recherchées</div>
-                        <div className="flex flex-wrap gap-2">
-                          {colocDetail.zones.map((z: string) => (
-                            <span key={z} className="px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">
-                              {z}
-                            </span>
-                          ))}
+
+                      {/* Intérêts */}
+                      {Array.isArray(colocDetail.interets) && colocDetail.interets.length > 0 && (
+                        <div className="bg-slate-50 rounded-lg p-4">
+                          <h4 className="font-semibold text-slate-800 mb-3">Intérêts</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {colocDetail.interets.map((i: string) => (
+                              <span key={i} className="px-2 py-1 rounded-full text-xs bg-purple-50 text-purple-700 border border-purple-200">
+                                {i}
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Communes ciblées */}
-                    {Array.isArray(colocDetail.communesSlugs) && colocDetail.communesSlugs.length > 0 && (
-                      <div>
-                        <div className="text-sm font-medium text-slate-700 mb-1">Communes ciblées</div>
-                        <div className="flex flex-wrap gap-2">
-                          {colocDetail.communesSlugs.map((s: string) => (
-                            <span key={s} className="px-2 py-1 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">
-                              {s}
-                            </span>
-                          ))}
+                      {/* Photos */}
+                      {Array.isArray(colocDetail.photos) && colocDetail.photos.length > 0 && (
+                        <div className="bg-slate-50 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-semibold text-slate-800">Photos ({colocDetail.photos.length})</h4>
+                                                      <button
+                            onClick={() => {
+                              if (colocDetail) {
+                                openColocModal(colocDetail);
+                                // Ne pas fermer le modal de détail, il sera mis à jour après la sauvegarde
+                              }
+                            }}
+                            className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                            title="Modifier les photos"
+                          >
+                            ✏️
+                          </button>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {colocDetail.photos.map((u: string, idx: number) => (
+                              <div key={idx} className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                                <ExpandableImage 
+                                  src={u} 
+                                  images={colocDetail.photos} 
+                                  className="w-full h-full object-cover" 
+                                  alt={`Photo ${idx + 1}`} 
+                                />
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
-
-                    {/* Centres d'intérêt */}
-                    {Array.isArray(colocDetail.interets) && colocDetail.interets.length > 0 && (
-                      <div>
-                        <div className="text-sm font-medium text-slate-700 mb-1">Centres d&apos;intérêt</div>
-                        <div className="flex flex-wrap gap-2">
-                          {colocDetail.interets.map((i: string) => (
-                            <span key={i} className="px-2 py-1 rounded-full text-xs bg-green-50 text-green-700 border border-green-200">
-                              {i}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Contact */}
-                    {(colocDetail.telephone || colocDetail.email) && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                        {colocDetail.telephone && (
-                          <div><span className="font-medium text-slate-700">Téléphone:</span> <span className="text-slate-800">{colocDetail.telephone}</span></div>
-                        )}
-                        {colocDetail.email && (
-                          <div><span className="font-medium text-slate-700">Email:</span> <span className="text-slate-800">{colocDetail.email}</span></div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Description longue */}
-                    {colocDetail.description && (
-                      <div>
-                        <div className="text-sm font-medium text-slate-700 mb-1">À propos</div>
-                        <p className="text-slate-800 whitespace-pre-line">{colocDetail.description}</p>
-                      </div>
-                    )}
-
-                    {/* Photos supplémentaires */}
-                    {Array.isArray(colocDetail.photos) && colocDetail.photos.length > 0 && (
-                      <div>
-                        <div className="text-sm font-medium text-slate-700 mb-1">Photos</div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          {colocDetail.photos.map((u: string, idx: number) => (
-                            <Image key={`${u}-${idx}`} src={u} alt={`photo-${idx}`} width={112} height={112} className="w-28 h-28 object-cover rounded-md border" />
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )}
-                </div>
               </div>
-            )}
+            </div>
+          )}
         
         </>
       );
@@ -1750,6 +1994,8 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+          
+
         </div>
       );
     }
@@ -1824,6 +2070,269 @@ export default function AdminPage() {
           {renderTab()}
         </div>
       </section>
+      
+      {/* Modals globaux */}
+      {/* Modal détail annonce complet */}
+      {annonceDetailOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={closeAnnonceDetail} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
+            {/* En-tête du modal */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <h3 className="text-2xl font-bold text-slate-800">Détail de l'annonce</h3>
+                {annonceDetailLoading && (
+                  <div className="text-sm text-slate-500">Chargement...</div>
+                )}
+              </div>
+              <button
+                onClick={closeAnnonceDetail}
+                className="text-slate-600 hover:text-slate-900 text-xl"
+                aria-label="Fermer"
+              >
+                ✖
+              </button>
+            </div>
+            
+            {/* Contenu du modal */}
+            {annonceDetail && (
+              <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Colonne gauche - Informations principales */}
+                  <div className="space-y-4">
+                    {/* En-tête avec image et infos principales */}
+                    <div className="flex gap-4 items-start">
+                      <div className="flex-shrink-0 w-32 h-32 rounded-lg overflow-hidden bg-gray-100">
+                        <ExpandableImage 
+                          src={annonceDetail.imageUrl || "/images/annonce-holder.svg"}
+                          alt={annonceDetail.titre || "Annonce"} 
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-2xl font-bold">{annonceDetail.titre || "Annonce sans titre"}</div>
+                        <div className="text-slate-700">
+                          {annonceDetail.ville || "-"}
+                          {typeof annonceDetail.prix === "number" && (
+                            <span className="ml-2 text-blue-700 font-semibold">• {annonceDetail.prix} €</span>
+                          )}
+                        </div>
+                        <div className="text-slate-600 text-sm mt-1">
+                          {annonceDetail.typeBien ? `${annonceDetail.typeBien}` : ""}
+                          {typeof annonceDetail.surface === "number" ? ` • ${annonceDetail.surface} m²` : ""}
+                          {typeof annonceDetail.nbChambres === "number" ? ` • ${annonceDetail.nbChambres} chambre(s)` : ""}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">
+                          {annonceDetail.createdAt ? `Créé le ${formatCreatedAt(annonceDetail.createdAt)}` : ""}
+                          {annonceDetail.updatedAt ? ` • Maj: ${formatCreatedAt(annonceDetail.updatedAt)}` : ""}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    {annonceDetail.description && (
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <h4 className="font-semibold text-slate-800 mb-3">Description</h4>
+                        <div className="text-sm text-slate-700 whitespace-pre-wrap">{annonceDetail.description}</div>
+                      </div>
+                    )}
+
+                    {/* Caractéristiques principales */}
+                    <div className="bg-slate-50 rounded-lg p-4">
+                      <h4 className="font-semibold text-slate-800 mb-3">Caractéristiques principales</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium">Ville:</span>
+                          <div className="text-slate-700">{annonceDetail.ville || "-"}</div>
+                        </div>
+                        <div>
+                          <span className="font-medium">Prix:</span>
+                          <div className="text-slate-700">
+                            {typeof annonceDetail.prix === "number" ? `${annonceDetail.prix} €` : "-"}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="font-medium">Surface:</span>
+                          <div className="text-slate-700">
+                            {typeof annonceDetail.surface === "number" ? `${annonceDetail.surface} m²` : "-"}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="font-medium">Chambres:</span>
+                          <div className="text-slate-700">
+                            {typeof annonceDetail.nbChambres === "number" ? `${annonceDetail.nbChambres}` : "-"}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="font-medium">Type de bien:</span>
+                          <div className="text-slate-700">{annonceDetail.typeBien || "-"}</div>
+                        </div>
+                        <div>
+                          <span className="font-medium">Meublé:</span>
+                          <div className="text-slate-700">
+                            {annonceDetail.meuble === true ? "Oui" : annonceDetail.meuble === false ? "Non" : "-"}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="font-medium">Nombre de pièces:</span>
+                          <div className="text-slate-700">
+                            {typeof annonceDetail.nbPieces === "number" ? `${annonceDetail.nbPieces}` : "-"}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="font-medium">Salles de bain:</span>
+                          <div className="text-slate-700">
+                            {typeof annonceDetail.nbSdb === "number" ? `${annonceDetail.nbSdb}` : "-"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Caractéristiques détaillées */}
+                    {(annonceDetail.natureBien || annonceDetail.caracteristiques || annonceDetail.exposition || annonceDetail.exterieur) && (
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <h4 className="font-semibold text-slate-800 mb-3">Caractéristiques détaillées</h4>
+                        <div className="space-y-2 text-sm">
+                          {annonceDetail.natureBien && (
+                            <div>
+                              <span className="font-medium">Nature du bien:</span>
+                              <div className="text-slate-700">{annonceDetail.natureBien}</div>
+                            </div>
+                          )}
+                          {annonceDetail.caracteristiques && (
+                            <div>
+                              <span className="font-medium">Caractéristiques:</span>
+                              <div className="text-slate-700">{annonceDetail.caracteristiques}</div>
+                            </div>
+                          )}
+                          {annonceDetail.exposition && (
+                            <div>
+                              <span className="font-medium">Exposition:</span>
+                              <div className="text-slate-700">{annonceDetail.exposition}</div>
+                            </div>
+                          )}
+                          {annonceDetail.exterieur && (
+                            <div>
+                              <span className="font-medium">Extérieur:</span>
+                              <div className="text-slate-700">{annonceDetail.exterieur}</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Informations de location */}
+                    {(annonceDetail.placesParking || annonceDetail.disponibleAPartir || annonceDetail.typeLocation || annonceDetail.nombreColocataires || annonceDetail.statutFumeur) && (
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <h4 className="font-semibold text-slate-800 mb-3">Informations de location</h4>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          {annonceDetail.placesParking && (
+                            <div>
+                              <span className="font-medium">Places parking:</span>
+                              <div className="text-slate-700">{annonceDetail.placesParking}</div>
+                            </div>
+                          )}
+                          {annonceDetail.disponibleAPartir && (
+                            <div>
+                              <span className="font-medium">Disponible à partir:</span>
+                              <div className="text-slate-700">{annonceDetail.disponibleAPartir}</div>
+                            </div>
+                          )}
+                          {annonceDetail.typeLocation && (
+                            <div>
+                              <span className="font-medium">Type de location:</span>
+                              <div className="text-slate-700">{annonceDetail.typeLocation}</div>
+                            </div>
+                          )}
+                          {annonceDetail.nombreColocataires && (
+                            <div>
+                              <span className="font-medium">Nombre de colocataires:</span>
+                              <div className="text-slate-700">{annonceDetail.nombreColocataires}</div>
+                            </div>
+                          )}
+                          {annonceDetail.statutFumeur && (
+                            <div>
+                              <span className="font-medium">Statut fumeur:</span>
+                              <div className="text-slate-700">{annonceDetail.statutFumeur}</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Équipements */}
+                    {annonceDetail.equipements && (
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <h4 className="font-semibold text-slate-800 mb-3">Équipements</h4>
+                        <div className="text-sm text-slate-700">{annonceDetail.equipements}</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Colonne droite - Photos et métadonnées */}
+                  <div className="space-y-4">
+                    {/* Photos */}
+                    {Array.isArray(annonceDetail.photos) && annonceDetail.photos.length > 0 && (
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold text-slate-800">Photos ({annonceDetail.photos.length})</h4>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {annonceDetail.photos.map((photo: string, idx: number) => (
+                            <div key={idx} className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                              <ExpandableImage 
+                                src={photo}
+                                alt={`Photo ${idx + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="bg-slate-50 rounded-lg p-4">
+                      <h4 className="font-semibold text-slate-800 mb-3">Actions</h4>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            if (annonceDetail) {
+                              setEditAnnonce(annonceDetail);
+                              setModalOpen(true);
+                              // Ne pas fermer le modal de détail, il sera mis à jour après la sauvegarde
+                            }
+                          }}
+                          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                          ✏️ Modifier
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (confirm("Êtes-vous sûr de vouloir supprimer cette annonce ?")) {
+                              try {
+                                await deleteAnnonce(annonceDetail.id);
+                                showToast("success", "Annonce supprimée ✅");
+                                await reloadAnnonces();
+                                closeAnnonceDetail();
+                              } catch (error) {
+                                console.error("[Admin][DeleteAnnonce]", error);
+                                showToast("error", "Erreur lors de la suppression.");
+                              }
+                            }
+                          }}
+                          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                        >
+                          🗑️ Supprimer
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }

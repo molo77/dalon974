@@ -898,6 +898,7 @@ export default function AdminPage() {
                   <thead className="bg-slate-50 sticky top-0">
                     <tr>
                       <th className="py-2 px-3 w-12 text-center select-none cursor-default" aria-label="Sélection"></th>
+                      <th className="py-2 px-3 text-left">Photo</th>
                       <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortAnnonces("titre")}>Titre <span className="text-xs opacity-60">{sortIcon("titre")}</span></th>
                       <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortAnnonces("ville")}>Ville <span className="text-xs opacity-60">{sortIcon("ville")}</span></th>
                       <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortAnnonces("prix")}>Prix <span className="text-xs opacity-60">{sortIcon("prix")}</span></th>
@@ -935,6 +936,21 @@ export default function AdminPage() {
                                 onChange={() => toggleAdminSelect(a.id)}
                                 onClick={(e) => e.stopPropagation()}
                                 className="w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem] transition-colors"
+                              />
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 border">
+                              <Image
+                                src={a.imageUrl || "/images/annonce-holder.svg"}
+                                alt="Photo principale"
+                                width={48}
+                                height={48}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.src = "/images/annonce-holder.svg";
+                                }}
                               />
                             </div>
                           </td>
@@ -1189,6 +1205,7 @@ export default function AdminPage() {
               <thead className="bg-slate-50 sticky top-0">
                 <tr>
                   <th className="py-2 px-3 w-12 text-center select-none cursor-default" aria-label="Sélection"></th>
+                  <th className="py-2 px-3 text-left">Photo</th>
                   <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortColocs("nom")}>Nom <span className="text-xs opacity-60">{sortIcon2("nom")}</span></th>
                   <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortColocs("ville")}>Ville <span className="text-xs opacity-60">{sortIcon2("ville")}</span></th>
                   <th className="py-2 px-3 text-left cursor-pointer select-none" onClick={() => toggleSortColocs("zones")}>Zone recherchée(s) <span className="text-xs opacity-60">{sortIcon2("zones")}</span></th>
@@ -1224,8 +1241,23 @@ export default function AdminPage() {
                             className="w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem] transition-colors"
                           />
                         </div>
-                      </td>
-                      <td className="py-2 px-3">{p.nom || "(sans nom)"}</td>
+                                                </td>
+                          <td className="py-2 px-3">
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 border">
+                              <Image
+                                src={p.imageUrl || "/images/coloc-holder.svg"}
+                                alt="Photo principale"
+                                width={48}
+                                height={48}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.src = "/images/coloc-holder.svg";
+                                }}
+                              />
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">{p.nom || "(sans nom)"}</td>
                       <td className="py-2 px-3">{p.ville || "-"}</td>
                       <td className="py-2 px-3">
                         {Array.isArray(p.zones) && p.zones.length > 0 ? (

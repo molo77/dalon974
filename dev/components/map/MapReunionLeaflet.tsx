@@ -208,7 +208,7 @@ export default function MapReunionLeaflet({
   };
 
   return (
-    <div className={className} style={{ width: '100%' }}>
+    <div className={className} style={{ width: '100%', position: 'relative', zIndex: 0 }}>
       <div className="flex flex-wrap items-center gap-2 mb-2 text-sm">
         <button
           type="button"
@@ -230,7 +230,7 @@ export default function MapReunionLeaflet({
       <MapContainer
         center={baseCenter as any}
         zoom={9}
-        style={{ width: '100%', height, borderRadius: '12px', overflow: 'hidden' }}
+        style={{ width: '100%', height, borderRadius: '12px', overflow: 'hidden', zIndex: 0 }}
         ref={mapRef}
         attributionControl={false}
         className="rounded-xl overflow-hidden"
