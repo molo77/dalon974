@@ -28,7 +28,11 @@
     "version:sync-prod": "node scripts/version-manager.js sync-prod",
     "version:auto-sync": "./scripts/auto-version-sync.sh auto-sync",
     "version:status": "./scripts/auto-version-sync.sh show",
-    "version:setup-hook": "./scripts/auto-version-sync.sh setup-hook"
+    "version:setup-hook": "./scripts/auto-version-sync.sh setup-hook",
+    "version:inc-patch": "./scripts/increment-dev-version.sh patch",
+    "version:inc-minor": "./scripts/increment-dev-version.sh minor",
+    "version:inc-major": "./scripts/increment-dev-version.sh major",
+    "version:show": "./scripts/increment-dev-version.sh show"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",
