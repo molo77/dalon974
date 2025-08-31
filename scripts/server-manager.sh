@@ -45,21 +45,67 @@ stop_all_servers() {
     pkill -f "node.*next" 2>/dev/null || true
     
     # Attendre un peu
-    sleep 2
+    sleep 1
     
     # Forcer l'arrêt si nécessaire
     pkill -9 -f "next.*dev" 2>/dev/null || true
     pkill -9 -f "next.*start" 2>/dev/null || true
     pkill -9 -f "node.*next" 2>/dev/null || true
     
-    # Libérer les ports
-    lsof -ti:$DEV_PORT | xargs kill -9 2>/dev/null || true
-    lsof -ti:$PROD_PORT | xargs kill -9 2>/dev/null || true
-    
     # Attendre que tout soit arrêté
-    sleep 3
+    sleep 1
     
     log_success "Tous les serveurs arrêtés"
+}
+
+# Fonction pour arrêter seulement le serveur de développement
+stop_dev_server() {
+    log_info "🛑 Arrêt du serveur de développement (port $DEV_PORT)..."
+    
+    # Tuer tous les processus qui utilisent le port de développement
+    # Utiliser netstat au lieu de lsof pour éviter sudo
+    local pids=$(netstat -tlnp 2>/dev/null | grep ":$DEV_PORT " | awk '{print $7}' | cut -d'/' -f1 | grep -v -)
+    if [ -n "$pids" ]; then
+        log_info "Processus trouvés sur le port $DEV_PORT: $pids"
+        echo "$pids" | xargs kill -9 2>/dev/null || true
+        log_success "Tous les processus du port $DEV_PORT tués"
+    else
+        log_info "Aucun processus trouvé sur le port $DEV_PORT"
+    fi
+    
+    # Arrêter aussi les processus Next.js de développement spécifiquement
+    pkill -f "next.*dev" 2>/dev/null || true
+    pkill -9 -f "next.*dev" 2>/dev/null || true
+    
+    # Attendre un peu
+    sleep 1
+    
+    log_success "Serveur de développement arrêté"
+}
+
+# Fonction pour arrêter seulement le serveur de production
+stop_prod_server() {
+    log_info "🛑 Arrêt du serveur de production (port $PROD_PORT)..."
+    
+    # Tuer tous les processus qui utilisent le port de production
+    # Utiliser netstat au lieu de lsof pour éviter sudo
+    local pids=$(netstat -tlnp 2>/dev/null | grep ":$PROD_PORT " | awk '{print $7}' | cut -d'/' -f1 | grep -v -)
+    if [ -n "$pids" ]; then
+        log_info "Processus trouvés sur le port $PROD_PORT: $pids"
+        echo "$pids" | xargs kill -9 2>/dev/null || true
+        log_success "Tous les processus du port $PROD_PORT tués"
+    else
+        log_info "Aucun processus trouvé sur le port $PROD_PORT"
+    fi
+    
+    # Arrêter aussi les processus Next.js de production spécifiquement
+    pkill -f "next.*start" 2>/dev/null || true
+    pkill -9 -f "next.*start" 2>/dev/null || true
+    
+    # Attendre un peu
+    sleep 1
+    
+    log_success "Serveur de production arrêté"
 }
 
 # Fonction pour nettoyer les builds et fichiers de lock
@@ -87,27 +133,39 @@ clean_builds() {
         rm -f "$PROD_DIR/package-lock.json"
         log_success "package-lock.json prod supprimé"
     fi
+}
+
+# Fonction pour nettoyer seulement l'environnement de développement
+clean_dev_builds() {
+    log_info "🧹 Nettoyage des builds de développement..."
     
-    # Supprimer les node_modules (optionnel, plus agressif)
-    if [ -d "$DEV_DIR/node_modules" ]; then
-        rm -rf "$DEV_DIR/node_modules"
-        log_success "node_modules dev supprimé"
+    # Supprimer le dossier .next de dev
+    if [ -d "$DEV_DIR/.next" ]; then
+        rm -rf "$DEV_DIR/.next"
+        log_success "Build dev supprimé"
     fi
     
-    if [ -d "$PROD_DIR/node_modules" ]; then
-        rm -rf "$PROD_DIR/node_modules"
-        log_success "node_modules prod supprimé"
+    # Supprimer le package-lock.json de dev
+    if [ -f "$DEV_DIR/package-lock.json" ]; then
+        rm -f "$DEV_DIR/package-lock.json"
+        log_success "package-lock.json dev supprimé"
+    fi
+}
+
+# Fonction pour nettoyer seulement l'environnement de production
+clean_prod_builds() {
+    log_info "🧹 Nettoyage des builds de production..."
+    
+    # Supprimer le dossier .next de prod
+    if [ -d "$PROD_DIR/.next" ]; then
+        rm -rf "$PROD_DIR/.next"
+        log_success "Build prod supprimé"
     fi
     
-    # Supprimer les fichiers de cache npm
-    if [ -d "$DEV_DIR/.npm" ]; then
-        rm -rf "$DEV_DIR/.npm"
-        log_success "Cache npm dev supprimé"
-    fi
-    
-    if [ -d "$PROD_DIR/.npm" ]; then
-        rm -rf "$PROD_DIR/.npm"
-        log_success "Cache npm prod supprimé"
+    # Supprimer le package-lock.json de prod
+    if [ -f "$PROD_DIR/package-lock.json" ]; then
+        rm -f "$PROD_DIR/package-lock.json"
+        log_success "package-lock.json prod supprimé"
     fi
 }
 
@@ -135,29 +193,10 @@ prepare_environment() {
     log_success "Environnement $env_name préparé"
 }
 
-# Fonction pour rebuild complet (avec build)
-rebuild() {
-    local dir=$1
-    local env_name=$2
-    
-    log_info "🔨 Rebuild complet de $env_name..."
-    
-    # Préparer l'environnement
-    prepare_environment "$dir" "$env_name"
-    
-    # Build
-    cd "$dir"
-    log_info "🏗️  Build de $env_name..."
-    npm run build
-    cd ..
-    
-    log_success "Rebuild de $env_name terminé"
-}
-
 # Fonction pour vérifier qu'un port est libre
 check_port() {
     local port=$1
-    if lsof -ti:$port >/dev/null 2>&1; then
+    if netstat -tlnp 2>/dev/null | grep -q ":$port "; then
         return 1  # Port occupé
     else
         return 0  # Port libre
@@ -167,12 +206,6 @@ check_port() {
 # Fonction pour démarrer le serveur de développement
 start_dev() {
     log_info "🚀 Démarrage du serveur de développement..."
-    
-    # Vérifier que le port est libre
-    if ! check_port $DEV_PORT; then
-        log_error "Port $DEV_PORT déjà occupé"
-        return 1
-    fi
     
     # Vérifier que package.json existe
     if [ ! -f "$DEV_DIR/package.json" ]; then
@@ -199,12 +232,6 @@ start_dev() {
 # Fonction pour démarrer le serveur de production
 start_prod() {
     log_info "🚀 Démarrage du serveur de production..."
-    
-    # Vérifier que le port est libre
-    if ! check_port $PROD_PORT; then
-        log_error "Port $PROD_PORT déjà occupé"
-        return 1
-    fi
     
     # Vérifier que package.json existe
     if [ ! -f "$PROD_DIR/package.json" ]; then
@@ -234,14 +261,12 @@ start_both() {
     
     # Démarrer la production en arrière-plan
     start_prod &
-    PROD_PID=$!
     
     # Attendre un peu
-    sleep 5
+    sleep 3
     
     # Démarrer le développement
     start_dev &
-    DEV_PID=$!
     
     log_success "Les deux serveurs sont en cours de démarrage"
 }
@@ -287,7 +312,7 @@ status() {
 show_help() {
     echo "Script de gestion des serveurs Dalon974"
     echo ""
-    echo "Usage: $0 {dev|prod|both|stop|status|clean|clean-all|restart-dev|restart-prod|restart-both}"
+    echo "Usage: $0 {dev|prod|both|stop|status|clean|restart-dev|restart-prod|restart-both}"
     echo ""
     echo "Commandes :"
     echo "  dev           - Démarrer le serveur de développement (port $DEV_PORT)"
@@ -296,7 +321,6 @@ show_help() {
     echo "  stop          - Arrêter tous les serveurs"
     echo "  status        - Afficher le statut des serveurs"
     echo "  clean         - Nettoyer les builds (.next et package-lock.json)"
-    echo "  clean-all     - Nettoyer complètement (inclut node_modules et cache)"
     echo "  restart-dev   - Redémarrer le serveur de développement (clean + rebuild)"
     echo "  restart-prod  - Redémarrer le serveur de production (clean + rebuild)"
     echo "  restart-both  - Redémarrer les deux serveurs (clean + rebuild)"
@@ -305,20 +329,20 @@ show_help() {
     echo "  $0 dev        # Démarrer le serveur de développement"
     echo "  $0 stop       # Arrêter tous les serveurs"
     echo "  $0 status     # Voir le statut"
-    echo "  $0 clean-all  # Nettoyage complet"
+    echo "  $0 clean      # Nettoyage des builds"
 }
 
 # Fonction principale
 main() {
     case "${1:-}" in
         "dev")
-            stop_all_servers
-            clean_builds
+            stop_dev_server
+            clean_dev_builds
             start_dev
             ;;
         "prod")
-            stop_all_servers
-            clean_builds
+            stop_prod_server
+            clean_prod_builds
             start_prod
             ;;
         "both")
@@ -336,18 +360,14 @@ main() {
             stop_all_servers
             clean_builds
             ;;
-        "clean-all")
-            stop_all_servers
-            clean_builds
-            ;;
         "restart-dev")
-            stop_all_servers
-            clean_builds
+            stop_dev_server
+            clean_dev_builds
             start_dev
             ;;
         "restart-prod")
-            stop_all_servers
-            clean_builds
+            stop_prod_server
+            clean_prod_builds
             start_prod
             ;;
         "restart-both")

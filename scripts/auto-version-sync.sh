@@ -119,13 +119,12 @@ show_version_status() {
     
     echo "📋 Versions actuelles :"
     echo "  • Dernier commit Git : $commit_version"
-    echo "  • package.json racine : $root_version"
     echo "  • dev/package.json : $dev_version"
     echo "  • prod/package.json : $prod_version"
     echo ""
     
     # Vérifier la cohérence
-    local all_versions=("$commit_version" "$root_version" "$dev_version" "$prod_version")
+    local all_versions=("$commit_version" "$dev_version" "$prod_version")
     local first_version=""
     local versions_match=true
     
@@ -163,28 +162,12 @@ auto_sync_versions() {
     local files_to_update=()
     local modified_files=()
     
-    # Vérifier et mettre à jour package.json racine
-    local root_version=$(extract_version_from_package_json "package.json")
-    if [[ "$root_version" != "$commit_version" ]]; then
-        update_version_in_package_json "package.json" "$commit_version"
-        files_to_update+=("package.json")
-        modified_files+=("package.json")
-    fi
-    
-    # Vérifier et mettre à jour dev/package.json
+    # Vérifier et mettre à jour seulement dev/package.json
     local dev_version=$(extract_version_from_package_json "dev/package.json")
     if [[ "$dev_version" != "$commit_version" ]]; then
         update_version_in_package_json "dev/package.json" "$commit_version"
         files_to_update+=("dev/package.json")
         modified_files+=("dev/package.json")
-    fi
-    
-    # Vérifier et mettre à jour prod/package.json
-    local prod_version=$(extract_version_from_package_json "prod/package.json")
-    if [[ "$prod_version" != "$commit_version" ]]; then
-        update_version_in_package_json "prod/package.json" "$commit_version"
-        files_to_update+=("prod/package.json")
-        modified_files+=("prod/package.json")
     fi
     
     if [[ ${#files_to_update[@]} -gt 0 ]]; then

@@ -18,7 +18,6 @@
     "uploads:backup": "./scripts/manage-uploads.sh backup",
     "uploads:restore": "./scripts/manage-uploads.sh restore",
     "fix-scraper": "node scripts/fix-scraper-config.js",
-    "version:show": "node scripts/version-manager.js show",
     "version:patch": "node scripts/version-manager.js patch",
     "version:minor": "node scripts/version-manager.js minor",
     "version:major": "node scripts/version-manager.js major",

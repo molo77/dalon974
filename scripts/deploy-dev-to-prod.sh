@@ -111,9 +111,77 @@ copy_files() {
         --exclude='.DS_Store' \
         --exclude='Thumbs.db' \
         --exclude='public/uploads' \
+        --exclude='package.json' \
         "$DEV_DIR/" "$PROD_DIR/"
     
     log_success "Fichiers copiés"
+}
+
+# Création du package.json de production basé sur dev
+create_prod_package_json() {
+    log_info "Création du package.json de production basé sur dev..."
+    
+    cd "$PROD_DIR"
+    
+    if [[ -f "$DEV_DIR/package.json" ]]; then
+        # Lire le package.json de dev
+        local dev_package_json=$(cat "$DEV_DIR/package.json")
+        
+        # Extraire la version de dev
+        local dev_version=$(echo "$dev_package_json" | grep '"version"' | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+        
+        log_info "Récupération des dépendances depuis dev/package.json..."
+        
+        # Extraire les dépendances de dev
+        local dependencies_section=$(echo "$dev_package_json" | sed -n '/"dependencies": {/,/^  },/p')
+        local dev_dependencies_section=$(echo "$dev_package_json" | sed -n '/"devDependencies": {/,/^  }/p')
+        
+        # Compter le nombre de dépendances
+        local deps_count=$(echo "$dependencies_section" | grep -c '^    "' || echo "0")
+        local dev_deps_count=$(echo "$dev_dependencies_section" | grep -c '^    "' || echo "0")
+        
+        log_info "Dépendances trouvées : $deps_count dependencies, $dev_deps_count devDependencies"
+        
+        # Créer le package.json de production avec les modifications nécessaires
+        cat > package.json << EOF
+{
+  "name": "dalon974-prod",
+  "version": "$dev_version",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 3000",
+    "lint": "next lint",
+    "prebuild": "node scripts/utils/build-reunion-geo.mjs",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf .next node_modules package-lock.json"
+  },
+EOF
+        
+        # Ajouter les dépendances de dev
+        echo "$dependencies_section" >> package.json
+        
+        # Ajouter les devDependencies de dev
+        echo "$dev_dependencies_section" >> package.json
+        
+        # Fermer le JSON
+        echo "}" >> package.json
+        
+        log_success "package.json de production créé avec la version $dev_version"
+        log_info "Dépendances copiées depuis dev : $deps_count dependencies, $dev_deps_count devDependencies"
+        
+        # Afficher un aperçu des dépendances principales
+        log_info "Aperçu des dépendances principales :"
+        echo "$dependencies_section" | grep '^    "' | head -5 | sed 's/^    "/  • /' | sed 's/":.*$//' || true
+        
+    else
+        log_error "Fichier package.json de dev introuvable"
+        return 1
+    fi
 }
 
 # Reconstruction du fichier .env.local pour la production
@@ -410,6 +478,7 @@ main() {
     stop_servers
     clean_production
     copy_files
+    create_prod_package_json
     rebuild_env_prod
     install_dependencies
     build_production

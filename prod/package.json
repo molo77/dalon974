@@ -1,15 +1,15 @@
 {
-  "name": "dalon974-dev",
-  "version": "0.3.31",
+  "name": "dalon974-prod",
+  "version": "0.3.32",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0 -p 3001",
+    "dev": "next dev -H 0.0.0.0 -p 3000",
     "build": "next build",
-    "start": "next start -H 0.0.0.0 -p 3001",
+    "start": "next start -H 0.0.0.0 -p 3000",
     "lint": "next lint",
     "prebuild": "node scripts/utils/build-reunion-geo.mjs",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf .next node_modules package-lock.json"
