@@ -1,6 +1,6 @@
 {
   "name": "dalon974-dev",
-  "version": "0.3.34",
+  "version": "0.3.35",
   "private": true,
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3001",
