@@ -14,26 +14,10 @@ export default function Header() {
   const router = useRouter();
   const isAdmin = (user?.role || (user as any)?.role) === "admin";
 
-  // Fonction pour récupérer l'environnement via l'API
-  const fetchEnvironment = async () => {
-    try {
-      const response = await fetch('/api/version');
-      if (response.ok) {
-        const data = await response.json();
-        setIsDevEnvironment(data.appEnv === 'development');
-      } else {
-        console.error('Erreur lors de la récupération de l\'environnement:', response.status);
-        setIsDevEnvironment(false); // Fallback vers production
-      }
-    } catch (error) {
-      console.error('Erreur lors de la récupération de l\'environnement:', error);
-      setIsDevEnvironment(false); // Fallback vers production
-    }
-  };
-
   // Récupérer l'environnement au chargement du composant
   useEffect(() => {
-    fetchEnvironment();
+    // En production, on n'affiche jamais l'étiquette DEV
+    setIsDevEnvironment(false);
   }, []);
 
   const handleLogout = async () => {
