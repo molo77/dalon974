@@ -1,6 +1,6 @@
 {
   "name": "dalon974",
-  "version": "0.2.0",
+  "version": "0.3.30",
   "private": true,
   "scripts": {
     "dev": "./scripts/server-manager.sh dev",
@@ -10,7 +10,7 @@
     "status": "./scripts/server-manager.sh status",
     "clean": "./scripts/server-manager.sh clean",
     "check-processes": "./scripts/check-server-processes.sh",
-    "deploy:dev-to-prod": "./scripts/deploy-dev-to-prod.sh",
+    "deploy": "./scripts/deploy-dev-to-prod.sh",
     "sync-db-structure": "./scripts/sync-database-structure.sh",
     "uploads:stats": "./scripts/manage-uploads.sh stats",
     "uploads:sync": "./scripts/manage-uploads.sh sync",
