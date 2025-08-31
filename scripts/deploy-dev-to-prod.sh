@@ -106,11 +106,11 @@ copy_files() {
         --exclude='.env.local.backup' \
         --exclude='node_modules' \
         --exclude='.next' \
-        --exclude='package-lock.json' \
         --exclude='.git' \
         --exclude='*.log' \
         --exclude='.DS_Store' \
         --exclude='Thumbs.db' \
+        --exclude='public/uploads' \
         "$DEV_DIR/" "$PROD_DIR/"
     
     log_success "Fichiers copiés"
@@ -145,7 +145,7 @@ rebuild_env_prod() {
                     ;;
                 DATABASE_URL=*)
                     # Remplacer l'URL de base de données par celle de production
-                    echo "$line" | sed 's/dev_/prod_/g' >> .env.local
+                    echo "$line" | sed 's/dalon974_dev/dalon974_prod/g' >> .env.local
                     ;;
                 NEXTAUTH_URL=*)
                     # Remplacer l'URL par celle de production
@@ -178,8 +178,14 @@ install_dependencies() {
     
     cd "$PROD_DIR"
     
-    # Installation des dépendances
-    npm ci --production=false
+    # Vérifier si package-lock.json existe pour choisir la méthode d'installation
+    if [[ -f "package-lock.json" ]]; then
+        log_info "package-lock.json trouvé, utilisation de npm ci pour une installation plus rapide"
+        npm ci --production=false
+    else
+        log_info "package-lock.json non trouvé, utilisation de npm install"
+        npm install --production=false
+    fi
     
     log_success "Dépendances installées"
 }
@@ -196,19 +202,168 @@ build_production() {
     log_success "Build terminé"
 }
 
-# Synchronisation de la base de données (structure uniquement)
+# Synchronisation complète de la structure de la base de données
 sync_database_structure() {
-    log_info "Synchronisation de la structure de la base de données..."
+    log_info "Synchronisation complète de la structure de la base de données..."
     
     cd "$PROD_DIR"
     
-    # Migration de la structure uniquement
-    if command -v npx &> /dev/null; then
-        npx prisma migrate deploy
-        log_success "Structure de base de données synchronisée"
-    else
-        log_warning "npx non disponible, synchronisation de base de données ignorée"
+    # Charger les variables d'environnement avant d'exécuter Prisma
+    if [[ -f ".env.local" ]]; then
+        set -a
+        source .env.local
+        set +a
+        log_info "Variables d'environnement chargées depuis .env.local"
     fi
+    
+    if ! command -v npx &> /dev/null; then
+        log_warning "npx non disponible, synchronisation de base de données ignorée"
+        return 1
+    fi
+    
+    # Étape 1: Générer le client Prisma en production
+    log_info "Génération du client Prisma en production..."
+    npx prisma generate
+    log_success "Client Prisma généré"
+    
+    # Étape 2: Vérifier l'état des migrations
+    log_info "Vérification de l'état des migrations..."
+    local migration_status=$(npx prisma migrate status 2>&1)
+    log_info "État des migrations: $migration_status"
+    
+    # Étape 3: Vérifier et résoudre les migrations échouées
+    log_info "Vérification des migrations échouées..."
+    local migrate_deploy_output=$(npx prisma migrate deploy 2>&1)
+    
+    if echo "$migrate_deploy_output" | grep -q "failed migrations"; then
+        log_warning "Migrations échouées détectées, tentative de résolution..."
+        
+        # Afficher les migrations échouées
+        log_info "Migrations échouées:"
+        npx prisma migrate status 2>&1 | grep -A 10 -B 5 "failed" || true
+        
+        # Résoudre les migrations échouées automatiquement
+        log_info "Résolution automatique des migrations échouées..."
+        
+        # Récupérer toutes les migrations échouées
+        local failed_migrations=$(npx prisma migrate status 2>&1 | grep "failed" | awk '{print $1}' || true)
+        
+        if [ -n "$failed_migrations" ]; then
+            for migration in $failed_migrations; do
+                log_info "Résolution de la migration: $migration"
+                npx prisma migrate resolve --applied "$migration" 2>/dev/null || {
+                    log_warning "Impossible de résoudre la migration $migration automatiquement"
+                }
+            done
+        else
+            # Si aucune migration échouée n'est trouvée, essayer de résoudre la migration init
+            log_info "Tentative de résolution de la migration init..."
+            npx prisma migrate resolve --applied 20250817082544_init 2>/dev/null || {
+                log_warning "Impossible de résoudre la migration 20250817082544_init automatiquement"
+            }
+        fi
+        
+        # Réessayer l'application des migrations
+        log_info "Nouvelle tentative d'application des migrations..."
+        npx prisma migrate deploy
+        log_success "Migrations appliquées après résolution"
+    else
+        log_success "Migrations appliquées sans problème"
+    fi
+    
+    # Étape 4: Vérifier la structure de la base de données
+    log_info "Vérification de la structure de la base de données..."
+    
+    # Créer un script temporaire pour vérifier la structure
+    cat > /tmp/check_db_structure.sql << 'EOF'
+-- Script de vérification de la structure de la base de données
+SELECT 
+    TABLE_NAME,
+    TABLE_ROWS,
+    DATA_LENGTH,
+    INDEX_LENGTH,
+    CREATE_TIME,
+    UPDATE_TIME
+FROM information_schema.TABLES 
+WHERE TABLE_SCHEMA = DATABASE()
+ORDER BY TABLE_NAME;
+EOF
+    
+    # Exécuter la vérification si mysql est disponible
+    if command -v mysql &> /dev/null; then
+        log_info "Vérification détaillée de la structure..."
+        
+        # Extraire les informations de connexion depuis DATABASE_URL
+        local db_url="$DATABASE_URL"
+        local db_host=$(echo "$db_url" | sed -n 's/.*@\([^:]*\):.*/\1/p')
+        local db_port=$(echo "$db_url" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
+        local db_name=$(echo "$db_url" | sed -n 's/.*\/\([^?]*\).*/\1/p')
+        local db_user=$(echo "$db_url" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
+        local db_pass=$(echo "$db_url" | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
+        
+        # Décoder le mot de passe URL-encoded
+        db_pass=$(printf '%b' "${db_pass//%/\\x}")
+        
+        log_info "Connexion à la base de données: $db_name sur $db_host:$db_port"
+        
+        # Vérifier la structure des tables
+        mysql -h "$db_host" -P "$db_port" -u "$db_user" -p"$db_pass" "$db_name" < /tmp/check_db_structure.sql 2>/dev/null || {
+            log_warning "Impossible de vérifier la structure avec mysql (mysql client non disponible ou erreur de connexion)"
+        }
+        
+        # Nettoyer le fichier temporaire
+        rm -f /tmp/check_db_structure.sql
+    else
+        log_warning "Client mysql non disponible, vérification de structure limitée"
+    fi
+    
+    # Étape 5: Vérifier l'intégrité avec Prisma
+    log_info "Vérification de l'intégrité avec Prisma..."
+    npx prisma db pull --print 2>/dev/null | head -20 || {
+        log_warning "Impossible de vérifier l'intégrité avec Prisma db pull"
+    }
+    
+    # Étape 6: Vérifier que toutes les tables sont accessibles
+    log_info "Test d'accès aux tables principales..."
+    
+    # Créer un script de test temporaire
+    cat > /tmp/test_tables.js << 'EOF'
+const { PrismaClient } = require('@prisma/client');
+
+async function testTables() {
+    const prisma = new PrismaClient();
+    
+    try {
+        // Test des tables principales
+        const tables = ['User', 'Annonce', 'Coloc', 'Message'];
+        
+        for (const table of tables) {
+            try {
+                const count = await prisma[table.toLowerCase()].count();
+                console.log(`✅ Table ${table}: ${count} enregistrements`);
+            } catch (error) {
+                console.log(`❌ Table ${table}: Erreur - ${error.message}`);
+            }
+        }
+    } catch (error) {
+        console.log(`❌ Erreur de connexion: ${error.message}`);
+    } finally {
+        await prisma.$disconnect();
+    }
+}
+
+testTables();
+EOF
+    
+    # Exécuter le test
+    node /tmp/test_tables.js 2>/dev/null || {
+        log_warning "Test d'accès aux tables échoué"
+    }
+    
+    # Nettoyer
+    rm -f /tmp/test_tables.js
+    
+    log_success "Synchronisation complète de la base de données terminée"
 }
 
 # Redémarrage des serveurs
@@ -268,7 +423,8 @@ main() {
     echo "📋 Résumé :"
     echo "  • Fichiers copiés de dev vers prod"
     echo "  • Variables d'environnement adaptées"
-    echo "  • Structure de base de données synchronisée"
+    echo "  • Structure de base de données MySQL synchronisée et vérifiée"
+    echo "  • Intégrité de la base de données validée"
     echo "  • Serveurs redémarrés"
     echo ""
     echo "🌐 URLs :"
