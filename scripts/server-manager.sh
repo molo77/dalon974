@@ -62,9 +62,9 @@ stop_all_servers() {
     log_success "Tous les serveurs arrêtés"
 }
 
-# Fonction pour nettoyer les builds
+# Fonction pour nettoyer les builds et fichiers de lock
 clean_builds() {
-    log_info "🧹 Nettoyage des builds..."
+    log_info "🧹 Nettoyage des builds et fichiers de lock..."
     
     # Supprimer les dossiers .next
     if [ -d "$DEV_DIR/.next" ]; then
@@ -87,6 +87,56 @@ clean_builds() {
         rm -f "$PROD_DIR/package-lock.json"
         log_success "package-lock.json prod supprimé"
     fi
+    
+    # Supprimer les node_modules (optionnel, plus agressif)
+    if [ -d "$DEV_DIR/node_modules" ]; then
+        rm -rf "$DEV_DIR/node_modules"
+        log_success "node_modules dev supprimé"
+    fi
+    
+    if [ -d "$PROD_DIR/node_modules" ]; then
+        rm -rf "$PROD_DIR/node_modules"
+        log_success "node_modules prod supprimé"
+    fi
+    
+    # Supprimer les fichiers de cache npm
+    if [ -d "$DEV_DIR/.npm" ]; then
+        rm -rf "$DEV_DIR/.npm"
+        log_success "Cache npm dev supprimé"
+    fi
+    
+    if [ -d "$PROD_DIR/.npm" ]; then
+        rm -rf "$PROD_DIR/.npm"
+        log_success "Cache npm prod supprimé"
+    fi
+}
+
+# Fonction pour rebuild complet
+rebuild() {
+    local dir=$1
+    local env_name=$2
+    
+    log_info "🔨 Rebuild complet de $env_name..."
+    
+    cd "$dir"
+    
+    # Installer les dépendances
+    log_info "📦 Installation des dépendances pour $env_name..."
+    npm install
+    
+    # Générer Prisma client si nécessaire
+    if [ -f "prisma/schema.prisma" ]; then
+        log_info "🗄️  Génération du client Prisma pour $env_name..."
+        npx prisma generate
+    fi
+    
+    # Build
+    log_info "🏗️  Build de $env_name..."
+    npm run build
+    
+    cd ..
+    
+    log_success "Rebuild de $env_name terminé"
 }
 
 # Fonction pour vérifier qu'un port est libre
@@ -109,24 +159,19 @@ start_dev() {
         return 1
     fi
     
-    # Aller dans le répertoire dev
-    cd "$DEV_DIR"
-    
     # Vérifier que package.json existe
-    if [ ! -f "package.json" ]; then
+    if [ ! -f "$DEV_DIR/package.json" ]; then
         log_error "package.json non trouvé dans $DEV_DIR"
         return 1
     fi
     
-    # Build de développement
-    log_info "🔨 Build de développement..."
-    npm run build
+    # Rebuild complet
+    rebuild "$DEV_DIR" "développement"
     
     # Démarrer le serveur
     log_success "Démarrage du serveur de développement sur le port $DEV_PORT..."
+    cd "$DEV_DIR"
     npm run dev &
-    
-    # Retourner au répertoire racine
     cd ..
     
     log_success "Serveur de développement démarré"
@@ -142,24 +187,19 @@ start_prod() {
         return 1
     fi
     
-    # Aller dans le répertoire prod
-    cd "$PROD_DIR"
-    
     # Vérifier que package.json existe
-    if [ ! -f "package.json" ]; then
+    if [ ! -f "$PROD_DIR/package.json" ]; then
         log_error "package.json non trouvé dans $PROD_DIR"
         return 1
     fi
     
-    # Build de production
-    log_info "🔨 Build de production..."
-    npm run build
+    # Rebuild complet
+    rebuild "$PROD_DIR" "production"
     
     # Démarrer le serveur
     log_success "Démarrage du serveur de production sur le port $PROD_PORT..."
+    cd "$PROD_DIR"
     npm run start &
-    
-    # Retourner au répertoire racine
     cd ..
     
     log_success "Serveur de production démarré"
@@ -224,7 +264,7 @@ status() {
 show_help() {
     echo "Script de gestion des serveurs Dalon974"
     echo ""
-    echo "Usage: $0 {dev|prod|both|stop|status|clean|restart-dev|restart-prod|restart-both}"
+    echo "Usage: $0 {dev|prod|both|stop|status|clean|clean-all|restart-dev|restart-prod|restart-both}"
     echo ""
     echo "Commandes :"
     echo "  dev           - Démarrer le serveur de développement (port $DEV_PORT)"
@@ -233,14 +273,16 @@ show_help() {
     echo "  stop          - Arrêter tous les serveurs"
     echo "  status        - Afficher le statut des serveurs"
     echo "  clean         - Nettoyer les builds (.next et package-lock.json)"
-    echo "  restart-dev   - Redémarrer le serveur de développement"
-    echo "  restart-prod  - Redémarrer le serveur de production"
-    echo "  restart-both  - Redémarrer les deux serveurs"
+    echo "  clean-all     - Nettoyer complètement (inclut node_modules et cache)"
+    echo "  restart-dev   - Redémarrer le serveur de développement (clean + rebuild)"
+    echo "  restart-prod  - Redémarrer le serveur de production (clean + rebuild)"
+    echo "  restart-both  - Redémarrer les deux serveurs (clean + rebuild)"
     echo ""
     echo "Exemples :"
     echo "  $0 dev        # Démarrer le serveur de développement"
     echo "  $0 stop       # Arrêter tous les serveurs"
     echo "  $0 status     # Voir le statut"
+    echo "  $0 clean-all  # Nettoyage complet"
 }
 
 # Fonction principale
@@ -268,6 +310,10 @@ main() {
             status
             ;;
         "clean")
+            stop_all_servers
+            clean_builds
+            ;;
+        "clean-all")
             stop_all_servers
             clean_builds
             ;;
