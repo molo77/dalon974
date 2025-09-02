@@ -91,9 +91,14 @@ export default function Header() {
               )}
             </>
           ) : (
-            <Link href="/login" className="text-blue-600 hover:underline">
-              Connexion
-            </Link>
+            <>
+              <Link href="/signup" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium">
+                Inscription
+              </Link>
+              <Link href="/login" className="text-blue-600 hover:underline">
+                Connexion
+              </Link>
+            </>
           )}
         </nav>
       </div>
@@ -154,9 +159,14 @@ export default function Header() {
               )}
             </>
           ) : (
-            <Link href="/login" className="text-blue-600 hover:underline" onClick={toggleMobile}>
-              Connexion
-            </Link>
+            <>
+              <Link href="/signup" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium text-center" onClick={toggleMobile}>
+                Inscription
+              </Link>
+              <Link href="/login" className="text-blue-600 hover:underline" onClick={toggleMobile}>
+                Connexion
+              </Link>
+            </>
           )}
         </nav>
       )}

@@ -76,22 +76,22 @@ export const { auth, signIn, signOut } = NextAuth({
         return { id: user.id, email: user.email, name: user.name, role: user.role } as any;
       },
     }),
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? [Google({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       allowDangerousEmailAccountLinking: false,
-    }),
-    Facebook({
-      clientId: process.env.FACEBOOK_CLIENT_ID!,
-      clientSecret: process.env.FACEBOOK_CLIENT_SECRET!,
+    })] : []),
+    ...(process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET ? [Facebook({
+      clientId: process.env.FACEBOOK_CLIENT_ID,
+      clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
       allowDangerousEmailAccountLinking: false,
-    }),
-    AzureAD({
-      clientId: process.env.AZURE_AD_CLIENT_ID!,
-      clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
+    })] : []),
+    ...(process.env.AZURE_AD_CLIENT_ID && process.env.AZURE_AD_CLIENT_SECRET ? [AzureAD({
+      clientId: process.env.AZURE_AD_CLIENT_ID,
+      clientSecret: process.env.AZURE_AD_CLIENT_SECRET,
       allowDangerousEmailAccountLinking: false,
-    }),
-    Email({
+    })] : []),
+    ...(process.env.EMAIL_SERVER_HOST ? [Email({
       server: {
         host: process.env.EMAIL_SERVER_HOST,
         port: process.env.EMAIL_SERVER_PORT ? parseInt(process.env.EMAIL_SERVER_PORT) : 587,
@@ -101,9 +101,12 @@ export const { auth, signIn, signOut } = NextAuth({
         },
       },
       from: process.env.EMAIL_FROM,
-    }),
+    })] : []),
   ],
-  pages: { signIn: "/login" },
+  pages: { 
+    signIn: "/login",
+    verifyRequest: "/verify-request",
+  },
   callbacks: {
     async signIn({ user, account, profile }) {
       // Exige un email pour toute connexion
@@ -150,4 +153,5 @@ export const { auth, signIn, signOut } = NextAuth({
     },
   },
   debug: process.env.NODE_ENV !== "production" ? false : false,
+  secret: process.env.NEXTAUTH_SECRET,
 });

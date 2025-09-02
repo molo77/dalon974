@@ -24,18 +24,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Token invalide ou expiré" }, { status: 400 });
     }
 
-    // Vérifier que l'utilisateur existe
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: "Utilisateur non trouvé" }, { status: 404 });
-    }
-
     return NextResponse.json({ valid: true });
-  } catch (error) {
-    console.error("Token verification error:", error);
+  } catch (_error) {
+    console.error("Token verification error:", _error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }

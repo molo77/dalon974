@@ -1,66 +1,33 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { showToast } from "@/lib/toast";
+import { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { toast } from "@/components/ui/feedback/Toast";
 
 function VerifyResetPasswordContent() {
+  const searchParams = useSearchParams();
+  const token = searchParams?.get("token");
+  const email = searchParams?.get("email");
+
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [token, setToken] = useState("");
-  const [email, setEmail] = useState("");
-  const [validToken, setValidToken] = useState(false);
-  const [checkingToken, setCheckingToken] = useState(true);
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  useEffect(() => {
-    const tokenParam = searchParams.get("token");
-    const emailParam = searchParams.get("email");
-    
-    if (tokenParam && emailParam) {
-      setToken(tokenParam);
-      setEmail(emailParam);
-      // Vérifier la validité du token
-      checkToken(tokenParam, emailParam);
-    } else {
-      setCheckingToken(false);
-      showToast("error", "Lien invalide");
-    }
-  }, [searchParams]);
-
-  const checkToken = async (token: string, email: string) => {
-    try {
-      const response = await fetch("/api/auth/reset-password/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, email }),
-      });
-
-      if (response.ok) {
-        setValidToken(true);
-      } else {
-        showToast("error", "Lien expiré ou invalide");
-      }
-    } catch (error) {
-      console.error("Token verification error:", error);
-      showToast("error", "Erreur de vérification");
-    } finally {
-      setCheckingToken(false);
-    }
-  };
+  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (password.length < 6) {
-      showToast("error", "Le mot de passe doit contenir au moins 6 caractères");
+    if (!token || !email) {
+      toast.error("Lien invalide");
       return;
     }
 
     if (password !== confirmPassword) {
-      showToast("error", "Les mots de passe ne correspondent pas");
+      toast.error("Les mots de passe ne correspondent pas");
+      return;
+    }
+
+    if (password.length < 6) {
+      toast.error("Le mot de passe doit contenir au moins 6 caractères");
       return;
     }
 
@@ -73,31 +40,29 @@ function VerifyResetPasswordContent() {
       });
 
       if (response.ok) {
-        showToast("success", "Mot de passe mis à jour avec succès !");
-        router.push("/login");
+        setSuccess(true);
+        toast.success("Mot de passe mis à jour avec succès !");
       } else {
-        const error = await response.text();
-        showToast("error", error || "Erreur lors du changement de mot de passe");
+        const error = await response.json();
+        toast.error(error.error || "Erreur lors de la mise à jour");
       }
-    } catch (error) {
-      console.error("Password change error:", error);
-      showToast("error", "Erreur lors du changement de mot de passe");
+    } catch (_error) {
+      toast.error("Erreur de connexion");
     } finally {
       setLoading(false);
     }
   };
 
-  if (checkingToken) {
+  if (!token || !email) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
           <div className="text-center">
-            <div className="text-6xl mb-4">⏳</div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">
-              Vérification en cours...
-            </h1>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              Lien invalide
+            </h2>
             <p className="text-gray-600">
-              Nous vérifions votre lien de réinitialisation
+              Ce lien de réinitialisation est invalide ou a expiré.
             </p>
           </div>
         </div>
@@ -105,25 +70,24 @@ function VerifyResetPasswordContent() {
     );
   }
 
-  if (!validToken) {
+  if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
           <div className="text-center">
-            <div className="text-6xl mb-4">❌</div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">
-              Lien invalide
-            </h1>
-            <p className="text-gray-600 mb-6">
-              Ce lien de réinitialisation est expiré ou invalide.
-              Veuillez demander un nouveau lien.
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              Mot de passe mis à jour !
+            </h2>
+            <p className="text-gray-600">
+              Votre mot de passe a été mis à jour avec succès. 
+              Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.
             </p>
-            <button
-              onClick={() => router.push("/reset-password")}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            <a
+              href="/login"
+              className="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
             >
-              Demander un nouveau lien
-            </button>
+              Aller à la connexion
+            </a>
           </div>
         </div>
       </div>
@@ -131,56 +95,54 @@ function VerifyResetPasswordContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="text-6xl mb-4">🔐</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
             Nouveau mot de passe
-          </h1>
+          </h2>
           <p className="text-gray-600">
-            Choisissez votre nouveau mot de passe
+            Entrez votre nouveau mot de passe pour {email}.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
               Nouveau mot de passe
             </label>
             <input
               id="password"
               type="password"
+              required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               placeholder="Votre nouveau mot de passe"
-              required
-              minLength={6}
             />
           </div>
 
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
               Confirmer le mot de passe
             </label>
             <input
               id="confirmPassword"
               type="password"
+              required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               placeholder="Confirmez votre mot de passe"
-              required
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
           >
-            {loading ? "Mise à jour..." : "Changer le mot de passe"}
+            {loading ? "Mise à jour..." : "Mettre à jour le mot de passe"}
           </button>
         </form>
       </div>
@@ -191,17 +153,9 @@ function VerifyResetPasswordContent() {
 export default function VerifyResetPasswordPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-          <div className="text-center">
-            <div className="text-6xl mb-4">⏳</div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">
-              Chargement...
-            </h1>
-            <p className="text-gray-600">
-              Vérification en cours
-            </p>
-          </div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <p>Chargement...</p>
         </div>
       </div>
     }>

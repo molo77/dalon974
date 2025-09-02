@@ -65,7 +65,7 @@ export default function ImageCleanup() {
       } else {
         showToast('error', `Erreur: ${result.error || 'Erreur inconnue'} ❌`);
       }
-          } catch (error) {
+          } catch (_error) {
         console.error('Erreur lors du test ❌');
         showToast('error', 'Erreur lors du test ❌');
     } finally {

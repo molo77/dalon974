@@ -133,3 +133,12 @@ model ScraperRun {
   @@index([startedAt])
   @@index([status])
 }
+
+// NextAuth VerificationToken
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
