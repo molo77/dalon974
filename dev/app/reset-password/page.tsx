@@ -27,7 +27,7 @@ export default function ResetPasswordPage() {
         const error = await response.json();
         toast.error(error.error || "Erreur lors de l'envoi");
       }
-    } catch (_error) {
+    } catch {
       toast.error("Erreur de connexion");
     } finally {
       setLoading(false);

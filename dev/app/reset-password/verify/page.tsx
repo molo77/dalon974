@@ -46,7 +46,7 @@ function VerifyResetPasswordContent() {
         const error = await response.json();
         toast.error(error.error || "Erreur lors de la mise à jour");
       }
-    } catch (_error) {
+    } catch {
       toast.error("Erreur de connexion");
     } finally {
       setLoading(false);

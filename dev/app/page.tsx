@@ -178,11 +178,11 @@ export default function HomePage() {
   const [selectionSource, setSelectionSource] = useState<"map" | "zones" | "input" | null>(null);
   const [countAnnoncesTotal, setCountAnnoncesTotal] = useState<number | null>(null);
   const [countProfilsTotal, setCountProfilsTotal] = useState<number | null>(null);
-  const [countFiltered, setCountFiltered] = useState<number | null>(null);
+  const [_countFiltered, setCountFiltered] = useState<number | null>(null);
   const pageLimit = 20;
   const offsetRef = useRef<number>(0);
   // Permettre de masquer/afficher la barre de filtres
-  const [filtersCollapsed, setFiltersCollapsed] = useState<boolean>(false);
+  const [_filtersCollapsed, setFiltersCollapsed] = useState<boolean>(false);
 
   // Refs diverses
   const resultsTopRef = useRef<HTMLDivElement | null>(null);
@@ -510,7 +510,7 @@ export default function HomePage() {
       return toMsAny(b) - toMsAny(a);
     });
     return list;
-  }, [annonces, selectedParentSlugs, prixMax, sortBy, activeHomeTab, critAgeMin, critAgeMax, critProfession, surfaceMin, surfaceMax]);
+  }, [annonces, prixMax, sortBy, activeHomeTab, critAgeMin, critAgeMax, critProfession, surfaceMin, surfaceMax]);
 
   // Quand le filtrage se termine, restaurer la position de scroll initiale
   useEffect(() => {
@@ -598,7 +598,7 @@ export default function HomePage() {
     }, { root: null, rootMargin: '200px', threshold: 0 });
     io.observe(el);
     return () => io.disconnect();
-  }, [hasMore, loadingMore, filtering, activeHomeTab, sortBy, prixMax, ville, codePostal, communesSelected.length, critAgeMin, critAgeMax, critProfession, surfaceMin, surfaceMax, loadAnnonces]);
+  }, [hasMore, loadingMore, filtering, activeHomeTab, sortBy, prixMax, ville, codePostal, communesSelected.length, critAgeMin, critAgeMax, critProfession, surfaceMin, surfaceMax, loadAnnonces, zoneFilters]);
 
   // Nettoyage global à l'unmount
   useEffect(() => {
@@ -937,7 +937,7 @@ export default function HomePage() {
                 {/* Message de fin de liste retiré à la demande */}
               </div>
               {/* Style local: empêche l'ancrage automatique qui peut déplacer la page quand du contenu est inséré */}
-              <style jsx>{`
+              <style>{`
                 .prevent-anchor { overflow-anchor: none; }
               `}</style>
 
@@ -1098,7 +1098,7 @@ export default function HomePage() {
                 </div>
 
                 {/* Contenu des filtres, masquable */}
-                <div id="filters-content" className={filtersCollapsed ? "hidden" : "block"}>
+                <div id="filters-content" className={_filtersCollapsed ? "hidden" : "block"}>
                 {/* Zones rapides (OU) tout en haut - visibles seulement en mode carte */}
                 {hasMode('map') && (
                   <div ref={zonesBlockRef}>
@@ -1195,7 +1195,7 @@ export default function HomePage() {
               </div>
 
               {/* Carte (sous la pub et, si visible, le bouton) */}
-              {showCommuneMap && !filtersCollapsed && (
+                              {showCommuneMap && !_filtersCollapsed && (
                 <div>
                   <div id="map-section" ref={mapWrapRef} className="rounded-2xl border border-slate-200 overflow-hidden">
                     <div className="bg-slate-50 px-3 py-2 border-b border-slate-200">
@@ -1226,7 +1226,7 @@ export default function HomePage() {
               )}
 
               {/* Bouton Réinitialiser filtre (placé sous la carte) */}
-              {!filtersCollapsed && (
+              {!_filtersCollapsed && (
                 <div className="mt-2">
                   <button
                     type="button"
@@ -1255,7 +1255,7 @@ export default function HomePage() {
               )}
 
               {/* Blocs de sélection — masqués si filtres repliés */}
-              {!filtersCollapsed && (zonesSelected.length > 0 || communesSelected.length > 0) && (
+              {!_filtersCollapsed && (zonesSelected.length > 0 || communesSelected.length > 0) && (
                 <div className="space-y-3 mt-3">
                   <div className="bg-white rounded-xl border border-slate-200 p-3">
                     <div className="flex items-center justify-between mb-2">

@@ -22,9 +22,9 @@ function getIpFromHeaders(h: Record<string, string | string[] | undefined>) {
   return (raw?.split(",")[0] || "unknown").trim();
 }
 
-export const { auth, signIn, signOut } = NextAuth({
+const config = {
   adapter: PrismaAdapter(prisma) as any,
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt" as const },
   providers: [
     Credentials({
       name: "Email",
@@ -108,7 +108,7 @@ export const { auth, signIn, signOut } = NextAuth({
     verifyRequest: "/verify-request",
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account, profile }: any) {
       // Exige un email pour toute connexion
       const email = (user?.email || (profile as any)?.email || "").toLowerCase().trim();
       if (!email) return false;
@@ -130,14 +130,14 @@ export const { auth, signIn, signOut } = NextAuth({
       } catch {}
       return true;
     },
-    async session({ session, token, user }) {
+    async session({ session, token, user }: any) {
       if (session.user) {
         (session.user as any).id = (token as any)?.sub || user?.id;
         (session.user as any).role = (token as any)?.role || (user as any)?.role || null;
       }
       return session;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user }: any) {
       // Toujours resynchroniser le rôle depuis la DB pour refléter les changements récents
       if (token.sub) {
         try {
@@ -154,4 +154,6 @@ export const { auth, signIn, signOut } = NextAuth({
   },
   debug: process.env.NODE_ENV !== "production" ? false : false,
   secret: process.env.NEXTAUTH_SECRET,
-});
+};
+
+export const { auth, signIn, signOut, handlers } = NextAuth(config);

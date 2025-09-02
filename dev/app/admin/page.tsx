@@ -184,7 +184,7 @@ export default function AdminPage() {
       }, 5000);
     }
     return ()=>{ if (pollingRef.current){ clearInterval(pollingRef.current); pollingRef.current=null; } };
-  },[activeTab, scraperRuns, showScraperLogs]);
+  },[activeTab, scraperRuns, showScraperLogs, loadScraperLogs]);
   const updateCfgField = async (k:string,v:string) => {
     setScraperConfig(prev=>({ ...prev, [k]: v }));
     
@@ -297,7 +297,7 @@ export default function AdminPage() {
   // Tri tableaux (annonces, colocs)
   const [annoncesSort, setAnnoncesSort] = useState<{ key: "titre"|"ville"|"prix"|"owner"|"createdAt"; dir: "asc"|"desc" }>({ key: "createdAt", dir: "desc" });
   const [colocsSort, setColocsSort] = useState<{ key: "nom"|"ville"|"zones"|"budget"|"email"|"createdAt"; dir: "asc"|"desc" }>({ key: "createdAt", dir: "desc" });
-  // Formulaire d’édition coloc (modale)
+  // Formulaire d'édition coloc (modale)
   const [colocNomEdit, setColocNomEdit] = useState("");
   const [colocVilleEdit, setColocVilleEdit] = useState("");
   const [colocBudgetEdit, setColocBudgetEdit] = useState<string>("");
@@ -327,11 +327,11 @@ export default function AdminPage() {
   const [soireesEdit, setSoireesEdit] = useState(false);
   const [musiqueEdit, setMusiqueEdit] = useState("");
 
-  // NOUVEAU: modal “Changer propriétaire”
+  // NOUVEAU: modal "Changer propriétaire"
   const [bulkOwnerOpen, setBulkOwnerOpen] = useState(false);
   const [bulkOwnerInput, setBulkOwnerInput] = useState("");
 
-  // NOUVEAU: état pour la création de profils d’exemple
+  // NOUVEAU: état pour la création de profils d'exemple
   // Seed colocataires supprimé
 
   // NOUVEAU: état pour modal de détails profil coloc
@@ -360,7 +360,7 @@ export default function AdminPage() {
     appToast[type](message);
   };
 
-  // Utilitaire: formatage robuste d’un champ createdAt (Timestamp/Date/number/string)
+  // Utilitaire: formatage robuste d'un champ createdAt (Timestamp/Date/number/string)
   const formatCreatedAt = (v: any) => {
     if (!v) return "-";
     try {
@@ -383,7 +383,7 @@ export default function AdminPage() {
   // NOUVEAU: réparer les URLs d'images placeholders cassées (annonces + colocs)
   // repairImages supprimé
 
-  // NOUVEAU: créer des profils colocataires d’exemple
+  // NOUVEAU: créer des profils colocataires d'exemple
   // seedColocExamples supprimé
 
   // Chargement des annonces
@@ -527,7 +527,7 @@ export default function AdminPage() {
     }
   };
 
-  // NOUVEAU: ouvrir la modale d’édition profil
+  // NOUVEAU: ouvrir la modale d'édition profil
   const openColocModal = (p: any) => {
     setEditColoc(p);
     setColocNomEdit(p?.nom || "");
@@ -560,7 +560,7 @@ export default function AdminPage() {
     setColocModalOpen(true);
   };
 
-  // NOUVEAU: ouvrir/fermer le détail d’un profil coloc
+  // NOUVEAU: ouvrir/fermer le détail d'un profil coloc
   const openColocDetail = async (_id: string) => {
     try {
       setColocDetailOpen(true);
@@ -885,7 +885,7 @@ export default function AdminPage() {
       const sortIcon = (key: typeof annoncesSort.key) => annoncesSort.key !== key ? "↕" : annoncesSort.dir === "asc" ? "▲" : "▼";
       return (
         <>
-          {/* Barre d’actions + table annonces */}
+          {/* Barre d'actions + table annonces */}
           <div className="flex items-center justify-between mb-8">
             <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight">
               Administration
@@ -957,7 +957,7 @@ export default function AdminPage() {
           </div>
 
           <div className="bg-white rounded-xl shadow-lg p-8">
-            {/* Barre d’actions */}
+            {/* Barre d'actions */}
             <div className="flex flex-wrap items-center gap-2 mb-4">
               {/* ...existing master checkbox + select/deselect all... */}
               <label className="inline-flex items-center gap-2">
@@ -1116,7 +1116,7 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* NOUVEAU: Modal d’édition */}
+            {/* NOUVEAU: Modal d'édition */}
             <AnnonceModal
               isOpen={modalOpen}
               onClose={() => { setModalOpen(false); setEditAnnonce(null); }}
@@ -1165,7 +1165,7 @@ export default function AdminPage() {
               }}
             />
 
-            {/* NOUVEAU: Modal “Changer propriétaire” */}
+            {/* NOUVEAU: Modal "Changer propriétaire" */}
             {bulkOwnerOpen && (
               <div
                 className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
@@ -1174,7 +1174,7 @@ export default function AdminPage() {
                 <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
                   <h3 className="text-lg font-semibold mb-3">Changer le propriétaire</h3>
                   <p className="text-sm text-slate-600 mb-3">
-                    Saisissez l’email OU l’identifiant (userId) du nouveau propriétaire
+                    Saisissez l'email OU l'identifiant (userId) du nouveau propriétaire
                     et utilisez la liste de suggestions.
                   </p>
                   <input
@@ -1186,13 +1186,13 @@ export default function AdminPage() {
                     list="owners-suggestions"
                     autoFocus
                   />
-                  {/* Suggestions d’utilisateurs existants (email/displayName) */}
+                  {/* Suggestions d'utilisateurs existants (email/displayName) */}
                   <datalist id="owners-suggestions">
                     {Object.entries(ownersById).map(([id, o]) => {
                       const label = o?.displayName
                         ? `${o.displayName} <${o.email || id}>`
                         : (o?.email || id);
-                      // La valeur utilisable reste l’email s’il existe, sinon l’UID
+                      // La valeur utilisable reste l'email s'il existe, sinon l'UID
                       const value = (o?.email || id) as string;
                       return <option key={id} value={value}>{label}</option>;
                     })}
@@ -1231,7 +1231,7 @@ export default function AdminPage() {
       const sortIcon2 = (key: typeof colocsSort.key) => colocsSort.key !== key ? "↕" : colocsSort.dir === "asc" ? "▲" : "▼";
       return (
         <>
-          {/* Barre d’actions profils + table */}
+          {/* Barre d'actions profils + table */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <label className="inline-flex items-center gap-2">
               <input

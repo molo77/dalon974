@@ -119,7 +119,7 @@ export default function MapReunionLeaflet({
     // évite les setState inutiles
     const same = incoming.size === selected.size && Array.from(incoming).every((s) => selected.has(s));
     if (!same) setSelected(incoming);
-  }, [selectedProp, canon]);
+  }, [selectedProp, canon, selected]);
 
   // Quand les features arrivent (ou changent), re-normaliser la sélection existante
   useEffect(() => {
