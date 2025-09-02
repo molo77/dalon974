@@ -91,7 +91,7 @@ const config = {
       clientSecret: process.env.AZURE_AD_CLIENT_SECRET,
       allowDangerousEmailAccountLinking: false,
     })] : []),
-    ...(process.env.EMAIL_SERVER_HOST ? [Email({
+    ...(process.env.EMAIL_SERVER_HOST && process.env.EMAIL_SERVER_HOST !== "disabled" ? [Email({
       server: {
         host: process.env.EMAIL_SERVER_HOST,
         port: process.env.EMAIL_SERVER_PORT ? parseInt(process.env.EMAIL_SERVER_PORT) : 587,
@@ -99,6 +99,13 @@ const config = {
           user: process.env.EMAIL_SERVER_USER,
           pass: process.env.EMAIL_SERVER_PASSWORD,
         },
+        // Options SSL pour éviter les erreurs de certificats auto-signés
+        secure: process.env.EMAIL_SERVER_PORT === "465", // true pour 465, false pour 587
+        tls: {
+          rejectUnauthorized: process.env.NODE_ENV === "production", // Ignorer les certificats auto-signés en dev
+          ciphers: "SSLv3",
+        },
+        ignoreTLS: process.env.NODE_ENV !== "production", // Ignorer TLS en dev si nécessaire
       },
       from: process.env.EMAIL_FROM,
     })] : []),
