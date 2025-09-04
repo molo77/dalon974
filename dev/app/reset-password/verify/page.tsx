@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { toast } from "@/components/ui/feedback/Toast";
+import { toast } from "@/shared/components/feedback/Toast";
 
 function VerifyResetPasswordContent() {
   const searchParams = useSearchParams();

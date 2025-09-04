@@ -1,28 +1,28 @@
 "use client";
-import ColocProfileModal from "@/components/modals/ColocProfileModal";
-import AnnonceDetailModal from "@/components/modals/AnnonceDetailModal";
+import ColocProfileModal from "@/shared/components/ColocProfileModal";
+import AnnonceDetailModal from "@/shared/components/AnnonceDetailModal";
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 // Firestore shim uniquement pour la branche coloc (temporaire)
 // Firestore supprimé: tout passe par les APIs internes
-import { listAnnoncesPage } from "@/lib/services/homeService";
-import { listColoc } from "@/lib/services/colocService";
+import { listAnnoncesPage } from "@/core/business/homeService";
+import { listColoc } from "@/core/business/colocService";
 import dynamic from "next/dynamic";
-import ExpandableImage from "@/components/ui/ExpandableImage";
-import AnnonceCard from "@/components/cards/AnnonceCard";
-import ColocProfileCard from "@/components/cards/ColocProfileCard";
-import ConfirmModal from "@/components/modals/ConfirmModal";
-import AnnonceModal from "@/components/modals/AnnonceModal";
+import ExpandableImage from "@/shared/components/ExpandableImage";
+import AnnonceCard from "@/shared/components/AnnonceCard";
+import ColocProfileCard from "@/shared/components/ColocProfileCard";
+import ConfirmModal from "@/shared/components/ConfirmModal";
+import AnnonceModal from "@/shared/components/AnnonceModal";
 // AdSense via AdSlot
-import AdSlot from "@/components/ads/AdSlot";
+import AdSlot from "@/shared/components/AdSlot";
 // Rôle admin désormais fourni par le contexte d'auth
 // AuthProvider n'exporte pas useAuth dans ce projet; on neutralise l'usage pour déverrouiller la build
-import { showToast } from "@/lib/toast";
-import CommuneZoneSelector from "@/components/map/CommuneZoneSelector";
-import { preloadReunionFeatures } from "@/lib/reunionGeo";
-const ImageLightbox = dynamic(() => import("@/components/modals/ImageLightbox"), { ssr: false });
+import { showToast } from "@/infrastructure/communication/toast";
+import CommuneZoneSelector from "@/shared/components/CommuneZoneSelector";
+import { preloadReunionFeatures } from "@/core/data/reunionGeo";
+const ImageLightbox = dynamic(() => import("@/shared/components/ImageLightbox"), { ssr: false });
 
 
 // === Utilitaires partagés (déplacés hors composant pour éviter recréations) ===

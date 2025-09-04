@@ -1,15 +1,14 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import AuthProvider from '@/components/auth/AuthProvider'
-import { MessagesProvider } from '@/contexts/MessagesContext'
-import MaintenanceAlert from '@/components/maintenance/MaintenanceAlert'
-import Header from '@/components/layout/Header'
-import LeafletStyles from '@/components/map/LeafletStyles'
-import ErrorBoundary from '@/components/ErrorBoundary'
-import ServerStatusChecker from '@/components/ServerStatusChecker'
+import AuthProvider from '@/features/auth/AuthProvider'
+import { MessagesProvider } from '@/shared/MessagesContext'
+import MaintenanceAlert from '@/shared/components/maintenance/MaintenanceAlert'
+import Header from '@/shared/components/layout/Header'
+import LeafletStyles from '@/shared/components/map/LeafletStyles'
+import { ErrorBoundary, ServerStatusChecker } from '@/shared/components'
 
-import { GlobalToast } from '@/components/ui/feedback/Toast'
+import { GlobalToast } from '@/shared/components/ui/feedback/Toast'
 
 const inter = Inter({ subsets: ['latin'] })
 

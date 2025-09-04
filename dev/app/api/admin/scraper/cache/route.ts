@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import prisma from '@/lib/prismaClient';
+import { auth } from '@/config/auth';
+import prisma from '@/infrastructure/database/prismaClient';
 import fs from 'fs';
 import path from 'path';
 

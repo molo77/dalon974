@@ -3,8 +3,8 @@
 import { useState, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { signInEmail } from "@/lib/services/authService";
-import { toast as appToast } from "@/components/ui/feedback/Toast";
+import { signInEmail } from "@/infrastructure/auth/authService";
+import { toast as appToast } from "@/shared/components/feedback/Toast";
 import Link from "next/link";
 
 function LoginContent() {

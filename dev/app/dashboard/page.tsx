@@ -5,22 +5,22 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-// import ExpandableImage from "@/components/ui/ExpandableImage";
-import PhotoUploader from "@/components/forms/PhotoUploader";
-const ImageLightbox = dynamic(() => import("@/components/modals/ImageLightbox"), { ssr: false });
-import AnnonceCard from "@/components/cards/AnnonceCard";
-import AnnonceModal from "@/components/modals/AnnonceModal";
-import ConfirmModal from "@/components/modals/ConfirmModal";
-import AnnonceDetailModal from "@/components/modals/AnnonceDetailModal";
-import { toast as appToast } from "@/components/ui/feedback/Toast";
+// import ExpandableImage from "@/shared/components/ExpandableImage";
+import PhotoUploader from "@/shared/components/PhotoUploader";
+const ImageLightbox = dynamic(() => import("@/shared/components/ImageLightbox"), { ssr: false });
+import AnnonceCard from "@/shared/components/AnnonceCard";
+import AnnonceModal from "@/shared/components/AnnonceModal";
+import ConfirmModal from "@/shared/components/ConfirmModal";
+import AnnonceDetailModal from "@/shared/components/AnnonceDetailModal";
+import { toast as appToast } from "@/shared/components/feedback/Toast";
 // import { v4 as uuidv4 } from "uuid";
-import { listUserAnnoncesPage, addAnnonce, updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/lib/services/annonceService";
-import { getUserRole } from "@/lib/services/userService";
-import { getColocProfile, saveColocProfile, deleteColocProfile, type ColocProfileData } from "@/lib/services/colocProfileService";
+import { listUserAnnoncesPage, addAnnonce, updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/core/business/annonceService";
+import { getUserRole } from "@/core/business/userService";
+import { getColocProfile, saveColocProfile, deleteColocProfile, type ColocProfileData } from "@/core/business/colocProfileClientService";
 import Link from "next/link";
-import useCommuneSelection from "@/hooks/useCommuneSelection";
-import CommuneZoneSelector from "@/components/map/CommuneZoneSelector";
-import MessagesSection from "@/components/dashboard/MessagesSection";
+import useCommuneSelection from "@/shared/hooks/useCommuneSelection";
+import CommuneZoneSelector from "@/shared/components/map/CommuneZoneSelector";
+import MessagesSection from "@/features/dashboard/MessagesSection";
 
 // Liste complète des communes de La Réunion
 const COMMUNES = [
@@ -315,6 +315,21 @@ export default function DashboardPage() {
   const [prefGenre, setPrefGenre] = useState("");
   const [prefAgeMin, setPrefAgeMin] = useState<number | "">("");
   const [prefAgeMax, setPrefAgeMax] = useState<number | "">("");
+  const [prefZones, setPrefZones] = useState<string[]>([]);
+  const [prefCommunesSlugs, setPrefCommunesSlugs] = useState<string[]>([]);
+  const [prefFumeur, setPrefFumeur] = useState(false);
+  const [prefAnimaux, setPrefAnimaux] = useState(false);
+  const [prefProfession, setPrefProfession] = useState("");
+  const [prefLangues, setPrefLangues] = useState("");
+  const [prefMusique, setPrefMusique] = useState("");
+  const [prefSport, setPrefSport] = useState("");
+  const [prefCuisine, setPrefCuisine] = useState("");
+  const [prefVoyage, setPrefVoyage] = useState("");
+  const [prefSorties, setPrefSorties] = useState("");
+  const [prefSoirees, setPrefSoirees] = useState("");
+  const [prefCalme, setPrefCalme] = useState("");
+  const [prefProprete, setPrefProprete] = useState("");
+  const [prefInvites, setPrefInvites] = useState("");
   const [accepteFumeurs, setAccepteFumeurs] = useState(false);
   const [accepteAnimaux, setAccepteAnimaux] = useState(false);
   const [rythme, setRythme] = useState("");
@@ -451,13 +466,13 @@ export default function DashboardPage() {
     const loadColocProfile = async () => {
       try {
         setLoadingColoc(true);
-        const profile = await getColocProfile(user.id);
+        const profile = await getColocProfile();
         
         if (profile) {
           setColocNom(profile.nom || "");
           setColocBudget(profile.budget || "");
           setColocImageUrl(profile.imageUrl || "");
-          setColocPhotos(profile.photos ? JSON.parse(profile.photos) : []);
+          setColocPhotos(profile.photos ? JSON.parse(profile.photos as string) : []);
           setColocDescription(profile.description || "");
           setColocAge(profile.age || "");
           setColocProfession(profile.profession || "");
@@ -466,32 +481,30 @@ export default function DashboardPage() {
           setColocDateDispo(profile.dateDispo || "");
           setColocQuartiers(profile.quartiers || "");
           setColocTelephone(profile.telephone || "");
-          setColocZones(profile.zones ? JSON.parse(profile.zones) : []);
-          setColocCommunesSlugs(profile.communesSlugs ? JSON.parse(profile.communesSlugs) : []);
+          setColocZones(profile.zones ? JSON.parse(profile.zones as string) : []);
+          setColocCommunesSlugs(profile.communesSlugs ? JSON.parse(profile.communesSlugs as string) : []);
           setColocGenre(profile.genre || "");
           setColocBioCourte(profile.bioCourte || "");
-          setColocLanguesCsv(profile.languesCsv || "");
+          setColocLanguesCsv(profile.langues ? JSON.stringify(profile.langues) : "");
           setColocInstagram(profile.instagram || "");
           setPrefGenre(profile.prefGenre || "");
           setPrefAgeMin(profile.prefAgeMin || "");
           setPrefAgeMax(profile.prefAgeMax || "");
-          setPrefBudgetMin(profile.prefBudgetMin || "");
-          setPrefBudgetMax(profile.prefBudgetMax || "");
-          setPrefZones(profile.prefZones ? JSON.parse(profile.prefZones) : []);
-          setPrefCommunesSlugs(profile.prefCommunesSlugs ? JSON.parse(profile.prefCommunesSlugs) : []);
-          setPrefFumeur(profile.prefFumeur || false);
-          setPrefAnimaux(profile.prefAnimaux || false);
-          setPrefProfession(profile.prefProfession || "");
-          setPrefLangues(profile.prefLangues || "");
-          setPrefMusique(profile.prefMusique || "");
-          setPrefSport(profile.prefSport || "");
-          setPrefCuisine(profile.prefCuisine || "");
-          setPrefVoyage(profile.prefVoyage || "");
-          setPrefSorties(profile.prefSorties || "");
-          setPrefSoirees(profile.prefSoirees || "");
-          setPrefCalme(profile.prefCalme || "");
-          setPrefProprete(profile.prefProprete || "");
-          setPrefInvites(profile.prefInvites || "");
+          setPrefZones([]);
+          setPrefCommunesSlugs([]);
+          setPrefFumeur(false);
+          setPrefAnimaux(false);
+          setPrefProfession("");
+          setPrefLangues("");
+          setPrefMusique("");
+          setPrefSport("");
+          setPrefCuisine("");
+          setPrefVoyage("");
+          setPrefSorties("");
+          setPrefSoirees("");
+          setPrefCalme("");
+          setPrefProprete("");
+          setPrefInvites("");
           setMusique(profile.musique || "");
           setHasColocDoc(true);
         } else {
@@ -542,8 +555,6 @@ export default function DashboardPage() {
         prefGenre,
         prefAgeMin: typeof prefAgeMin === 'number' ? prefAgeMin : undefined,
         prefAgeMax: typeof prefAgeMax === 'number' ? prefAgeMax : undefined,
-        prefBudgetMin: typeof prefBudgetMin === 'number' ? prefBudgetMin : undefined,
-        prefBudgetMax: typeof prefBudgetMax === 'number' ? prefBudgetMax : undefined,
         prefZones,
         prefCommunesSlugs,
         prefFumeur,
@@ -562,7 +573,7 @@ export default function DashboardPage() {
         musique
       };
       
-      await saveColocProfile(user.id, profileData);
+      await saveColocProfile(profileData);
       setHasColocDoc(true);
       setColocEditing(false);
       showToast("success", "Profil colocataire sauvegardé avec succès !");
@@ -578,7 +589,7 @@ export default function DashboardPage() {
     if (!user) return;
     
     try {
-      await deleteColocProfile(user.id);
+      await deleteColocProfile();
       setHasColocDoc(false);
       setColocEditing(false);
       // Reset all form fields

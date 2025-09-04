@@ -1,7 +1,7 @@
 "use client";
 
-import AuthGuard from "@/components/auth/AuthGuard";
-import ConversationsList from "@/components/messages/ConversationsList";
+import AuthGuard from "@/features/auth/AuthGuard";
+import ConversationsList from "@/features/messages/ConversationsList";
 
 export default function MessagesPage() {
   return (

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import prisma from '@/lib/prismaClient';
+import { auth } from '@/config/auth';
+import prisma from '@/infrastructure/database/prismaClient';
 
 const ALLOWED_KEYS = [
   'LBC_SEARCH_URL','LBC_BROWSER_HEADLESS','LBC_MAX','LBC_FETCH_DETAILS','LBC_DETAIL_LIMIT',

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "@/components/ui/feedback/Toast";
+import { toast } from "@/shared/components/feedback/Toast";
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState("");

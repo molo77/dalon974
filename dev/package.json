@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3001",
     "lint": "next lint",
-    "prebuild": "node scripts/utils/build-reunion-geo.mjs",
+    "prebuild": "node src/scripts/build/build-reunion-geo.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",

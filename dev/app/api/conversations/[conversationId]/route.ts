@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prismaClient";
+import { auth } from "@/config/auth";
+import prisma from "@/infrastructure/database/prismaClient";
 
 // Fonction pour parser un ID de conversation
 function parseConversationId(conversationId: string) {

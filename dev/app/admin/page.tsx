@@ -4,23 +4,23 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import AdminUsers from "@/components/admin/AdminUsers";
-import AdminAds from "@/components/admin/AdminAds";
-import ImageCleanup from "@/components/admin/ImageCleanup";
-import VersionInfo from "@/components/admin/VersionInfo";
-import ExpandableImage from "@/components/ui/ExpandableImage"; // New import
+import AdminUsers from "@/features/admin/AdminUsers";
+import AdminAds from "@/features/admin/AdminAds";
+import ImageCleanup from "@/features/admin/ImageCleanup";
+import VersionInfo from "@/features/admin/VersionInfo";
+import ExpandableImage from "@/shared/components/ExpandableImage"; // New import
 // import AdminAnnonces from "@/components/admin/AdminAnnonces"; // affichage remplacé par une liste intégrée
-import useAdminGate from "@/hooks/useAdminGate";
+import useAdminGate from "@/shared/hooks/useAdminGate";
 // Firebase supprimé: à migrer vers API Prisma.
 const serverTimestamp = () => new Date();
-import AnnonceModal from "@/components/modals/AnnonceModal";
-const ColocPhotoSection = dynamic(() => import("@/components/ui/ColocPhotoSection"), { ssr: false });
-import { updateAnnonce, deleteAnnonce } from "@/lib/services/annonceService";
-import { updateColoc, deleteColoc, getColoc, listColoc } from "@/lib/services/colocService";
+import AnnonceModal from "@/shared/components/AnnonceModal";
+const ColocPhotoSection = dynamic(() => import("@/shared/components/ColocPhotoSection"), { ssr: false });
+import { updateAnnonce, deleteAnnonce } from "@/core/business/annonceService";
+import { updateColoc, deleteColoc, getColoc, listColoc } from "@/core/business/colocService";
 // import Link from "next/link"; // + import
 import Image from "next/image";
-import { toast as appToast } from "@/components/ui/feedback/Toast";
-import { formatDateReunion } from "@/lib/utils/dateUtils";
+import { toast as appToast } from "@/shared/components/feedback/Toast";
+import { formatDateReunion } from "@/core/validation/dateUtils";
 
 // données seed retirées (non utilisées pendant la migration)
 

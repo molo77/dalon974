@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import AuthGuard from "@/components/auth/AuthGuard";
-import ConversationView from "@/components/messages/ConversationView";
+import AuthGuard from "@/features/auth/AuthGuard";
+import ConversationView from "@/features/messages/ConversationView";
 
 interface ConversationPageProps {
   params: Promise<{

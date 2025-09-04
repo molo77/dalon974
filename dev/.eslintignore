@@ -1,0 +1,7 @@
+# Ignore scripts directory for ESLint
+src/scripts/
+
+# Ignore other build artifacts
+.next/
+node_modules/
+*.log
