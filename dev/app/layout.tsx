@@ -4,7 +4,7 @@ import './globals.css'
 import AuthProvider from '@/features/auth/AuthProvider'
 import { MessagesProvider } from '@/shared/MessagesContext'
 import MaintenanceAlert from '@/shared/components/maintenance/MaintenanceAlert'
-import Header from '@/shared/components/layout/Header'
+import Header from '@/shared/components/Header'
 import LeafletStyles from '@/shared/components/map/LeafletStyles'
 import { ErrorBoundary, ServerStatusChecker } from '@/shared/components'
 

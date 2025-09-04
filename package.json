@@ -1,7 +1,7 @@
 {
-  "name": "dalon974",
-  "version": "2.1.0",
-  "description": "Application web Next.js avec authentification et gestion de données",
+  "name": "rodcoloc",
+  "version": "2.2.0",
+  "description": "RodColoc - Plateforme de colocation à La Réunion",
   "private": true,
   "author": "dalon974",
   "license": "UNLICENSED",

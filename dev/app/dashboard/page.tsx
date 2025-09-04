@@ -18,6 +18,7 @@ import { listUserAnnoncesPage, addAnnonce, updateAnnonce, deleteAnnonce as delet
 import { getUserRole } from "@/core/business/userService";
 import { getColocProfile, saveColocProfile, deleteColocProfile, type ColocProfileData } from "@/core/business/colocProfileClientService";
 import Link from "next/link";
+import AdBlock from "@/shared/components/AdBlock";
 import useCommuneSelection from "@/shared/hooks/useCommuneSelection";
 import CommuneZoneSelector from "@/shared/components/map/CommuneZoneSelector";
 import MessagesSection from "@/features/dashboard/MessagesSection";
@@ -915,65 +916,97 @@ function DashboardContent() {
   };
 
   return (
-    <div className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
-      {/* En-tête */}
-      <div className="w-full max-w-3xl mb-6">
-        <div className="rounded-lg bg-white shadow-md p-4 sm:p-6">
-          <h1 className="text-3xl font-bold mb-2">
-            Tableau de bord
-          </h1>
-          <p className="text-gray-700">
-            Gère tes annonces, messages et ton profil colocataire.
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-emerald-50 to-teal-50 p-2 sm:p-6 flex flex-col items-center">
+      {/* En-tête moderne */}
+      <div className="w-full max-w-6xl mb-8">
+        <div className="relative rounded-3xl bg-gradient-to-br from-white to-slate-50 shadow-2xl border border-slate-200/60 p-6 sm:p-8 overflow-hidden">
+          {/* Éléments décoratifs */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-sky-100 to-cyan-100 rounded-full -translate-y-16 translate-x-16 opacity-50 animate-pulse-slow"></div>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-br from-teal-100 to-cyan-100 rounded-full translate-y-12 -translate-x-12 opacity-50 animate-bounce-slow"></div>
+          
+          <div className="relative z-10">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-16 h-16 bg-gradient-to-br from-sky-600 to-cyan-500 rounded-2xl flex items-center justify-center shadow-lg animate-spin-slow">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <div>
+                <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-sky-600 via-cyan-500 to-teal-500 bg-clip-text text-transparent mb-2 animate-fade-in">
+                  Tableau de bord
+                </h1>
+                <p className="text-lg text-slate-600">
+                  Organise ta colocation, échange avec tes futurs colocataires et personnalise ton profil
+                  <br />
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Onglets */}
-      <div className="w-full max-w-3xl flex gap-2 mb-6">
-        <button
-          className={`flex-1 px-3 py-2 rounded-t-lg font-semibold transition text-sm ${
-            activeTab === "annonces"
-              ? "bg-blue-600 text-white shadow"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
-          onClick={() => setActiveTab("annonces")}
-        >
-          Mes annonces
-        </button>
-        <button
-          className={`flex-1 px-3 py-2 rounded-t-lg font-semibold transition text-sm ${
-            activeTab === "messages"
-              ? "bg-blue-600 text-white shadow"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
-          onClick={() => setActiveTab("messages")}
-        >
-          Messages
-        </button>
-        <button
-          className={`flex-1 px-3 py-2 rounded-t-lg font-semibold transition text-sm ${
-            activeTab === "coloc"
-              ? "bg-blue-600 text-white shadow"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
-          onClick={() => setActiveTab("coloc")}
-        >
-          Profil colocataire
-        </button>
-        <button
-          className={`flex-1 px-3 py-2 rounded-t-lg font-semibold transition text-sm ${
-            activeTab === "match"
-              ? "bg-blue-600 text-white shadow"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
-          onClick={() => setActiveTab("match")}
-        >
-          💕 Match
-        </button>
+      {/* Onglets modernes */}
+      <div className="w-full max-w-6xl mb-8">
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/50 shadow-lg p-2">
+          <div className="flex gap-1">
+            <button
+              className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-300 text-sm flex items-center justify-center gap-2 ${
+                activeTab === "annonces"
+                  ? "bg-gradient-to-r from-sky-600 to-cyan-500 text-white shadow-lg transform scale-105 animate-pulse-slow"
+                  : "text-slate-700 hover:bg-slate-50 hover:text-sky-600"
+              }`}
+              onClick={() => setActiveTab("annonces")}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              Mes annonces
+            </button>
+            <button
+              className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-300 text-sm flex items-center justify-center gap-2 ${
+                activeTab === "messages"
+                  ? "bg-gradient-to-r from-sky-600 to-cyan-500 text-white shadow-lg transform scale-105 animate-pulse-slow"
+                  : "text-slate-700 hover:bg-slate-50 hover:text-sky-600"
+              }`}
+              onClick={() => setActiveTab("messages")}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              Messages
+            </button>
+            <button
+              className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-300 text-sm flex items-center justify-center gap-2 ${
+                activeTab === "coloc"
+                  ? "bg-gradient-to-r from-sky-600 to-cyan-500 text-white shadow-lg transform scale-105 animate-pulse-slow"
+                  : "text-slate-700 hover:bg-slate-50 hover:text-sky-600"
+              }`}
+              onClick={() => setActiveTab("coloc")}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              Profil colocataire
+            </button>
+            <button
+              className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-300 text-sm flex items-center justify-center gap-2 ${
+                activeTab === "match"
+                  ? "bg-gradient-to-r from-sky-600 to-cyan-500 text-white shadow-lg transform scale-105 animate-pulse-slow"
+                  : "text-slate-700 hover:bg-slate-50 hover:text-sky-600"
+              }`}
+              onClick={() => setActiveTab("match")}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+              Match
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Contenu des onglets */}
-      <div className="w-full max-w-3xl bg-white rounded-b-xl shadow p-6">
+      <div className="w-full max-w-6xl bg-white/90 backdrop-blur-sm rounded-3xl border border-slate-200/50 shadow-2xl p-6 sm:p-8">
         {activeTab === "annonces" && (
           <>
             <button
@@ -981,53 +1014,108 @@ function DashboardContent() {
                 setEditAnnonce(null);
                 setModalOpen(true);
               }}
-              className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 mb-6 shadow-sm"
+              className="group inline-flex items-center gap-3 bg-gradient-to-r from-sky-600 to-cyan-500 text-white px-6 py-3 rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-200 mb-8 font-semibold"
             >
-              <span>➕</span> Nouvelle annonce
+              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center group-hover:bg-white/30 transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+              </div>
+              Nouvelle annonce
             </button>
 
-            {/* Barre d’actions toujours visible */}
-            <div className="flex flex-wrap items-center gap-3 mb-4">
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={() => (allSelected ? deselectAll() : selectAllVisible())}
-                  className="w-5 h-5 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 checked:bg-blue-600 checked:border-blue-600 checked:ring-2 checked:ring-blue-300 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%223%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:1rem_1rem]"
-                />
-                <span className="text-sm text-slate-700">
-                  Tout ({visibleIds.length})
-                </span>
-              </label>
-              <button
-                type="button"
-                onClick={selectAllVisible}
-                className="border border-slate-300 px-3 py-1.5 rounded hover:bg-slate-50"
-              >
-                Tout sélectionner
-              </button>
-              <button
-                type="button"
-                onClick={deselectAll}
-                className="border border-slate-300 px-3 py-1.5 rounded hover:bg-slate-50"
-              >
-                Tout désélectionner
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmBulkOpen(true)}
-                disabled={selectedIds.length === 0}
-                className="bg-rose-600 text-white px-3 py-1.5 rounded hover:bg-rose-700 disabled:opacity-60"
-              >
-                Supprimer la sélection ({selectedIds.length})
-              </button>
+            {/* Barre d'actions moderne */}
+            <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-2xl border border-slate-200/50 p-4 mb-6">
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="inline-flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={() => (allSelected ? deselectAll() : selectAllVisible())}
+                    className="w-5 h-5 appearance-none rounded-full border-2 border-slate-400 bg-white bg-center bg-no-repeat transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 checked:bg-gradient-to-r checked:from-blue-600 checked:to-purple-600 checked:border-transparent checked:ring-2 checked:ring-blue-300 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%223%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:1rem_1rem]"
+                  />
+                  <span className="text-sm font-medium text-slate-700">
+                    Tout sélectionner ({visibleIds.length})
+                  </span>
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={selectAllVisible}
+                    className="px-4 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-all duration-200 text-sm font-medium text-slate-700"
+                  >
+                    Tout sélectionner
+                  </button>
+                  <button
+                    type="button"
+                    onClick={deselectAll}
+                    className="px-4 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-all duration-200 text-sm font-medium text-slate-700"
+                  >
+                    Tout désélectionner
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmBulkOpen(true)}
+                    disabled={selectedIds.length === 0}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      selectedIds.length === 0
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-gradient-to-r from-red-600 to-red-700 text-white hover:shadow-lg hover:scale-105"
+                    }`}
+                  >
+                    Supprimer la sélection ({selectedIds.length})
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <h2 className="text-2xl font-semibold mb-4">Mes annonces</h2>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg flex items-center justify-center">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-sky-600 to-cyan-500 bg-clip-text text-transparent">Mes annonces</h2>
+            </div>
+            
+            {/* Publicité dans le dashboard */}
+            <div className="mb-6">
+              <AdBlock 
+                placementKey="dashboard.annonces" 
+                title="Conseils pour vos annonces"
+                variant="compact"
+                showBorder={false}
+              />
+            </div>
             {loadingAnnonces ? (
-              <p className="text-gray-500">Chargement de vos annonces...</p>
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-slate-600 font-medium">Chargement de vos annonces...</p>
+                </div>
+              </div>
             ) : sortedAnnonces.length === 0 ? (
-              <p className="text-gray-500">Aucune annonce pour le moment.</p>
+              <div className="text-center py-12">
+                <div className="w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-12 h-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-slate-700 mb-2">Aucune annonce pour le moment</h3>
+                <p className="text-slate-500 mb-6">Créez votre première annonce pour commencer à trouver des colocataires !</p>
+                <button
+                  onClick={() => {
+                    setEditAnnonce(null);
+                    setModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-sky-600 to-cyan-500 text-white px-6 py-3 rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-200 font-semibold"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  Créer ma première annonce
+                </button>
+              </div>
             ) : (
               <div className="flex flex-col gap-4 w-full">
                 {sortedAnnonces.map((annonce) => (
@@ -1221,19 +1309,6 @@ function DashboardContent() {
                 Découvrez les annonces et profils qui correspondent à vos critères.
               </p>
               
-              {/* Information sur l'algorithme de matching */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <h3 className="font-semibold text-blue-900 mb-2">🎯 Comment fonctionne le matching ?</h3>
-                <div className="text-sm text-blue-800 space-y-1">
-                  <p><strong>Budget (40 points) :</strong> Correspondance entre votre budget et le prix de l'annonce</p>
-                  <p><strong>Zone géographique (30 points) :</strong> Même commune = 30pts, même zone = 20pts</p>
-                  <p><strong>Surface (20 points) :</strong> Surface idéale entre 20-100m²</p>
-                  <p><strong>Description (10 points) :</strong> Qualité et complétude des informations</p>
-                  <p className="text-xs text-blue-600 mt-2">
-                    Seuls les matches avec au moins 30% de compatibilité sont affichés.
-                  </p>
-                </div>
-              </div>
               
               {/* Sélecteur de type de match */}
               <div className="flex gap-2 mb-6">

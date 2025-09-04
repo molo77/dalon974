@@ -30,46 +30,77 @@ export default function Header() {
   const toggleMobile = () => setMobileOpen((prev) => !prev);
 
   return (
-    <header className="bg-white shadow px-4 py-3 sticky top-0 z-[9999]">
-      <div className="w-[85%] max-w-full mx-auto flex items-center justify-between">
-        <Link href="/" className="text-xl font-bold text-blue-600">
-          Dalon974 {isDevEnvironment === true && (
-            <span className="text-xs bg-yellow-400 text-black px-2 py-1 rounded ml-2">DEV</span>
-          )}
+    <header className="bg-white/95 backdrop-blur-md shadow-lg border-b border-slate-200/50 px-4 py-4 sticky top-0 z-[9999]">
+      <div className="w-[90%] max-w-7xl mx-auto flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-3 group">
+          <div className="relative">
+            <div className="w-10 h-10 bg-gradient-to-br from-sky-600 to-teal-500 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow duration-300 animate-pulse-slow">
+              <span className="text-white font-bold text-lg">R</span>
+            </div>
+            {isDevEnvironment === true && (
+              <span className="absolute -top-1 -right-1 text-xs bg-yellow-400 text-black px-1.5 py-0.5 rounded-full font-bold">DEV</span>
+            )}
+          </div>
+          <div>
+            <span className="text-2xl font-bold bg-gradient-to-r from-sky-600 to-teal-500 bg-clip-text text-transparent">
+              RodColoc
+            </span>
+            <p className="text-xs text-slate-500 -mt-1">Colocation à La Réunion 🌺</p>
+          </div>
         </Link>
 
         <button
           onClick={toggleMobile}
-          className="md:hidden text-2xl"
+          className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors duration-200"
           aria-label="Menu"
         >
-          ☰
+          <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
         </button>
 
         {/* Desktop nav */}
-        <nav className="hidden md:flex gap-6 items-center">
-          <Link href="/" className="hover:underline">
+        <nav className="hidden md:flex gap-2 items-center">
+          <Link 
+            href="/" 
+            className="px-4 py-2 rounded-lg text-slate-700 hover:text-sky-600 hover:bg-sky-50 transition-all duration-200 font-medium"
+          >
             Accueil
+          </Link>
+          <Link 
+            href="/idees-pratiques" 
+            className="px-4 py-2 rounded-lg text-slate-700 hover:text-green-600 hover:bg-green-50 transition-all duration-200 font-medium flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            Idées Pratiques
           </Link>
           
           {user && (
             <>
               <Link 
                 href="/dashboard?tab=messages" 
-                className="hover:underline relative flex items-center gap-1"
+                className="relative px-4 py-2 rounded-lg text-slate-700 hover:text-sky-600 hover:bg-sky-50 transition-all duration-200 font-medium flex items-center gap-2"
               >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
                 Messages
                 {unreadCount > 0 && (
-                  <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                  <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold animate-pulse">
                     {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 )}
               </Link>
               <Link 
                 href="/dashboard?tab=match" 
-                className="hover:underline flex items-center gap-1"
+                className="px-4 py-2 rounded-lg text-slate-700 hover:text-green-600 hover:bg-green-50 transition-all duration-200 font-medium flex items-center gap-2"
               >
-                💕 Match
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                Match
               </Link>
             </>
           )}
@@ -79,93 +110,119 @@ export default function Header() {
               {/* Avatar et nom du compte cliquables */}
               <Link
                 href="/dashboard"
-                className="flex items-center gap-2 hover:underline relative"
+                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-50 transition-all duration-200 relative group"
               >
                 {user.photoURL ? (
                   <Image
                     src={user.photoURL}
                     alt="Avatar"
-                    width={32}
-                    height={32}
-                    className="w-8 h-8 rounded-full border object-cover"
+                    width={36}
+                    height={36}
+                    className="w-9 h-9 rounded-full border-2 border-slate-200 object-cover group-hover:border-blue-300 transition-colors"
                   />
                 ) : (
-                  <span className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm group-hover:shadow-lg transition-shadow">
                     {user.displayName?.charAt(0) || user.email?.charAt(0) || "?"}
-                  </span>
+                  </div>
                 )}
-                <span className="font-medium text-gray-700">
-                  {user.displayName || user.email?.split("@")[0]}
-                </span>
-                
-                {/* Badge de notification */}
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-                    {unreadCount > 99 ? "99+" : unreadCount}
+                <div className="flex flex-col">
+                  <span className="font-medium text-slate-800 text-sm">
+                    {user.displayName || user.email?.split("@")[0]}
                   </span>
-                )}
+                  <span className="text-xs text-slate-500">Mon compte</span>
+                </div>
                 
                 {/* Indicateur de nouveaux messages */}
                 {hasNewMessages && (
                   <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full h-3 w-3 animate-pulse"></span>
                 )}
               </Link>
-              <button
-                onClick={handleLogout}
-                className="text-red-600 hover:underline ml-4"
-              >
-                Déconnexion
-              </button>
-              {/* Bouton accès admin (role basé sur session) */}
-          {isAdmin && (
-                <Link
-                  href="/admin"
-                  className="bg-blue-700 text-white px-3 py-1.5 rounded hover:bg-blue-800 font-semibold text-sm ml-2"
+              
+              <div className="flex items-center gap-2 ml-2">
+                <button
+                  onClick={handleLogout}
+                  className="px-3 py-2 text-sm text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
                 >
-            Accéder à l&apos;administration
-                </Link>
-              )}
+                  Déconnexion
+                </button>
+                
+                {/* Bouton accès admin (role basé sur session) */}
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200 font-semibold text-sm"
+                  >
+                    Admin
+                  </Link>
+                )}
+              </div>
             </>
           ) : (
-            <>
-              <Link href="/signup" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium">
-                Inscription
-              </Link>
-              <Link href="/login" className="text-blue-600 hover:underline">
+            <div className="flex items-center gap-3">
+              <Link 
+                href="/login" 
+                className="px-4 py-2 text-slate-700 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-all duration-200 font-medium"
+              >
                 Connexion
               </Link>
-            </>
+              <Link 
+                href="/signup" 
+                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200 font-semibold"
+              >
+                Inscription
+              </Link>
+            </div>
           )}
         </nav>
       </div>
 
       {/* Mobile nav */}
       {mobileOpen && (
-        <nav className="md:hidden mt-3 flex flex-col gap-3 border-t pt-3">
-          <Link href="/" className="hover:underline" onClick={toggleMobile}>
+        <nav className="md:hidden mt-4 flex flex-col gap-2 border-t border-slate-200 pt-4">
+          <Link 
+            href="/" 
+            className="px-4 py-3 rounded-lg text-slate-700 hover:text-sky-600 hover:bg-sky-50 transition-all duration-200 font-medium" 
+            onClick={toggleMobile}
+          >
             Accueil
+          </Link>
+          <Link 
+            href="/idees-pratiques" 
+            className="px-4 py-3 rounded-lg text-slate-700 hover:text-green-600 hover:bg-green-50 transition-all duration-200 font-medium flex items-center gap-3" 
+            onClick={toggleMobile}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            Idées Pratiques
           </Link>
           
           {user && (
             <>
               <Link 
                 href="/dashboard?tab=messages" 
-                className="hover:underline flex items-center gap-2" 
+                className="px-4 py-3 rounded-lg text-slate-700 hover:text-sky-600 hover:bg-sky-50 transition-all duration-200 font-medium flex items-center gap-3" 
                 onClick={toggleMobile}
               >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
                 Messages
                 {unreadCount > 0 && (
-                  <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                  <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold animate-pulse">
                     {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 )}
               </Link>
               <Link 
                 href="/dashboard?tab=match" 
-                className="hover:underline flex items-center gap-1" 
+                className="px-4 py-3 rounded-lg text-slate-700 hover:text-purple-600 hover:bg-purple-50 transition-all duration-200 font-medium flex items-center gap-3" 
                 onClick={toggleMobile}
               >
-                💕 Match
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                Match
               </Link>
             </>
           )}
@@ -191,13 +248,6 @@ export default function Header() {
                   ) : (
                     <span className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
                       {user.displayName?.charAt(0) || user.email?.charAt(0) || "?"}
-                    </span>
-                  )}
-                  
-                  {/* Badge de notification mobile */}
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-                      {unreadCount > 99 ? "99+" : unreadCount}
                     </span>
                   )}
                   

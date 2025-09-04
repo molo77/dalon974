@@ -15,8 +15,8 @@ import AnnonceCard from "@/shared/components/AnnonceCard";
 import ColocProfileCard from "@/shared/components/ColocProfileCard";
 import ConfirmModal from "@/shared/components/ConfirmModal";
 import AnnonceModal from "@/shared/components/AnnonceModal";
-// AdSense via AdSlot
-import AdSlot from "@/shared/components/AdSlot";
+// AdSense via AdBlock
+import AdBlock from "@/shared/components/AdBlock";
 // Rôle admin désormais fourni par le contexte d'auth
 // AuthProvider n'exporte pas useAuth dans ce projet; on neutralise l'usage pour déverrouiller la build
 import { showToast } from "@/infrastructure/communication/toast";
@@ -271,7 +271,7 @@ export default function HomePage() {
           else if (p.ville) { const s = slugify(String(p.ville)); parentSlug = nameToParentSlug[s] || s; }
           const zonesFromSlugs = slugsArr.length ? computeZonesFromSlugs(slugsArr) : [];
           const zonesArr: string[] = Array.isArray(p.zones) && p.zones.length ? (p.zones as string[]) : zonesFromSlugs;
-          const zonesLabel = zonesArr && zonesArr.length ? zonesArr.map((z) => (z === 'Intérieur' ? 'Secteur Centre' : `Secteur ${z}`)).join(', ') : (p.ville || '-');
+          const zonesLabel = zonesArr && zonesArr.length ? zonesArr.map((z) => (z === 'Intérieur' ? 'Centre' : z)).join(', ') : (p.ville || '-');
           const subLabel = extractSubCommunesLabel([p.nom, p.description, p.ville], parentSlug);
           return {
             id: p.id,
@@ -690,55 +690,119 @@ export default function HomePage() {
 
   return (
     <>
-  <main className="min-h-screen p-2 sm:p-6 flex flex-col items-center scroll-pt-28 md:scroll-pt-32">
+  <main className="min-h-screen bg-gradient-to-br from-sky-50 via-emerald-50 to-teal-50 p-2 sm:p-6 flex flex-col items-center scroll-pt-28 md:scroll-pt-32">
       {/* Ecran de CHOIX initial */}
       {activeHomeTab === null ? (
   <section className="w-full max-w-[1440px] flex flex-col items-center">
-          <h1 className="text-3xl font-bold mb-2 text-center">Que souhaitez-vous rechercher ?</h1>
-          <p className="text-slate-600 mb-8 text-center">Choisissez un type de recherche pour commencer.</p>
-          {/* Illustration kaz réunionnaise (page d'accueil initiale) */}
-      <div className="w-full max-w-2xl mx-auto mb-8 px-2">
-            <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-gradient-to-b from-sky-50 to-white">
+          {/* Hero Section */}
+          <div className="w-full max-w-6xl mx-auto mb-16">
+            <div className="text-center mb-12">
+              <div className="inline-flex items-center gap-2 bg-gradient-to-r from-sky-100 to-cyan-100 text-sky-800 px-4 py-2 rounded-full text-sm font-medium mb-6 border border-sky-200 animate-pulse-slow">
+                <span className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse-slow"></span>
+                🌺 La plateforme de colocation à La Réunion
+              </div>
+              <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-sky-600 via-cyan-500 to-teal-500 bg-clip-text text-transparent leading-tight animate-fade-in">
+                Trouvez votre colocation
+                <br />
+                <span className="text-4xl md:text-5xl">idéale</span>
+                <br />
+              </h1>
+              <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
+                Que vous cherchiez un logement à partager ou des colocataires, RodColoc vous aide à trouver votre match parfait à La Réunion.
+                <br />
+              </p>
+            </div>
+            
+            {/* Image Hero */}
+            <div className="w-full max-w-5xl mx-auto mb-12">
+              <div className="relative rounded-3xl overflow-hidden border border-slate-200 shadow-2xl bg-gradient-to-b from-sky-50 to-white transform hover:scale-[1.02] transition-transform duration-500">
               <Image
                 src={homepageImageSrc}
                 alt="Colocation à La Réunion, colocs sur la terrasse d'une kaz"
                 width={1280}
-                height={853}
+                  height={480}
                 priority
         sizes="(max-width: 640px) 92vw, (max-width: 1024px) 70vw, 640px"
-                className="w-full h-auto"
-              />
+                  className="w-full h-72 md:h-96 object-cover object-[center_bottom]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                <div className="absolute bottom-6 left-6 right-6">
+                  <button
+                    onClick={() => {
+                      const optionsSection = document.querySelector('[data-options-section]');
+                      optionsSection?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="w-full bg-white/90 backdrop-blur-sm hover:bg-white hover:scale-105 transition-all duration-300 rounded-2xl p-4 shadow-lg border border-white/20 group"
+                    aria-label="Découvrir les options de colocation"
+                  >
+                    <div className="flex items-center justify-center gap-3">
+                      <p className="text-slate-800 font-medium">
+                        🌺 Découvrez la vie en colocation à La Réunion
+                      </p>
+                      <svg className="w-5 h-5 text-slate-600 group-hover:translate-y-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                      </svg>
+            </div>
+                  </button>
+          </div>
+              </div>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full">
+          
+          {/* Options de recherche */}
+          <div className="w-full max-w-5xl mx-auto" data-options-section>
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold mb-4 text-slate-800">Que souhaitez-vous rechercher ?</h2>
+              <p className="text-slate-600 text-lg">Choisissez votre type de recherche pour commencer votre aventure</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <button
-              className="group bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition text-left"
+                className="group relative bg-gradient-to-br from-sky-50 to-cyan-50 rounded-3xl border border-sky-200 shadow-lg p-10 hover:shadow-2xl hover:border-sky-400 hover:scale-105 transition-all duration-500 text-left overflow-hidden animate-slide-up"
               onClick={() => setActiveHomeTab("annonces")}
             >
-              <div className="text-2xl mb-2">🏠</div>
-              <h2 className="text-xl font-semibold mb-1">Je cherche une colocation</h2>
-              <p className="text-slate-600">Voir les annonces de logements à partager.</p>
-              <div className="mt-4 inline-flex items-center gap-2 text-blue-600 group-hover:underline">
-                Commencer
-                <span>→</span>
+                <div className="absolute top-4 right-4 w-20 h-20 bg-sky-100 rounded-full opacity-20 group-hover:opacity-30 transition-opacity"></div>
+                <div className="absolute bottom-4 left-4 w-16 h-16 bg-cyan-200 rounded-full opacity-10 group-hover:opacity-20 transition-opacity"></div>
+                
+                <div className="relative z-10">
+                  <div className="text-5xl mb-6 transform group-hover:scale-110 transition-transform duration-300">🏠🌺</div>
+                  <h3 className="text-2xl font-bold mb-4 text-slate-800 group-hover:text-sky-700 transition-colors">Je cherche une colocation</h3>
+                  <p className="text-slate-600 mb-4 text-lg leading-relaxed">Découvrez les annonces de logements à partager dans toute La Réunion. Trouvez votre nouveau chez-vous !</p>
+                  <div className="inline-flex items-center gap-3 text-sky-600 group-hover:text-sky-700 font-semibold text-lg">
+                    <span>Voir les annonces</span>
+                    <span className="group-hover:translate-x-2 transition-transform duration-300">→</span>
+                  </div>
               </div>
             </button>
+              
             <button
-              className="group bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition text-left"
+                className="group relative bg-gradient-to-br from-teal-50 to-cyan-50 rounded-3xl border border-teal-200 shadow-lg p-10 hover:shadow-2xl hover:border-teal-400 hover:scale-105 transition-all duration-500 text-left overflow-hidden animate-slide-up"
               onClick={() => setActiveHomeTab("colocataires")}
             >
-              <div className="text-2xl mb-2">👥</div>
-              <h2 className="text-xl font-semibold mb-1">Je cherche colocataire(s) </h2>
-              <p className="text-slate-600">Voir les profils des personnes recherchant une colocation.</p>
-              <div className="mt-4 inline-flex items-center gap-2 text-blue-600 group-hover:underline">
-                Commencer
-                <span>→</span>
+                <div className="absolute top-4 right-4 w-20 h-20 bg-green-100 rounded-full opacity-20 group-hover:opacity-30 transition-opacity"></div>
+                <div className="absolute bottom-4 left-4 w-16 h-16 bg-emerald-200 rounded-full opacity-10 group-hover:opacity-20 transition-opacity"></div>
+                
+                <div className="relative z-10">
+                  <div className="text-5xl mb-6 transform group-hover:scale-110 transition-transform duration-300">👥🌴</div>
+                  <h3 className="text-2xl font-bold mb-4 text-slate-800 group-hover:text-teal-700 transition-colors">Je cherche des colocataires</h3>
+                  <p className="text-slate-600 mb-4 text-lg leading-relaxed">Rencontrez des personnes qui recherchent une colocation et partagez votre logement. Créez des liens !</p>
+                  <div className="inline-flex items-center gap-3 text-teal-600 group-hover:text-teal-700 font-semibold text-lg">
+                    <span>Voir les profils</span>
+                    <span className="group-hover:translate-x-2 transition-transform duration-300">→</span>
+                  </div>
               </div>
             </button>
           </div>
+          </div>
+          
           {/* Bandeau publicitaire (AdSense) géré par le back-office */}
-          <div className="w-full max-w-5xl mx-auto mt-6">
-            <AdSlot placementKey="home.initial.belowHero" className="my-2" />
+          <div className="w-full max-w-5xl mx-auto mt-12">
+            <AdBlock 
+              placementKey="home.initial.belowHero" 
+              title="Nos partenaires"
+              variant="featured"
+              className="my-2"
+            />
           </div>
         </section>
       ) : (
@@ -747,37 +811,73 @@ export default function HomePage() {
 
           {/* Ancre au-dessus des onglets */}
           <div ref={tabsTopRef} className="h-0 scroll-mt-28 md:scroll-mt-32" aria-hidden="true" />
-          {/* Onglets Accueil — version légèrement agrandie et centrée */}
-          <div className="w-full max-w-[1440px] mb-4 flex justify-center">
+          
+          {/* Hero Section pour les onglets */}
+          <div className="w-full max-w-7xl mx-auto mb-8">
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center gap-2 bg-gradient-to-r from-sky-100 to-cyan-100 text-sky-800 px-4 py-2 rounded-full text-sm font-medium mb-4 border border-sky-200 animate-bounce-slow">
+                <span className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse-slow"></span>
+                {activeHomeTab === "annonces" ? "Recherche de logements" : "Recherche de colocataires"}
+              </div>
+              <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-sky-600 via-cyan-500 to-teal-500 bg-clip-text text-transparent animate-fade-in">
+                {activeHomeTab === "annonces" ? "Trouvez votre colocation" : "Rencontrez vos colocataires"}
+              </h1>
+              <p className="text-xl text-slate-600 max-w-3xl mx-auto whitespace-nowrap">
+                {activeHomeTab === "annonces" 
+                  ? "Découvrez les meilleures annonces de colocation à La Réunion" 
+                  : "Connectez-vous avec des personnes qui partagent vos valeurs et votre style de vie"
+                }
+                <br />
+              </p>
+            </div>
+            
+            {/* Publicité hero */}
+            <div className="mb-8">
+              <AdBlock 
+                placementKey="home.hero" 
+                title="Partenaires"
+                variant="featured"
+                className="max-w-4xl mx-auto"
+              />
+            </div>
+          </div>
+
+          {/* Onglets modernes */}
+          <div className="w-full max-w-7xl mx-auto mb-8 flex justify-center">
             <div
               role="tablist"
               aria-label="Type de recherche"
-              className="inline-flex items-center rounded-full border border-slate-200 bg-white shadow-sm overflow-hidden"
+              className="inline-flex items-center rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden p-1"
             >
               <button
                 role="tab"
                 aria-selected={activeHomeTab === "annonces"}
-                className={`px-4 sm:px-5 py-1.5 sm:py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`px-6 py-3 text-sm font-semibold transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded-xl flex items-center gap-2 ${
                   activeHomeTab === "annonces"
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-700 hover:bg-slate-50"
+                    ? "bg-gradient-to-r from-sky-600 to-cyan-500 text-white shadow-lg transform scale-105 animate-pulse-slow"
+                    : "text-slate-700 hover:bg-slate-50 hover:text-sky-600"
                 }`}
                 onClick={() => setActiveHomeTab("annonces")}
               >
-                🏠 <span className="ml-1.5">Annonces</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Annonces
               </button>
-              <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
               <button
                 role="tab"
                 aria-selected={activeHomeTab === "colocataires"}
-                className={`px-4 sm:px-5 py-1.5 sm:py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`px-6 py-3 text-sm font-semibold transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 rounded-xl flex items-center gap-2 ${
                   activeHomeTab === "colocataires"
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-700 hover:bg-slate-50"
+                    ? "bg-gradient-to-r from-teal-600 to-cyan-500 text-white shadow-lg transform scale-105 animate-pulse-slow"
+                    : "text-slate-700 hover:bg-slate-50 hover:text-teal-600"
                 }`}
                 onClick={() => setActiveHomeTab("colocataires")}
               >
-                👥 <span className="ml-1.5">Colocataires</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Colocataires
               </button>
             </div>
           </div>
@@ -790,9 +890,12 @@ export default function HomePage() {
             </div>
           )}
 
-          <h1 className="text-3xl font-bold mb-6 text-center">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl md:text-4xl font-bold mb-4 bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
             {activeHomeTab === "annonces" ? "Annonces de colocation" : "Profils de colocataires"}
           </h1>
+            <div className="w-24 h-1 bg-gradient-to-r from-orange-600 to-yellow-500 mx-auto rounded-full"></div>
+          </div>
 
           {/* Layout 3 colonnes (desktop): filtres | annonces | publicité */}
           <div className="w-full max-w-[1400px] flex flex-col md:flex-row md:items-start gap-6">
@@ -921,11 +1024,16 @@ export default function HomePage() {
                     } else {
                       rendered.push(card);
                     }
-                    // Insérer une pub inline toutes les 16 cartes (annonces et profils)
-                    if ((idx + 1) % 16 === 0) {
+                    // Insérer une pub inline toutes les 8 cartes (annonces et profils)
+                    if ((idx + 1) % 8 === 0) {
                       rendered.push(
-                        <div key={`ad-inline-${idx}`} className="col-span-full">
-                          <AdSlot placementKey="listing.inline.1" />
+                        <div key={`ad-inline-${idx}`} className="col-span-full my-6">
+                          <AdBlock 
+                            placementKey="listing.inline.1" 
+                            title="Suggestion pour vous"
+                            variant="compact"
+                            showBorder={false}
+                          />
                         </div>
                       );
                     }
@@ -1064,11 +1172,13 @@ export default function HomePage() {
 
             {/* Colonne publicité (droite en ≥md) */}
             <div className="w-full md:order-3 md:basis-[20%] md:flex-shrink-0">
-              <div className="sticky top-24 space-y-4">
-                <AdSlot placementKey="home.list.rightSidebar" />
-                <div className="text-xs text-slate-400 text-center">
-                  Publicité
-                </div>
+              <div className="sticky top-24 space-y-6">
+                <AdBlock 
+                  placementKey="home.list.rightSidebar" 
+                  title="Annonces partenaires"
+                  variant="featured"
+                  className="mb-4"
+                />
               </div>
             </div>
 
@@ -1078,48 +1188,22 @@ export default function HomePage() {
                 onSubmit={(e) => {
                   e.preventDefault(); // mise à jour auto: pas d'appel manuel
                 }}
-                className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4"
+                className="w-full bg-gradient-to-br from-white to-slate-50 rounded-3xl border border-slate-200/60 shadow-xl backdrop-blur-sm p-6 flex flex-col gap-6"
               >
-                {/* Titre Affiner la recherche */}
-                <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 -mx-4 -mt-4 mb-4 rounded-t-2xl">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center justify-center gap-3 flex-1">
-                      <span className="hidden md:block h-px w-8 bg-slate-200" />
-                      <div className="text-base md:text-lg font-semibold text-slate-700 tracking-tight">Affiner la recherche</div>
-                      <span className="hidden md:block h-px w-8 bg-slate-200" />
+                {/* Titre Affiner la recherche avec design moderne */}
+                <div className="bg-gradient-to-r from-sky-50 to-emerald-50 px-4 py-3 border border-sky-200/50 -mx-6 -mt-6 mb-4 rounded-t-3xl">
+                  <div className="flex items-center justify-center gap-3">
+                    <div className="w-8 h-8 bg-gradient-to-br from-sky-500 to-emerald-500 rounded-lg flex items-center justify-center animate-spin">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                      </svg>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFirestoreError(null);
-                        setVille("");
-                        setCodePostal("");
-                        setPrixMax(null);
-                        setSortBy("date");
-                        setCommunesSelected([]);
-                        setZonesSelected([]);
-                        setAnnonces([]);
-                        setHasMore(true);
-                        setZoneFilters([]);
-                        setSelectionSource(null);
-                        // Réinitialiser les filtres de surface
-                        setSurfaceMin(null);
-                        setSurfaceMax(null);
-                        // Réinitialiser les critères colocataires
-                        setCritAgeMin(null);
-                        setCritAgeMax(null);
-                        setCritProfession("");
-                        // Remplacement au 1er snapshot pour éviter les doublons
-                        resetOnFirstSnapshotRef.current = true;
-                        setFiltering(true);
-                        // pas d'appel direct à loadAnnonces: l'effet "filtres" va relancer proprement
-                      }}
-                      className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors"
-                    >
-                      Réinitialiser
-                    </button>
+                    <div className="text-lg font-bold bg-gradient-to-r from-sky-600 to-emerald-500 bg-clip-text text-transparent tracking-tight">
+                      Affiner la recherche
                   </div>
                 </div>
+                </div>
+                
                 <div className="hidden">
                   {/* anciennement: <div className="grid grid-cols-3 gap-2"> ... */}
                 </div>
@@ -1128,21 +1212,29 @@ export default function HomePage() {
                 <div id="filters-content" className={_filtersCollapsed ? "hidden" : "block"}>
                 {/* Zones rapides (OU) tout en haut - visibles seulement en mode carte */}
                 {hasMode('map') && (
-                  <div ref={zonesBlockRef}>
-                    <div className="mb-2 text-xs font-medium text-slate-600">Secteur de recherche</div>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1 text-center justify-items-stretch">
+                  <div ref={zonesBlockRef} className="bg-gradient-to-br from-slate-50 to-white rounded-2xl p-4 border border-slate-200/50">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-6 h-6 bg-gradient-to-br from-slate-500 to-slate-600 rounded-lg flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </div>
+                      <div className="text-sm font-semibold text-slate-700">Secteur de recherche</div>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 text-center justify-items-stretch">
                       {Object.keys(GROUPES).map((z) => (
                         <button
                           key={z}
                           type="button"
                           onClick={() => toggleZoneFilter(z)}
-                          className={`w-full px-2 py-1 rounded-full text-xs leading-none border transition ${
+                          className={`w-full px-3 py-2 rounded-xl text-xs font-medium leading-none border transition-all duration-200 flex items-center justify-center text-center ${
                             zoneFilters.includes(z)
-                              ? "bg-blue-600 text-white border-blue-600"
-                              : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                              ? "bg-gradient-to-r from-sky-600 to-emerald-500 text-white border-transparent shadow-lg transform scale-105 animate-bounce"
+                              : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50 hover:border-sky-400 hover:shadow-sm"
                           }`}
                         >
-                          {z === "Intérieur" ? "Secteur Centre" : `Secteur ${z}`}
+                          {z === "Intérieur" ? "Centre" : z}
                         </button>
                       ))}
                     </div>
@@ -1150,59 +1242,113 @@ export default function HomePage() {
                 )}
 
                 {/* Carte (déplacée en bas) */}
-                <div ref={communeBlockRef} className="flex flex-col gap-4 items-stretch justify-center">
+                <div ref={communeBlockRef} className="flex flex-col gap-6 items-stretch justify-center">
                   {/* Budget (toujours visible) */}
-                  <div ref={budgetBlockRef}>
-                    <label className="block text-sm font-medium mb-1">
-                      {activeHomeTab === "annonces" ? "Prix max (€)" : "Budget max (€)"}
+                  <div ref={budgetBlockRef} className="bg-gradient-to-br from-white to-slate-50 rounded-2xl p-4 border border-slate-200/50">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-6 h-6 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                        </svg>
+                      </div>
+                      <label className="text-sm font-semibold text-slate-700">
+                        {activeHomeTab === "annonces" ? "Prix maximum" : "Budget maximum"}
                     </label>
+                    </div>
+                    <div className="relative">
                     <input
                       type="number"
                       value={prixMax ?? ""}
                       onChange={(e) => setPrixMax(Number(e.target.value) || null)}
-                      className="border border-gray-300 rounded px-3 py-2 w-full"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 text-slate-700 placeholder-slate-400"
                       placeholder={activeHomeTab === "annonces" ? "Ex: 600" : "Ex: 600"}
                     />
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-500 font-medium">€</div>
+                    </div>
                   </div>
 
                    {/* Surface (toujours visible) */}
+                   <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl p-4 border border-slate-200/50">
+                     <div className="flex items-center gap-2 mb-3">
+                       <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg flex items-center justify-center">
+                         <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                         </svg>
+                       </div>
+                       <div className="text-sm font-semibold text-slate-700">Surface</div>
+                     </div>
                    <div className="grid grid-cols-2 gap-3 w-full">
                      <div>
-                       <label className="block text-sm font-medium mb-1">Surface min (m²)</label>
+                         <label className="block text-xs font-medium text-slate-600 mb-2">Minimum</label>
+                         <div className="relative">
                        <input
                          type="number"
                          value={surfaceMin ?? ""}
                          onChange={(e) => setSurfaceMin(Number(e.target.value) || null)}
-                         className="border border-gray-300 rounded px-3 py-2 w-full"
+                             className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all duration-200 text-slate-700 placeholder-slate-400"
                          placeholder="Ex: 20"
                        />
+                           <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-500 text-xs">m²</div>
+                         </div>
                      </div>
                      <div>
-                       <label className="block text-sm font-medium mb-1">Surface max (m²)</label>
+                         <label className="block text-xs font-medium text-slate-600 mb-2">Maximum</label>
+                         <div className="relative">
                        <input
                          type="number"
                          value={surfaceMax ?? ""}
                          onChange={(e) => setSurfaceMax(Number(e.target.value) || null)}
-                         className="border border-gray-300 rounded px-3 py-2 w-full"
+                             className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all duration-200 text-slate-700 placeholder-slate-400"
                          placeholder="Ex: 80"
                        />
+                           <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-500 text-xs">m²</div>
+                         </div>
+                       </div>
                      </div>
                    </div>
 
                                      {/* Critères (visibles seulement pour les colocataires) */}
                    {activeHomeTab === 'colocataires' && (
+                   <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl p-4 border border-slate-200/50">
+                     <div className="flex items-center gap-2 mb-3">
+                       <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                         <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                         </svg>
+                       </div>
+                       <div className="text-sm font-semibold text-slate-700">Critères colocataires</div>
+                     </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Âge min</label>
-                      <input type="number" className="border border-gray-300 rounded px-3 py-2 w-full" value={critAgeMin ?? ''} onChange={(e) => setCritAgeMin(Number(e.target.value) || null)} placeholder="Ex: 20" />
+                         <label className="block text-xs font-medium text-slate-600 mb-2">Âge min</label>
+                         <input 
+                           type="number" 
+                           className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200 text-slate-700 placeholder-slate-400" 
+                           value={critAgeMin ?? ''} 
+                           onChange={(e) => setCritAgeMin(Number(e.target.value) || null)} 
+                           placeholder="Ex: 20" 
+                         />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Âge max</label>
-                      <input type="number" className="border border-gray-300 rounded px-3 py-2 w-full" value={critAgeMax ?? ''} onChange={(e) => setCritAgeMax(Number(e.target.value) || null)} placeholder="Ex: 35" />
+                         <label className="block text-xs font-medium text-slate-600 mb-2">Âge max</label>
+                         <input 
+                           type="number" 
+                           className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200 text-slate-700 placeholder-slate-400" 
+                           value={critAgeMax ?? ''} 
+                           onChange={(e) => setCritAgeMax(Number(e.target.value) || null)} 
+                           placeholder="Ex: 35" 
+                         />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Profession</label>
-                      <input type="text" className="border border-gray-300 rounded px-3 py-2 w-full" value={critProfession} onChange={(e) => setCritProfession(e.target.value)} placeholder="Ex: Étudiant, CDI..." />
+                         <label className="block text-xs font-medium text-slate-600 mb-2">Profession</label>
+                         <input 
+                           type="text" 
+                           className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200 text-slate-700 placeholder-slate-400" 
+                           value={critProfession} 
+                           onChange={(e) => setCritProfession(e.target.value)} 
+                           placeholder="Ex: Étudiant, CDI..." 
+                         />
+                       </div>
                     </div>
                   </div>
                    )}
@@ -1212,22 +1358,61 @@ export default function HomePage() {
 
               {/* Mise à jour automatique silencieuse */}
 
-              {/* Le bouton Réinitialiser est déplacé près de la carte */}
+              {/* Bouton Réinitialiser en bas du bloc */}
+              <div className="flex justify-center mt-6 pt-4 border-t border-slate-200/50">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFirestoreError(null);
+                      setVille("");
+                      setCodePostal("");
+                      setPrixMax(null);
+                      setSortBy("date");
+                      setCommunesSelected([]);
+                      setZonesSelected([]);
+                      setAnnonces([]);
+                      setHasMore(true);
+                      setZoneFilters([]);
+                      setSelectionSource(null);
+                    // Réinitialiser les filtres de surface
+                    setSurfaceMin(null);
+                    setSurfaceMax(null);
+                    // Réinitialiser les critères colocataires
+                    setCritAgeMin(null);
+                    setCritAgeMax(null);
+                    setCritProfession("");
+                      // Remplacement au 1er snapshot pour éviter les doublons
+                      resetOnFirstSnapshotRef.current = true;
+                      setFiltering(true);
+                      // pas d'appel direct à loadAnnonces: l'effet "filtres" va relancer proprement
+                    }}
+                  className="group inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-sky-50 to-emerald-50 border border-sky-200 text-sky-700 rounded-xl hover:from-sky-100 hover:to-emerald-100 hover:border-sky-300 hover:shadow-md transition-all duration-200 text-sm font-medium animate-pulse"
+                  >
+                  <svg className="w-4 h-4 group-hover:rotate-180 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Réinitialiser tous les filtres
+                  </button>
+              </div>
               </div>
             </form>
 
               {/* Carte */}
                               {showCommuneMap && !_filtersCollapsed && (
-                <div>
-                  <div id="map-section" ref={mapWrapRef} className="rounded-2xl border border-slate-200 overflow-hidden">
-                    <div className="bg-slate-50 px-3 py-2 border-b border-slate-200">
+                <div className="mt-6 bg-gradient-to-br from-white to-slate-50 rounded-3xl border border-slate-200/60 shadow-xl overflow-hidden">
+                  <div className="bg-gradient-to-r from-sky-50 to-emerald-50 px-4 py-3 border-b border-sky-200/50">
                       <div className="flex items-center justify-center gap-3">
-                        <span className="hidden md:block h-px w-8 bg-slate-200" />
-                        <div className="text-base md:text-lg font-semibold text-slate-700 tracking-tight">Rechercher par secteur</div>
-                        <span className="hidden md:block h-px w-8 bg-slate-200" />
+                      <div className="w-8 h-8 bg-gradient-to-br from-sky-500 to-emerald-500 rounded-lg flex items-center justify-center animate-pulse">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                        </svg>
+                      </div>
+                      <div className="text-lg font-bold bg-gradient-to-r from-sky-600 to-emerald-500 bg-clip-text text-transparent tracking-tight">
+                        Rechercher par secteur
                       </div>
                     </div>
-                    <div className="p-3">
+                  </div>
+                  <div className="p-4">
                   <CommuneZoneSelector
                     value={communesSelected}
                     computeZonesFromSlugs={computeZonesFromSlugs}
@@ -1238,7 +1423,6 @@ export default function HomePage() {
                     // Masque le résumé de sélection sous la carte
                     hideSelectionSummary
                   />
-                    </div>
                   </div>
                 </div>
               )}
@@ -1246,12 +1430,19 @@ export default function HomePage() {
 
               {/* Blocs de sélection — masqués si filtres repliés */}
               {!_filtersCollapsed && (zonesSelected.length > 0 || communesSelected.length > 0) && (
-                <div className="space-y-3 mt-3">
-                  <div className="bg-white rounded-xl border border-slate-200 p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-xs font-medium text-slate-600">Secteurs sélectionnés</div>
+                <div className="space-y-4 mt-4">
+                  <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl border border-slate-200/50 shadow-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{zoneFilters.length}</span>
+                        <div className="w-5 h-5 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <div className="text-sm font-semibold text-slate-700">Secteurs sélectionnés</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs px-2 py-1 rounded-full bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 border border-blue-200 font-medium">{zoneFilters.length}</span>
                         <button
                           type="button"
                           onClick={() => {
@@ -1261,10 +1452,10 @@ export default function HomePage() {
                             setSelectionSource(null);
                           }}
                           disabled={zonesSelected.length === 0 && communesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0}
-                          className={`text-[11px] px-2 py-0.5 rounded border transition ${
+                          className={`text-xs px-3 py-1.5 rounded-lg border transition-all duration-200 ${
                             (zonesSelected.length === 0 && communesSelected.length === 0 && !ville && !codePostal && zoneFilters.length === 0)
                               ? "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
-                              : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                              : "border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 hover:shadow-sm"
                           }`}
                           title="Tout effacer"
                           aria-label="Tout effacer les zones et communes"
@@ -1277,7 +1468,7 @@ export default function HomePage() {
                       <div className="flex flex-wrap gap-1">
                         {zonesSelected.map((z) => (
                           <span key={z} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">
-                            {z === "Intérieur" ? "Secteur Centre" : `Secteur ${z}`}
+                            {z === "Intérieur" ? "Centre" : z}
                             <button
                               type="button"
                               aria-label={`Retirer le secteur ${z}`}
@@ -1630,6 +1821,16 @@ export default function HomePage() {
           )}
         </>
       )}
+      
+      {/* Publicité footer */}
+      <div className="w-full max-w-7xl mx-auto mt-16 mb-8">
+        <AdBlock 
+          placementKey="home.footer" 
+          title="Découvrez nos partenaires"
+          variant="featured"
+          className="max-w-5xl mx-auto"
+        />
+      </div>
     </main>
     </>
   );
