@@ -1092,6 +1092,13 @@ export default function HomePage() {
                         setHasMore(true);
                         setZoneFilters([]);
                         setSelectionSource(null);
+                        // Réinitialiser les filtres de surface
+                        setSurfaceMin(null);
+                        setSurfaceMax(null);
+                        // Réinitialiser les critères colocataires
+                        setCritAgeMin(null);
+                        setCritAgeMax(null);
+                        setCritProfession("");
                         // Remplacement au 1er snapshot pour éviter les doublons
                         resetOnFirstSnapshotRef.current = true;
                         setFiltering(true);
@@ -1248,6 +1255,13 @@ export default function HomePage() {
                       setHasMore(true);
                       setZoneFilters([]);
                       setSelectionSource(null);
+                      // Réinitialiser les filtres de surface
+                      setSurfaceMin(null);
+                      setSurfaceMax(null);
+                      // Réinitialiser les critères colocataires
+                      setCritAgeMin(null);
+                      setCritAgeMax(null);
+                      setCritProfession("");
                       // Remplacement au 1er snapshot pour éviter les doublons
                       resetOnFirstSnapshotRef.current = true;
                       setFiltering(true);

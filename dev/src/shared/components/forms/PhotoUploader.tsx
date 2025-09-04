@@ -3,8 +3,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import ConfirmModal from "../ConfirmModal";
-import dynamic from "next/dynamic";
-// thumbnails should not open the global lightbox here
+import { 
+  uploadPhoto, 
+  addAnnonceImageMeta, 
+  deleteAnnoncePhotoWithMeta, 
+  setAnnonceMainPhoto,
+  setColocImageMainByUrl,
+  deleteColocPhotoWithMeta
+} from "@/infrastructure/storage/photoService";
 
 type PhotoItem = {
   id: string;
@@ -32,9 +38,14 @@ export default function PhotoUploader({
   openOnClick?: boolean;
 }) {
   const [items, setItems] = useState<PhotoItem[]>(() =>
-    initial.map((u, i) => ({ id: `i-${i}`, previewUrl: u, uploadedUrl: u, isMain: initialMain ? (u === initialMain) : (i === 0), progress: 100 }))
+    initial.map((u, i) => ({ 
+      id: `i-${i}`, 
+      previewUrl: u, 
+      uploadedUrl: u, 
+      isMain: initialMain ? (u === initialMain) : (i === 0), 
+      progress: 100 
+    }))
   );
-  // no local lightbox for thumbnails (site-wide ImageLightbox is used for large images)
 
   // store xhrs to allow abort on delete
   const xhrs = useRef<Record<string, XMLHttpRequest | null>>({});
@@ -48,7 +59,13 @@ export default function PhotoUploader({
     // build items from initial URLs using stable ids (based on url)
     const initUrls = (initial || []).map((u) => String(u).trim()).filter(Boolean);
     const init = initUrls.map(
-      (u, i) => ({ id: `i-${encodeURIComponent(u)}`, previewUrl: u, uploadedUrl: u, isMain: initialMain ? (u === initialMain) : (i === 0), progress: 100 } as PhotoItem)
+      (u, i) => ({ 
+        id: `i-${encodeURIComponent(u)}`, 
+        previewUrl: u, 
+        uploadedUrl: u, 
+        isMain: initialMain ? (u === initialMain) : (i === 0), 
+        progress: 100 
+      } as PhotoItem)
     );
 
     // short-circuit if incoming `initial` (by value) matches last applied one
@@ -57,7 +74,7 @@ export default function PhotoUploader({
 
     // compare current uploaded URLs to incoming initial URLs to avoid unnecessary updates
     const currentUrls = items.filter((it) => it.uploadedUrl).map((it) => String(it.uploadedUrl));
-  const same = currentUrls.length === initUrls.length && currentUrls.every((v: string, idx: number) => v === initUrls[idx]);
+    const same = currentUrls.length === initUrls.length && currentUrls.every((v: string, idx: number) => v === initUrls[idx]);
     if (!same) {
       setItems(init);
       lastInitRef.current = initKey;
@@ -67,11 +84,6 @@ export default function PhotoUploader({
     }
     // only re-run when the value of `initial` or `initialMain` changes
   }, [initialKey, initialMain, items, initial]);
-
-  // optional site-wide lightbox for thumbnails
-  const ImageLightbox = dynamic(() => import("../modals/ImageLightbox"), { ssr: false });
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   // avoid feedback loops: only call onChange when payload differs from last sent
   const lastSentRef = useRef<string | null>(null);
@@ -100,58 +112,44 @@ export default function PhotoUploader({
       return merged;
     });
 
-  // upload each file immediately
-  arr.forEach((it) => uploadFile(it));
+    // upload each file immediately using photoService
+    arr.forEach((it) => uploadFile(it));
   }
 
-  function uploadFile(item: PhotoItem) {
+  async function uploadFile(item: PhotoItem) {
     if (!item.file) return;
     setItems((s) => s.map((x) => (x.id === item.id ? { ...x, uploading: true, progress: 0 } : x)));
 
-    const fd = new FormData();
-    fd.append("files", item.file as File);
+    try {
+      // Use photoService for upload
+      const uploadedUrl = await uploadPhoto(item.file);
+      
+      setItems((s) => s.map((x) => (x.id === item.id ? { 
+        ...x, 
+        uploadedUrl, 
+        previewUrl: uploadedUrl, 
+        uploading: false, 
+        progress: 100 
+      } : x)));
 
-    const xhr = new XMLHttpRequest();
-    xhrs.current[item.id] = xhr;
-
-    xhr.open("POST", "/api/uploads");
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const pct = Math.round((e.loaded / e.total) * 100);
-        setItems((s) => s.map((x) => (x.id === item.id ? { ...x, progress: pct } : x)));
-      }
-    };
-    xhr.onload = () => {
-      try {
-        const data = JSON.parse(xhr.responseText);
-        if (data?.files && data.files.length > 0) {
-          const uploaded = data.files[0];
-          setItems((s) => s.map((x) => (x.id === item.id ? { ...x, uploadedUrl: uploaded, previewUrl: uploaded, uploading: false, progress: 100 } : x)));
-          // persist metadata if resource provided
-          if (resourceType && resourceId) {
-            import("@/infrastructure/storage/photoService").then(async (svc) => {
-              try {
-                if (resourceType === "annonce") await svc.addAnnonceImageMeta(resourceId, { url: uploaded, filename: item.file?.name });
-              } catch (e) {
-                console.warn('persist image meta failed', e);
-              }
+      // persist metadata if resource provided
+      if (resourceType && resourceId) {
+        try {
+          if (resourceType === "annonce") {
+            await addAnnonceImageMeta(resourceId, { 
+              url: uploadedUrl, 
+              filename: item.file?.name,
+              isMain: item.isMain 
             });
           }
-        } else {
-          setItems((s) => s.map((x) => (x.id === item.id ? { ...x, uploading: false } : x)));
+        } catch (e) {
+          console.warn('persist image meta failed', e);
         }
-      } catch (err) {
-        console.error("upload parse error", err);
-        setItems((s) => s.map((x) => (x.id === item.id ? { ...x, uploading: false } : x)));
       }
-      xhrs.current[item.id] = null;
-    };
-    xhr.onerror = () => {
-      console.error("upload xhr error");
+    } catch (err) {
+      console.error("upload error", err);
       setItems((s) => s.map((x) => (x.id === item.id ? { ...x, uploading: false } : x)));
-      xhrs.current[item.id] = null;
-    };
-    xhr.send(fd);
+    }
   }
 
   // Gestion du modal de confirmation
@@ -159,7 +157,6 @@ export default function PhotoUploader({
   const [pendingRemoveId, setPendingRemoveId] = useState<string|null>(null);
 
   async function doRemoveItem(id: string) {
-
     const it = items.find((x) => x.id === id);
     if (!it) return;
 
@@ -170,33 +167,29 @@ export default function PhotoUploader({
       xhrs.current[id] = null;
     }
 
-    if (it.uploadedUrl) {
-      try {
-        await fetch(`/api/uploads?path=${encodeURIComponent(it.uploadedUrl)}`, { method: "DELETE" });
-      } catch (err) {
-        console.error("delete error", err);
-      }
-    }
     // revoke object URL if any
     if (it.file && it.previewUrl.startsWith("blob:")) {
       URL.revokeObjectURL(it.previewUrl);
     }
+
+    // Use photoService for deletion
+    if (it.uploadedUrl && resourceType && resourceId) {
+      try {
+        if (resourceType === 'coloc') {
+          await deleteColocPhotoWithMeta(resourceId, it.uploadedUrl);
+        } else if (resourceType === 'annonce') {
+          await deleteAnnoncePhotoWithMeta(resourceId, it.uploadedUrl);
+        }
+      } catch (e) {
+        console.warn('delete meta failed', e);
+      }
+    }
+
     setItems((s) => {
       const next = s.filter((x) => x.id !== id);
       if (!next.some((x) => x.isMain) && next.length) next[0].isMain = true;
       return next;
     });
-    // if resource provided, also delete meta doc by url
-    try {
-      const it = items.find(x => x.id === id);
-      if (it && it.uploadedUrl && resourceType && resourceId) {
-        const svc = await import("@/infrastructure/storage/photoService");
-        if (resourceType === 'coloc') await svc.deleteColocPhotoWithMeta(resourceId, it.uploadedUrl);
-        if (resourceType === 'annonce') await svc.deleteAnnoncePhotoWithMeta(resourceId, it.uploadedUrl);
-      }
-    } catch (e) {
-      console.warn('delete meta failed', e);
-    }
   }
 
   function removeItem(id: string) {
@@ -204,22 +197,26 @@ export default function PhotoUploader({
     setConfirmOpen(true);
   }
 
-  function setMain(id: string) {
+  async function setMain(id: string) {
     setItems((s) => {
       const next = s.map((x) => ({ ...x, isMain: x.id === id }));
       const selected = next.find((x) => x.id === id);
+      
       // persist main selection if resource provided and selected has an uploaded URL
       if (selected && selected.uploadedUrl && resourceType && resourceId) {
-        import("@/mechanics/storage/photoService").then(async (svc) => {
-          try {
-            if (resourceType === 'coloc') {
-              await svc.setColocImageMainByUrl(resourceId, selected.uploadedUrl as string);
-            } else if (resourceType === 'annonce') {
-              // no URL-based helper for annonce main in photoService; try to update root imageUrl similarly
-              await svc.setAnnonceMainPhoto(resourceId, 0).catch(() => {});
+        try {
+          if (resourceType === 'coloc') {
+            setColocImageMainByUrl(resourceId, selected.uploadedUrl as string);
+          } else if (resourceType === 'annonce') {
+            // Find the index of the selected photo and set it as main
+            const index = next.findIndex(x => x.id === id);
+            if (index !== -1) {
+              setAnnonceMainPhoto(resourceId, index);
             }
-          } catch (e) { console.warn('set main failed', e); }
-        });
+          }
+        } catch (e) { 
+          console.warn('set main failed', e); 
+        }
       }
       return next;
     });
@@ -229,6 +226,7 @@ export default function PhotoUploader({
   function onDragStart(e: React.DragEvent, id: string) {
     e.dataTransfer.setData("text/plain", id);
   }
+  
   function onDrop(e: React.DragEvent, targetId: string) {
     e.preventDefault();
     const id = e.dataTransfer.getData("text/plain");
@@ -244,12 +242,10 @@ export default function PhotoUploader({
     });
   }
 
-  // (supprimé) ancien handler single-upload non utilisé
-
   return (
     <div>
       <div className="flex gap-2 items-center">
-        <label className="inline-block px-3 py-2 bg-slate-100 border rounded-md cursor-pointer">
+        <label className="inline-block px-3 py-2 bg-slate-100 border rounded-md cursor-pointer hover:bg-slate-200 transition-colors">
           Ajouter des photos
           <input
             type="file"
@@ -262,22 +258,19 @@ export default function PhotoUploader({
       </div>
 
       <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {items.map((it, idx) => (
-            <div
-              key={it.id}
-              className="relative group"
-              draggable
-              onDragStart={(e)=>onDragStart(e,it.id)}
-              onDragOver={(e)=>e.preventDefault()}
-              onDrop={(e)=>onDrop(e,it.id)}
-              onClick={() => {
-                if (!openOnClick) return;
-                // open lightbox at this index among current items
-                setLightboxIndex(idx);
-                setLightboxOpen(true);
-              }}
-              role={openOnClick ? "button" : undefined}
-            >
+        {items.map((it, idx) => (
+          <div
+            key={it.id}
+            className="relative group"
+            draggable
+            onDragStart={(e)=>onDragStart(e,it.id)}
+            onDragOver={(e)=>e.preventDefault()}
+            onDrop={(e)=>onDrop(e,it.id)}
+            onClick={() => {
+              // lightbox functionality removed
+            }}
+            role={openOnClick ? "button" : undefined}
+          >
             <div className="w-28 h-28 rounded-lg overflow-hidden bg-gray-100 border relative">
               <Image
                 src={it.previewUrl}
@@ -288,22 +281,32 @@ export default function PhotoUploader({
                 style={{ cursor: openOnClick ? 'pointer' : 'default' }}
                 tabIndex={0}
               />
+              
               {/* Overlay icônes */}
               <div className="absolute top-1 right-1 flex flex-col gap-1 z-10">
                 {/* Coche principale */}
                 <button
                   type="button"
-                  className={`w-6 h-6 flex items-center justify-center rounded-full border ${it.isMain ? "bg-blue-600 border-blue-600" : "bg-white border-slate-300"} shadow transition-all duration-100`}
+                  className={`w-6 h-6 flex items-center justify-center rounded-full border ${
+                    it.isMain 
+                      ? "bg-blue-600 border-blue-600" 
+                      : "bg-white border-slate-300 hover:border-blue-400"
+                  } shadow transition-all duration-100`}
                   onClick={e => { e.stopPropagation(); setMain(it.id); }}
-                  title={it.isMain ? undefined : "Définir comme principale"}
+                  title={it.isMain ? "Photo principale" : "Définir comme principale"}
                   style={{ marginBottom: 0 }}
                 >
                   {it.isMain ? (
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
                   ) : (
-                    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" fill="white" /></svg>
+                    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" fill="white" />
+                    </svg>
                   )}
                 </button>
+                
                 {/* Poubelle */}
                 <button
                   type="button"
@@ -312,27 +315,21 @@ export default function PhotoUploader({
                   title="Supprimer la photo"
                   style={{ marginBottom: 0 }}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
-      {/* Modal de confirmation de suppression */}
-      <ConfirmModal
-        isOpen={confirmOpen}
-        onClose={() => { setConfirmOpen(false); setPendingRemoveId(null); }}
-        onConfirm={() => {
-          if (pendingRemoveId) doRemoveItem(pendingRemoveId);
-          setConfirmOpen(false);
-          setPendingRemoveId(null);
-        }}
-        title="Supprimer la photo ?"
-        description="Voulez-vous vraiment supprimer cette photo ? Cette action est irréversible."
-      />
               </div>
+              
               {/* Étoile sur la photo principale */}
               {it.isMain && (
                 <div className="absolute bottom-1 left-1 bg-yellow-400 rounded-full p-0.5 shadow text-white flex items-center justify-center z-10">
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.122-6.545L.488 6.91l6.561-.955L10 0l2.951 5.955 6.561.955-4.756 4.635 1.122 6.545z"/></svg>
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 15l-5.878 3.09 1.122-6.545L.488 6.91l6.561-.955L10 0l2.951 5.955 6.561.955-4.756 4.635 1.122 6.545z"/>
+                  </svg>
                 </div>
               )}
+              
               {/* Hover/focus overlay: magnifier (visual only) */}
               <div
                 className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 group-focus-within:bg-black/30 transition-colors"
@@ -345,25 +342,30 @@ export default function PhotoUploader({
               </div>
             </div>
 
-
+            {/* Barre de progression */}
             {it.uploading && (
               <div className="absolute left-0 right-0 bottom-0 px-1 pb-1">
                 <div className="h-2 bg-white/60 rounded overflow-hidden border">
-                  <div className="h-full bg-blue-600" style={{ width: `${it.progress ?? 0}%` }} />
+                  <div className="h-full bg-blue-600 transition-all duration-300" style={{ width: `${it.progress ?? 0}%` }} />
                 </div>
               </div>
             )}
           </div>
         ))}
       </div>
-      {lightboxOpen && (
-        <ImageLightbox
-          images={items.map((it) => it.previewUrl)}
-          initialIndex={lightboxIndex}
-          onClose={() => setLightboxOpen(false)}
-        />
-      )}
-  {/* No local lightbox rendering here: thumbnails should not open the global lightbox */}
+
+      {/* Modal de confirmation de suppression */}
+      <ConfirmModal
+        isOpen={confirmOpen}
+        onClose={() => { setConfirmOpen(false); setPendingRemoveId(null); }}
+        onConfirm={() => {
+          if (pendingRemoveId) doRemoveItem(pendingRemoveId);
+          setConfirmOpen(false);
+          setPendingRemoveId(null);
+        }}
+        title="Supprimer la photo ?"
+        description="Voulez-vous vraiment supprimer cette photo ? Cette action est irréversible."
+      />
     </div>
   );
 }

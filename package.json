@@ -1,6 +1,6 @@
 {
   "name": "dalon974",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Application web Next.js avec authentification et gestion de données",
   "private": true,
   "author": "dalon974",
@@ -30,6 +30,7 @@
     "uploads:backup": "echo 'Script de sauvegarde uploads à implémenter'",
     "uploads:restore": "echo 'Script de restauration uploads à implémenter'",
     "// === OUTILS DE DÉVELOPPEMENT ===": "",
+    "builddev": "cd dev && npm run build",
     "fix-scraper": "node prod/scripts/fix-scraper-config.js",
     "// === GESTION DES VERSIONS ET COMMITS ===": "",
     "commit": "node scripts/smart-commit.js commit",

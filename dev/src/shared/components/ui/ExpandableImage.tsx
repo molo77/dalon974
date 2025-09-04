@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 
-const ImageLightbox = dynamic(() => import("../modals/ImageLightbox"), { ssr: false });
+const ImageLightbox = dynamic(() => import("../ImageLightbox"), { ssr: false });
 
 export default function ExpandableImage({
   src,

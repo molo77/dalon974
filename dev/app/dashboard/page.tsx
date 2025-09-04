@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef, type MouseEvent } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, type MouseEvent, Suspense } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 // import ExpandableImage from "@/shared/components/ExpandableImage";
@@ -216,7 +216,8 @@ const SLUG_TO_NAME = (COMMUNES as string[]).reduce<Record<string, string>>((acc,
 }, {});
 
 // NOUVEAU: déduire les zones depuis les slugs sélectionnés
-function computeZonesFromSlugs(slugs: string[]): string[] {
+function computeZonesFromSlugs(slugs: string[] | undefined | null): string[] {
+  if (!slugs || !Array.isArray(slugs)) return [];
   const names = slugs.map((s) => SLUG_TO_NAME[s]).filter(Boolean);
   const zones: string[] = [];
   Object.entries(GROUPES).forEach(([zone, list]) => {
@@ -256,11 +257,13 @@ function translateFirebaseError(code: string): string {
   }
 }
 
-export default function DashboardPage() {
+// Composant pour gérer les paramètres de recherche avec Suspense
+function DashboardContent() {
   const { data: session, status } = useSession();
   const user = session?.user as any;
   const loading = status === "loading";
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mesAnnonces, setMesAnnonces] = useState<any[]>([]);
   const [loadingAnnonces, setLoadingAnnonces] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -279,9 +282,16 @@ export default function DashboardPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userDocLoaded, setUserDocLoaded] = useState(false);
-  const [activeTab, setActiveTab] = useState<"annonces" | "messages" | "coloc">("annonces");
+  const [activeTab, setActiveTab] = useState<"annonces" | "messages" | "coloc" | "match">("annonces");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
+
+  // États pour l'onglet Match
+  const [matchLoading, setMatchLoading] = useState(false);
+  const [matches, setMatches] = useState<any[]>([]);
+  const [matchType, setMatchType] = useState<"annonces" | "profils">("annonces");
+  const [colocDetailOpen, setColocDetailOpen] = useState(false);
+  const [colocDetail, setColocDetail] = useState<any | null>(null);
 
   // --- Profil colocataire: états (déplacé plus haut pour éviter l'usage avant déclaration) ---
   const [loadingColoc, setLoadingColoc] = useState(true);
@@ -625,6 +635,21 @@ export default function DashboardPage() {
     if (user) loadUserDoc(user);
   }, [user, loadUserDoc]);
 
+  // Détecter le paramètre tab dans l'URL et définir l'onglet actif
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['annonces', 'messages', 'coloc', 'match'].includes(tabParam)) {
+      setActiveTab(tabParam as "annonces" | "messages" | "coloc" | "match");
+    }
+  }, [searchParams]);
+
+  // Charger les matches quand l'onglet match est sélectionné
+  useEffect(() => {
+    if (activeTab === "match") {
+      loadMatches();
+    }
+  }, [activeTab, matchType, user]);
+
   useEffect(() => {
     if (loading) return;
 
@@ -706,6 +731,189 @@ export default function DashboardPage() {
     }
   };
 
+  // Fonction pour calculer un score de compatibilité
+  const calculateCompatibilityScore = (item: any, userProfile: any, isAnnonce: boolean) => {
+    let score = 0;
+    let maxScore = 0;
+
+    if (isAnnonce) {
+      // Matching annonce -> profil colocataire
+      maxScore = 100;
+      
+      // Budget (40 points)
+      if (userProfile.budget && item.prix) {
+        const budgetRatio = item.prix / userProfile.budget;
+        if (budgetRatio <= 0.8) score += 40; // Excellent match
+        else if (budgetRatio <= 1.0) score += 30; // Bon match
+        else if (budgetRatio <= 1.2) score += 20; // Match acceptable
+        else if (budgetRatio <= 1.5) score += 10; // Match limite
+      } else if (!userProfile.budget || !item.prix) {
+        score += 20; // Pas de critère budget
+      }
+
+      // Zone géographique (30 points)
+      if (userProfile.communesSlugs && Array.isArray(userProfile.communesSlugs) && userProfile.communesSlugs.length > 0 && item.communeSlug) {
+        if (userProfile.communesSlugs.includes(item.communeSlug)) {
+          score += 30; // Même commune
+        } else {
+          // Vérifier si c'est dans la même zone
+          const userZones = computeZonesFromSlugs(userProfile.communesSlugs);
+          const annonceZones = computeZonesFromSlugs([item.communeSlug]);
+          if (userZones.some(zone => annonceZones.includes(zone))) {
+            score += 20; // Même zone
+          } else {
+            score += 5; // Zone différente
+          }
+        }
+      } else {
+        score += 15; // Pas de critère géographique
+      }
+
+      // Surface (20 points)
+      if (item.surface) {
+        if (item.surface >= 20 && item.surface <= 100) score += 20; // Surface idéale
+        else if (item.surface >= 15 && item.surface <= 120) score += 15; // Surface acceptable
+        else score += 10; // Surface limite
+      } else {
+        score += 10; // Surface non renseignée
+      }
+
+      // Équipements et description (10 points)
+      if (item.description && item.description.length > 50) score += 10;
+      else if (item.description && item.description.length > 20) score += 5;
+
+    } else {
+      // Matching profil -> annonce
+      maxScore = 100;
+      
+      // Budget (40 points)
+      if (item.budget && mesAnnonces.length > 0) {
+        const avgPrix = mesAnnonces.reduce((sum, annonce) => sum + (annonce.prix || 0), 0) / mesAnnonces.length;
+        const budgetRatio = item.budget / avgPrix;
+        if (budgetRatio >= 0.8 && budgetRatio <= 1.2) score += 40; // Excellent match
+        else if (budgetRatio >= 0.6 && budgetRatio <= 1.5) score += 30; // Bon match
+        else if (budgetRatio >= 0.4 && budgetRatio <= 2.0) score += 20; // Match acceptable
+        else score += 10; // Match limite
+      } else {
+        score += 20; // Pas de critère budget
+      }
+
+      // Zone géographique (30 points)
+      if (item.communesSlugs && Array.isArray(item.communesSlugs) && item.communesSlugs.length > 0 && mesAnnonces.length > 0) {
+        const hasZoneMatch = mesAnnonces.some(annonce => 
+          annonce.communeSlug && item.communesSlugs.includes(annonce.communeSlug)
+        );
+        if (hasZoneMatch) {
+          score += 30; // Même commune
+        } else {
+          // Vérifier les zones
+          const profilZones = computeZonesFromSlugs(item.communesSlugs);
+          const hasZoneOverlap = mesAnnonces.some(annonce => {
+            if (!annonce.communeSlug) return false;
+            const annonceZones = computeZonesFromSlugs([annonce.communeSlug]);
+            return profilZones.some(zone => annonceZones.includes(zone));
+          });
+          if (hasZoneOverlap) score += 20; // Même zone
+          else score += 5; // Zone différente
+        }
+      } else {
+        score += 15; // Pas de critère géographique
+      }
+
+      // Âge et profession (20 points)
+      if (item.age && item.profession) score += 20;
+      else if (item.age || item.profession) score += 10;
+
+      // Description complète (10 points)
+      if (item.description && item.description.length > 100) score += 10;
+      else if (item.description && item.description.length > 50) score += 5;
+    }
+
+    return { score, maxScore, percentage: Math.round((score / maxScore) * 100) };
+  };
+
+  // Fonction pour charger les matches
+  const loadMatches = async () => {
+    if (!user) return;
+    
+    setMatchLoading(true);
+    try {
+      if (matchType === "annonces") {
+        // Charger les annonces qui correspondent au profil colocataire de l'utilisateur
+        const response = await fetch('/api/annonces');
+        if (response.ok) {
+          const data = await response.json();
+          const userColocProfile = await getColocProfile();
+          
+          if (userColocProfile) {
+            // Calculer les scores de compatibilité pour chaque annonce
+            const annoncesWithScores = data.items.map((annonce: any) => {
+              const compatibility = calculateCompatibilityScore(annonce, userColocProfile, true);
+              return {
+                ...annonce,
+                compatibilityScore: compatibility.score,
+                compatibilityPercentage: compatibility.percentage
+              };
+            });
+
+            // Filtrer et trier par score de compatibilité
+            const matchedAnnonces = annoncesWithScores
+              .filter((annonce: any) => annonce.compatibilityPercentage >= 30) // Minimum 30% de compatibilité
+              .sort((a: any, b: any) => b.compatibilityScore - a.compatibilityScore)
+              .slice(0, 20); // Limiter à 20 meilleurs matches
+
+            setMatches(matchedAnnonces);
+          } else {
+            setMatches([]);
+          }
+        }
+      } else {
+        // Charger les profils colocataires qui correspondent aux annonces de l'utilisateur
+        const response = await fetch('/api/coloc');
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (mesAnnonces.length > 0) {
+            // Calculer les scores de compatibilité pour chaque profil
+            const profilsWithScores = data.items.map((profil: any) => {
+              const compatibility = calculateCompatibilityScore(profil, null, false);
+              
+              // Trouver les annonces qui matchent avec ce profil
+              const matchingAnnonces = mesAnnonces.filter((annonce: any) => {
+                const budgetMatch = !profil.budget || !annonce.prix || profil.budget >= annonce.prix;
+                const zoneMatch = !profil.communesSlugs || !Array.isArray(profil.communesSlugs) || profil.communesSlugs.length === 0 || 
+                  (annonce.communeSlug && profil.communesSlugs.includes(annonce.communeSlug));
+                return budgetMatch && zoneMatch;
+              });
+              
+              return {
+                ...profil,
+                compatibilityScore: compatibility.score,
+                compatibilityPercentage: compatibility.percentage,
+                matchingAnnonces: matchingAnnonces
+              };
+            });
+
+            // Filtrer et trier par score de compatibilité
+            const matchedProfils = profilsWithScores
+              .filter((profil: any) => profil.compatibilityPercentage >= 30) // Minimum 30% de compatibilité
+              .sort((a: any, b: any) => b.compatibilityScore - a.compatibilityScore)
+              .slice(0, 20); // Limiter à 20 meilleurs matches
+
+            setMatches(matchedProfils);
+          } else {
+            setMatches([]);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[Dashboard] Erreur lors du chargement des matches:", error);
+      showToast("error", "Erreur lors du chargement des matches");
+    } finally {
+      setMatchLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
       {/* En-tête */}
@@ -723,7 +931,7 @@ export default function DashboardPage() {
       {/* Onglets */}
       <div className="w-full max-w-3xl flex gap-2 mb-6">
         <button
-          className={`flex-1 px-4 py-2 rounded-t-lg font-semibold transition ${
+          className={`flex-1 px-3 py-2 rounded-t-lg font-semibold transition text-sm ${
             activeTab === "annonces"
               ? "bg-blue-600 text-white shadow"
               : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -733,7 +941,7 @@ export default function DashboardPage() {
           Mes annonces
         </button>
         <button
-          className={`flex-1 px-4 py-2 rounded-t-lg font-semibold transition ${
+          className={`flex-1 px-3 py-2 rounded-t-lg font-semibold transition text-sm ${
             activeTab === "messages"
               ? "bg-blue-600 text-white shadow"
               : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -743,7 +951,7 @@ export default function DashboardPage() {
           Messages
         </button>
         <button
-          className={`flex-1 px-4 py-2 rounded-t-lg font-semibold transition ${
+          className={`flex-1 px-3 py-2 rounded-t-lg font-semibold transition text-sm ${
             activeTab === "coloc"
               ? "bg-blue-600 text-white shadow"
               : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -751,6 +959,16 @@ export default function DashboardPage() {
           onClick={() => setActiveTab("coloc")}
         >
           Profil colocataire
+        </button>
+        <button
+          className={`flex-1 px-3 py-2 rounded-t-lg font-semibold transition text-sm ${
+            activeTab === "match"
+              ? "bg-blue-600 text-white shadow"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+          }`}
+          onClick={() => setActiveTab("match")}
+        >
+          💕 Match
         </button>
       </div>
 
@@ -993,6 +1211,224 @@ export default function DashboardPage() {
 
         {activeTab === "messages" && (
           <MessagesSection />
+        )}
+
+        {activeTab === "match" && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold mb-4">💕 Mes matches</h2>
+              <p className="text-gray-600 mb-4">
+                Découvrez les annonces et profils qui correspondent à vos critères.
+              </p>
+              
+              {/* Information sur l'algorithme de matching */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <h3 className="font-semibold text-blue-900 mb-2">🎯 Comment fonctionne le matching ?</h3>
+                <div className="text-sm text-blue-800 space-y-1">
+                  <p><strong>Budget (40 points) :</strong> Correspondance entre votre budget et le prix de l'annonce</p>
+                  <p><strong>Zone géographique (30 points) :</strong> Même commune = 30pts, même zone = 20pts</p>
+                  <p><strong>Surface (20 points) :</strong> Surface idéale entre 20-100m²</p>
+                  <p><strong>Description (10 points) :</strong> Qualité et complétude des informations</p>
+                  <p className="text-xs text-blue-600 mt-2">
+                    Seuls les matches avec au moins 30% de compatibilité sont affichés.
+                  </p>
+                </div>
+              </div>
+              
+              {/* Sélecteur de type de match */}
+              <div className="flex gap-2 mb-6">
+                <button
+                  className={`px-4 py-2 rounded-lg font-medium transition ${
+                    matchType === "annonces"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                  onClick={() => setMatchType("annonces")}
+                >
+                  🏠 Annonces pour moi
+                </button>
+                <button
+                  className={`px-4 py-2 rounded-lg font-medium transition ${
+                    matchType === "profils"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                  onClick={() => setMatchType("profils")}
+                >
+                  👥 Profils pour mes annonces
+                </button>
+              </div>
+
+              {matchLoading ? (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <p className="mt-2 text-gray-600">Recherche de matches...</p>
+                </div>
+              ) : matches.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-6xl mb-4">💔</div>
+                  <p className="text-gray-600 mb-2">
+                    {matchType === "annonces" 
+                      ? "Aucune annonce ne correspond à votre profil colocataire pour le moment."
+                      : "Aucun profil ne correspond à vos annonces pour le moment."
+                    }
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {matchType === "annonces" 
+                      ? "Créez ou mettez à jour votre profil colocataire pour améliorer les matches."
+                      : "Créez des annonces ou mettez à jour votre profil pour attirer plus de colocataires."
+                    }
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600">
+                      {matches.length} {matchType === "annonces" ? "annonce(s)" : "profil(s)"} trouvé(s)
+                    </p>
+                    <button
+                      onClick={loadMatches}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      🔄 Actualiser
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {matches.map((item: any) => (
+                      <div key={item.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow relative">
+                        {/* Badge de compatibilité */}
+                        <div className="absolute top-3 right-3">
+                          <div className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            item.compatibilityPercentage >= 80 
+                              ? "bg-green-100 text-green-800" 
+                              : item.compatibilityPercentage >= 60 
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-orange-100 text-orange-800"
+                          }`}>
+                            {item.compatibilityPercentage}% match
+                          </div>
+                        </div>
+
+                        {matchType === "annonces" ? (
+                          <div>
+                            <h3 className="font-semibold text-lg mb-2 pr-16">{item.titre}</h3>
+                            <p className="text-gray-600 mb-2">📍 {item.ville}</p>
+                            <p className="text-blue-600 font-semibold mb-2">
+                              {item.prix ? `${item.prix} €/mois` : "Prix non renseigné"}
+                            </p>
+                            {item.surface && (
+                              <p className="text-sm text-gray-500 mb-2">Surface: {item.surface} m²</p>
+                            )}
+                            <p className="text-sm text-gray-700 line-clamp-2">
+                              {item.description || "Aucune description disponible"}
+                            </p>
+                            
+                            {/* Indicateurs de compatibilité */}
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {item.compatibilityPercentage >= 80 && (
+                                <span className="px-2 py-1 bg-green-50 text-green-700 text-xs rounded-full border border-green-200">
+                                  💚 Excellent match
+                                </span>
+                              )}
+                              {item.compatibilityPercentage >= 60 && item.compatibilityPercentage < 80 && (
+                                <span className="px-2 py-1 bg-yellow-50 text-yellow-700 text-xs rounded-full border border-yellow-200">
+                                  💛 Bon match
+                                </span>
+                              )}
+                              {item.compatibilityPercentage < 60 && (
+                                <span className="px-2 py-1 bg-orange-50 text-orange-700 text-xs rounded-full border border-orange-200">
+                                  🧡 Match acceptable
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="mt-3 flex gap-2">
+                              <button
+                                onClick={() => openAnnonceDetail(item.id)}
+                                className="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700"
+                              >
+                                Voir détails
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <h3 className="font-semibold text-lg mb-2 pr-16">{item.nom || "Profil colocataire"}</h3>
+                            <p className="text-gray-600 mb-2">
+                              {item.age ? `${item.age} ans` : ""} 
+                              {item.profession ? ` • ${item.profession}` : ""}
+                            </p>
+                            <p className="text-blue-600 font-semibold mb-2">
+                              {item.budget ? `Budget: ${item.budget} €/mois` : "Budget non renseigné"}
+                            </p>
+                            <p className="text-sm text-gray-700 line-clamp-2">
+                              {item.description || "Aucune description disponible"}
+                            </p>
+
+                            {/* Annonces correspondantes */}
+                            {item.matchingAnnonces && item.matchingAnnonces.length > 0 && (
+                              <div className="mt-2 mb-2">
+                                <p className="text-xs font-medium text-gray-600 mb-1">🏠 Correspond à vos annonces :</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {item.matchingAnnonces.slice(0, 3).map((annonce: any, idx: number) => (
+                                    <span 
+                                      key={annonce.id} 
+                                      className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 cursor-pointer hover:bg-blue-100"
+                                      title={`${annonce.titre} - ${annonce.prix}€/mois - ${annonce.ville}`}
+                                      onClick={() => openAnnonceDetail(annonce.id)}
+                                    >
+                                      {annonce.titre.length > 20 ? `${annonce.titre.substring(0, 20)}...` : annonce.titre}
+                                    </span>
+                                  ))}
+                                  {item.matchingAnnonces.length > 3 && (
+                                    <span className="px-2 py-1 bg-gray-50 text-gray-600 text-xs rounded-full border border-gray-200">
+                                      +{item.matchingAnnonces.length - 3} autres
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Indicateurs de compatibilité */}
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {item.compatibilityPercentage >= 80 && (
+                                <span className="px-2 py-1 bg-green-50 text-green-700 text-xs rounded-full border border-green-200">
+                                  💚 Excellent match
+                                </span>
+                              )}
+                              {item.compatibilityPercentage >= 60 && item.compatibilityPercentage < 80 && (
+                                <span className="px-2 py-1 bg-yellow-50 text-yellow-700 text-xs rounded-full border border-yellow-200">
+                                  💛 Bon match
+                                </span>
+                              )}
+                              {item.compatibilityPercentage < 60 && (
+                                <span className="px-2 py-1 bg-orange-50 text-orange-700 text-xs rounded-full border border-orange-200">
+                                  🧡 Match acceptable
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="mt-3 flex gap-2">
+                              <button
+                                onClick={() => {
+                                  setColocDetail(item);
+                                  setColocDetailOpen(true);
+                                }}
+                                className="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700"
+                              >
+                                Voir profil
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {activeTab === "coloc" && (
@@ -1483,8 +1919,88 @@ export default function DashboardPage() {
           }}
         />
         )}
+
+        {/* Modal de détail du profil colocataire pour l'onglet Match */}
+        {colocDetailOpen && colocDetail && (
+          <div
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setColocDetailOpen(false); }}
+          >
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+              <button
+                onClick={() => setColocDetailOpen(false)}
+                className="absolute top-3 right-3 text-slate-600 hover:text-slate-900"
+                aria-label="Fermer"
+              >
+                ✖
+              </button>
+              <h3 className="text-xl font-semibold mb-4">Profil colocataire</h3>
+              <div className="flex flex-col gap-4">
+                <div className="flex gap-4 items-start">
+                  <div className="flex-shrink-0 w-32 h-32">
+                    <Image
+                      src={colocDetail.imageUrl || defaultColocImg}
+                      alt="Photo de profil"
+                      width={128}
+                      height={128}
+                      className="w-32 h-32 object-cover rounded-lg border"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-2xl font-bold">
+                      {colocDetail.nom || "Profil colocataire"}
+                    </div>
+                    <div className="text-slate-700">
+                      {colocDetail.age ? `${colocDetail.age} ans` : ""} 
+                      {colocDetail.profession ? ` • ${colocDetail.profession}` : ""}
+                    </div>
+                    <div className="text-blue-600 font-semibold">
+                      {colocDetail.budget ? `Budget: ${colocDetail.budget} €/mois` : "Budget non renseigné"}
+                    </div>
+                  </div>
+                </div>
+                
+                {colocDetail.bioCourte && (
+                  <div className="text-slate-700">{colocDetail.bioCourte}</div>
+                )}
+                
+                {colocDetail.description && (
+                  <div>
+                    <div className="text-sm font-medium text-slate-700 mb-1">À propos</div>
+                    <p className="text-slate-800 whitespace-pre-line">{colocDetail.description}</p>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setColocDetailOpen(false)}
+                    className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+// Composant principal avec Suspense boundary
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement du tableau de bord...</p>
+        </div>
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
   );
 }
 

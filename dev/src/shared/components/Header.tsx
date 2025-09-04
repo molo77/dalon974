@@ -53,17 +53,25 @@ export default function Header() {
           </Link>
           
           {user && (
-            <Link 
-              href="/messages" 
-              className="hover:underline relative flex items-center gap-1"
-            >
-              Messages
-              {unreadCount > 0 && (
-                <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
-              )}
-            </Link>
+            <>
+              <Link 
+                href="/dashboard?tab=messages" 
+                className="hover:underline relative flex items-center gap-1"
+              >
+                Messages
+                {unreadCount > 0 && (
+                  <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </Link>
+              <Link 
+                href="/dashboard?tab=match" 
+                className="hover:underline flex items-center gap-1"
+              >
+                💕 Match
+              </Link>
+            </>
           )}
 
           {user ? (
@@ -139,18 +147,27 @@ export default function Header() {
           </Link>
           
           {user && (
-            <Link 
-              href="/messages" 
-              className="hover:underline flex items-center gap-2" 
-              onClick={toggleMobile}
-            >
-              Messages
-              {unreadCount > 0 && (
-                <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
-              )}
-            </Link>
+            <>
+              <Link 
+                href="/dashboard?tab=messages" 
+                className="hover:underline flex items-center gap-2" 
+                onClick={toggleMobile}
+              >
+                Messages
+                {unreadCount > 0 && (
+                  <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </Link>
+              <Link 
+                href="/dashboard?tab=match" 
+                className="hover:underline flex items-center gap-1" 
+                onClick={toggleMobile}
+              >
+                💕 Match
+              </Link>
+            </>
           )}
 
           {user ? (

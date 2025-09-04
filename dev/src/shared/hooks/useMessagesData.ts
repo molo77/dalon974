@@ -1,4 +1,4 @@
-import { useMessages } from "@/contexts/MessagesContext";
+import { useMessages } from "@/shared/MessagesContext";
 
 export default function useMessagesData(params: {
   user: any;
