@@ -37,7 +37,7 @@ export default function MaintenanceAlert({
       setIsHealthy(data.status === 'healthy');
       setHealthStatus(data);
       setErrorMessage(data.database?.error || null);
-    } catch (error) {
+    } catch {
       setIsHealthy(false);
       setErrorMessage('Erreur de connexion');
     }

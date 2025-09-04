@@ -52,14 +52,14 @@ export default function ColocProfileCard({
   const dateLabel = formatDate(createdAt);
   return (
     <div
-      className="block w-full cursor-pointer"
+      className="block w-full cursor-pointer relative -z-10"
       role="button"
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onClick && onClick(e);
+          if (onClick) onClick(e);
         }
       }}
     >

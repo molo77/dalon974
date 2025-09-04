@@ -23,7 +23,8 @@ function getIpFromHeaders(h: Record<string, string | string[] | undefined>) {
 }
 
 const config = {
-  adapter: PrismaAdapter(prisma) as any,
+  // Adaptateur Prisma pour le provider Email
+  adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" as const },
   providers: [
     Credentials({

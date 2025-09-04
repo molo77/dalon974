@@ -53,6 +53,8 @@ export default function HomePage() {
   const isAdmin = (session as any)?.user?.role === 'admin';
   const [editAnnonce, setEditAnnonce] = useState<any|null>(null);
   const [annonceDetail, setAnnonceDetail] = useState<any|null>(null);
+  const [annonceDetailOpen, setAnnonceDetailOpen] = useState(false);
+  const [annonceDetailLoading, setAnnonceDetailLoading] = useState(false);
   const [deleteAnnonceId, setDeleteAnnonceId] = useState<string|null>(null);
   const [editColoc, setEditColoc] = useState<any|null>(null);
   const [deleteColocId, setDeleteColocId] = useState<string|null>(null);
@@ -176,11 +178,11 @@ export default function HomePage() {
   const [selectionSource, setSelectionSource] = useState<"map" | "zones" | "input" | null>(null);
   const [countAnnoncesTotal, setCountAnnoncesTotal] = useState<number | null>(null);
   const [countProfilsTotal, setCountProfilsTotal] = useState<number | null>(null);
-  const [countFiltered, setCountFiltered] = useState<number | null>(null);
+  const [_countFiltered, setCountFiltered] = useState<number | null>(null);
   const pageLimit = 20;
   const offsetRef = useRef<number>(0);
   // Permettre de masquer/afficher la barre de filtres
-  const [filtersCollapsed, setFiltersCollapsed] = useState<boolean>(false);
+  const [_filtersCollapsed, setFiltersCollapsed] = useState<boolean>(false);
 
   // Refs diverses
   const resultsTopRef = useRef<HTMLDivElement | null>(null);
@@ -508,7 +510,7 @@ export default function HomePage() {
       return toMsAny(b) - toMsAny(a);
     });
     return list;
-  }, [annonces, selectedParentSlugs, prixMax, sortBy, activeHomeTab, critAgeMin, critAgeMax, critProfession, surfaceMin, surfaceMax]);
+  }, [annonces, prixMax, sortBy, activeHomeTab, critAgeMin, critAgeMax, critProfession, surfaceMin, surfaceMax]);
 
   // Quand le filtrage se termine, restaurer la position de scroll initiale
   useEffect(() => {
@@ -596,7 +598,7 @@ export default function HomePage() {
     }, { root: null, rootMargin: '200px', threshold: 0 });
     io.observe(el);
     return () => io.disconnect();
-  }, [hasMore, loadingMore, filtering, activeHomeTab, sortBy, prixMax, ville, codePostal, communesSelected.length, critAgeMin, critAgeMax, critProfession, surfaceMin, surfaceMax, loadAnnonces]);
+  }, [hasMore, loadingMore, filtering, activeHomeTab, sortBy, prixMax, ville, codePostal, communesSelected.length, critAgeMin, critAgeMax, critProfession, surfaceMin, surfaceMax, loadAnnonces, zoneFilters]);
 
   // Nettoyage global à l'unmount
   useEffect(() => {
@@ -604,6 +606,34 @@ export default function HomePage() {
      if (filtersDebounceRef.current) clearTimeout(filtersDebounceRef.current);
     };
   }, []);
+
+  // NOUVEAU: ouvrir le détail d'une annonce (via API)
+  const openAnnonceDetail = async (id: string) => {
+    try {
+      setAnnonceDetailOpen(true);
+      setAnnonceDetailLoading(true);
+      setAnnonceDetail(null);
+      const res = await fetch(`/api/annonces/${id}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setAnnonceDetail(data);
+      } else {
+        setAnnonceDetail(null);
+      }
+    } catch (e) {
+      console.error("[Accueil][AnnonceDetail] load error", e);
+      setAnnonceDetail(null);
+    } finally {
+      setAnnonceDetailLoading(false);
+    }
+  };
+
+  // NOUVEAU: fermer le détail d'une annonce
+  const closeAnnonceDetail = () => {
+    setAnnonceDetailOpen(false);
+    setAnnonceDetail(null);
+    setAnnonceDetailLoading(false);
+  };
 
   // NOUVEAU: ouvrir le détail du profil colocataire (via API)
   const openColocDetail = async (id: string) => {
@@ -850,6 +880,9 @@ export default function HomePage() {
                             zonesLabel={annonce.zonesLabel}
                             onEdit={isAdmin ? () => setEditAnnonce(annonce) : undefined}
                             onDelete={isAdmin ? () => setDeleteAnnonceId(annonce.id) : undefined}
+                            onClick={() => {
+                              openAnnonceDetail(annonce.id);
+                            }}
                           />
                         )}
                       </div>
@@ -904,7 +937,7 @@ export default function HomePage() {
                 {/* Message de fin de liste retiré à la demande */}
               </div>
               {/* Style local: empêche l'ancrage automatique qui peut déplacer la page quand du contenu est inséré */}
-              <style jsx>{`
+              <style>{`
                 .prevent-anchor { overflow-anchor: none; }
               `}</style>
 
@@ -1065,7 +1098,7 @@ export default function HomePage() {
                 </div>
 
                 {/* Contenu des filtres, masquable */}
-                <div id="filters-content" className={filtersCollapsed ? "hidden" : "block"}>
+                <div id="filters-content" className={_filtersCollapsed ? "hidden" : "block"}>
                 {/* Zones rapides (OU) tout en haut - visibles seulement en mode carte */}
                 {hasMode('map') && (
                   <div ref={zonesBlockRef}>
@@ -1162,7 +1195,7 @@ export default function HomePage() {
               </div>
 
               {/* Carte (sous la pub et, si visible, le bouton) */}
-              {showCommuneMap && !filtersCollapsed && (
+                              {showCommuneMap && !_filtersCollapsed && (
                 <div>
                   <div id="map-section" ref={mapWrapRef} className="rounded-2xl border border-slate-200 overflow-hidden">
                     <div className="bg-slate-50 px-3 py-2 border-b border-slate-200">
@@ -1193,7 +1226,7 @@ export default function HomePage() {
               )}
 
               {/* Bouton Réinitialiser filtre (placé sous la carte) */}
-              {!filtersCollapsed && (
+              {!_filtersCollapsed && (
                 <div className="mt-2">
                   <button
                     type="button"
@@ -1222,7 +1255,7 @@ export default function HomePage() {
               )}
 
               {/* Blocs de sélection — masqués si filtres repliés */}
-              {!filtersCollapsed && (zonesSelected.length > 0 || communesSelected.length > 0) && (
+              {!_filtersCollapsed && (zonesSelected.length > 0 || communesSelected.length > 0) && (
                 <div className="space-y-3 mt-3">
                   <div className="bg-white rounded-xl border border-slate-200 p-3">
                     <div className="flex items-center justify-between mb-2">
@@ -1352,6 +1385,103 @@ export default function HomePage() {
             </div>
           </div>
 
+
+          {/* Modal détail annonce */}
+          {activeHomeTab === "annonces" && annonceDetailOpen && (
+            <div
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+              onMouseDown={(e) => { if (e.target === e.currentTarget) closeAnnonceDetail(); }}
+            >
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 relative">
+                <button
+                  onClick={closeAnnonceDetail}
+                  className="absolute top-3 right-3 text-slate-600 hover:text-slate-900"
+                  aria-label="Fermer"
+                >
+                  ✖
+                </button>
+                <h3 className="text-xl font-semibold mb-4">Détail de l'annonce</h3>
+                {annonceDetailLoading ? (
+                  <p className="text-slate-600">Chargement…</p>
+                ) : !annonceDetail ? (
+                  <p className="text-slate-600">Annonce introuvable.</p>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    <div className="flex gap-4 items-start">
+                      <div className="flex-shrink-0 w-44">
+                        <div className="rounded-lg overflow-hidden bg-gray-100 w-44 h-44 relative">
+                          <ExpandableImage
+                            src={annonceDetail.imageUrl || defaultAnnonceImg}
+                            className="w-full h-full object-cover"
+                            alt={annonceDetail.titre || "Annonce"}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-2xl font-bold">
+                          {annonceDetail.titre || "Annonce sans titre"}
+                        </div>
+                        <div className="text-slate-700">
+                          {annonceDetail.ville || "-"}
+                          {typeof annonceDetail.prix === "number" && (
+                            <span className="ml-2 text-blue-700 font-semibold">• {annonceDetail.prix} €</span>
+                          )}
+                        </div>
+                        <div className="text-slate-600 text-sm mt-1">
+                          {annonceDetail.typeBien ? `${annonceDetail.typeBien}` : ""}
+                          {typeof annonceDetail.surface === "number" ? ` • ${annonceDetail.surface} m²` : ""}
+                          {typeof annonceDetail.nbChambres === "number" ? ` • ${annonceDetail.nbChambres} chambre(s)` : ""}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">
+                          {annonceDetail.createdAt ? `Créé le ${new Date(annonceDetail.createdAt).toLocaleDateString('fr-FR')}` : ""}
+                        </div>
+                      </div>
+                    </div>
+
+                    {annonceDetail.description && (
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <h4 className="font-semibold text-slate-800 mb-2">Description</h4>
+                        <div className="text-sm text-slate-700 whitespace-pre-wrap">{annonceDetail.description}</div>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          window.open(`/annonce/${annonceDetail.id}`, '_blank');
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        👁️ Voir en public
+                      </button>
+                      {isAdmin && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setEditAnnonce(annonceDetail);
+                              closeAnnonceDetail();
+                            }}
+                            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                          >
+                            ✏️ Modifier
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDeleteAnnonceId(annonceDetail.id);
+                              closeAnnonceDetail();
+                            }}
+                            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                          >
+                            🗑️ Supprimer
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Modal détail profil colocataire */}
           {activeHomeTab === "colocataires" && colocDetailOpen && (

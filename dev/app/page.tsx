@@ -219,6 +219,13 @@ export default function HomePage() {
     return zones;
   }, [parentSlugToName, GROUPES]);
 
+  // Mémoriser la fonction onChange pour éviter les re-rendus infinis
+  const handleCommuneZoneChange = useCallback((slugs: string[], zones: string[] = []) => {
+    setSelectionSource("map");
+    setCommunesSelected((prev) => (sameIds(prev, slugs) ? prev : slugs));
+    setZonesSelected((prev) => (sameIds(prev, zones) ? prev : zones));
+  }, []);
+
   const getDocParentSlug = useCallback((d: any) => {
     const s = d?.communeSlug ? String(d.communeSlug) : (d?.ville ? slugify(String(d.ville)) : "");
     return nameToParentSlug[s] || s;
@@ -878,6 +885,7 @@ export default function HomePage() {
                             createdAt={annonce.createdAt}
                             imageUrl={annonce.imageUrl || defaultAnnonceImg}
                             zonesLabel={annonce.zonesLabel}
+                            userId={annonce.userId}
                             onEdit={isAdmin ? () => setEditAnnonce(annonce) : undefined}
                             onDelete={isAdmin ? () => setDeleteAnnonceId(annonce.id) : undefined}
                             onClick={() => {
@@ -1209,11 +1217,7 @@ export default function HomePage() {
                   <CommuneZoneSelector
                     value={communesSelected}
                     computeZonesFromSlugs={computeZonesFromSlugs}
-                    onChange={(slugs, zones = []) => {
-                      setSelectionSource("map");
-                      setCommunesSelected((prev) => (sameIds(prev, slugs as string[]) ? prev : (slugs as string[])));
-                      setZonesSelected((prev) => (sameIds(prev, zones as string[]) ? prev : (zones as string[])));
-                    }}
+                    onChange={handleCommuneZoneChange}
                     height={420}
                     className="w-full"
                     alwaysMultiSelect

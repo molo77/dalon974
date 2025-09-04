@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/authOptions';
+import { auth } from '@/lib/auth';
 
 // Import du script de nettoyage
-const { cleanupUnusedImages } = require('@/scripts/maintenance/cleanup-unused-images');
+import { cleanupUnusedImages } from '@/scripts/maintenance/cleanup-unused-images';
 
 export async function POST(request: NextRequest) {
   try {
     // Vérifier l'authentification admin
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session || (session.user as any)?.role !== 'admin') {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 401 });
     }
@@ -49,7 +48,7 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   try {
     // Vérifier l'authentification admin
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session || (session.user as any)?.role !== 'admin') {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 401 });
     }

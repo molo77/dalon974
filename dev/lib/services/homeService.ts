@@ -9,6 +9,7 @@ export type HomeAnnonce = {
   createdAt?: any;
   communeSlug?: string | null;
   photos?: string[] | null;
+  userId?: string | null;
 };
 
 export async function listAnnoncesAll(): Promise<HomeAnnonce[]> {

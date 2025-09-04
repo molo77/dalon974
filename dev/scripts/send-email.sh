@@ -29,3 +29,4 @@ else
     echo "Erreur lors de l'envoi de l'email à $EMAIL"
     exit 1
 fi
+

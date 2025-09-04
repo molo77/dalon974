@@ -1,0 +1,240 @@
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String?
+  name      String?
+  role      String?  // e.g. 'admin', 'user', etc.
+  providerId String?
+  displayName String?
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime? @db.Timestamp(6)
+
+  // NextAuth relations
+  accounts  Account[]
+  sessions  Session[]
+}
+model Message {
+  id            String   @id @default(uuid())
+  annonceId     String?
+  annonceOwnerId String?
+  senderId      String?
+  senderEmail   String?
+  content       String   @db.Text
+  createdAt     DateTime @default(now()) @db.Timestamp(6)
+  updatedAt     DateTime? @db.Timestamp(6)
+}
+// Prisma schema for migrating Firestore data to MySQL
+// Run with: DATABASE_URL="mysql://user:pass@localhost:3306/dalon974" npx prisma migrate dev --name init
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// NextAuth models (Prisma Adapter)
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model ColocProfile {
+  id           String        @id
+  userId       String?
+  title        String?       // titre générique (fallback)
+  nom          String?
+  ville        String?
+  budget       Int?
+  age          Int?
+  profession   String?
+  description  String?       @db.Text
+  imageUrl     String?       
+  photos       Json?         // keep photos array as JSON for compatibility
+  mainPhotoIdx Int?
+  communesSlugs Json?
+  zones        Json?
+  // Nouveaux champs pour les profils coloc
+  bioCourte    String?
+  genre        String?
+  langues      Json?
+  instagram    String?
+  telephone    String?
+  dateDispo    String?
+  // Préférences
+  prefGenre    String?
+  prefAgeMin   Int?
+  prefAgeMax   Int?
+  accepteFumeurs Boolean?
+  accepteAnimaux Boolean?
+  rythme       String?
+  proprete     String?
+  sportif      Boolean?
+  vegetarien   Boolean?
+  soirees      Boolean?
+  musique      String?
+  // Champs legacy
+  fumeur       Boolean?
+  animaux      Boolean?
+  quartiers    String?
+  interets     Json?
+  codePostal   String?
+  createdAt    DateTime?     @db.Timestamp(6)
+  updatedAt    DateTime?     @db.Timestamp(6)
+  images       ColocImage[]  @relation("coloc_images")
+}
+
+model ColocImage {
+  id             Int          @id @default(autoincrement())
+  url            String       @db.Text
+  filename       String?
+  createdAt      DateTime?    @db.Timestamp(6)
+  uploadedBy     String?
+  isMain         Boolean      @default(false)
+  size           Int?
+  type           String?
+  storagePath    String?
+  colocProfileId String
+  colocProfile   ColocProfile @relation(fields: [colocProfileId], references: [id], name: "coloc_images")
+}
+
+model Annonce {
+  id          String       @id
+  userId      String?
+  title       String?
+  description String?      @db.Text
+  imageUrl    String?
+  photos      Json?
+  mainPhotoIdx Int?
+  // Champs supplémentaires pour l'app
+  ville       String?
+  prix        Int?
+  surface     Int?
+  nbChambres  Int?
+  equipements String?
+  // Attributs détaillés normalisés
+  typeBien            String?
+  meuble              Boolean?
+  nbPieces            Int?
+  nbSdb               Int?
+  natureBien          String?
+  caracteristiques    String?
+  exposition          String?
+  exterieur           String?
+  placesParking       Int?
+  disponibleAPartir   String?
+  typeLocation        String?
+  nombreColocataires  Int?
+  statutFumeur        String?
+  // Source de l'annonce (ex: 'lbc' pour Leboncoin)
+  source              String?
+  createdAt   DateTime?    @db.Timestamp(6)
+  updatedAt   DateTime?    @db.Timestamp(6)
+  images      AnnonceImage[]
+}
+
+model AnnonceImage {
+  id         Int      @id @default(autoincrement())
+  url        String   @db.Text
+  filename   String?
+  createdAt  DateTime? @db.Timestamp(6)
+  uploadedBy String?
+  isMain     Boolean  @default(false)
+  size       Int?
+  type       String?
+  storagePath String?
+  annonceId  String
+  annonce    Annonce  @relation(fields: [annonceId], references: [id])
+}
+
+model ColocAutosaveQueue {
+  id        Int      @id @default(autoincrement())
+  uid       String
+  payload   Json
+  createdAt DateTime @default(now())
+  // processed flag could be added if you prefer soft-delete
+}
+
+// Publicités Google AdSense administrables
+model AdUnit {
+  id                 String   @id @default(uuid())
+  name               String
+  placementKey       String   // ex: "home.initial.belowHero", "listing.inline.1"
+  slot               String   // data-ad-slot
+  format             String?  // ex: "auto"
+  fullWidthResponsive Boolean  @default(true)
+  height             Int?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now()) @db.Timestamp(6)
+  updatedAt          DateTime? @db.Timestamp(6)
+
+  @@index([placementKey])
+  @@index([isActive])
+}
+
+// Configuration clé/valeur du scraper (variables LBC_ dynamiques)
+model ScraperSetting {
+  key       String   @id
+  value     String?
+  updatedAt DateTime @updatedAt @db.Timestamp(6)
+}
+
+// Historique d'exécution du scraper
+model ScraperRun {
+  id             String   @id @default(cuid())
+  startedAt      DateTime @default(now()) @db.Timestamp(6)
+  finishedAt     DateTime? @db.Timestamp(6)
+  status         String?  // running | success | error
+  totalCollected Int?
+  totalUpserts   Int?
+  detailLimit    Int?
+  rawLog         String?  @db.LongText
+  errorMessage   String? @db.Text
+  createdCount   Int?
+  updatedCount   Int?
+  skippedRecentCount Int?
+  cooldownHours  Float?
+  progress       Float?   // 0..1 progression temps réel
+  currentStep    String?  // Étape actuelle (ex: "Étape 2/5")
+  currentMessage String?  // Message détaillé de l'étape
+  childPid       Int?     // PID du process enfant pour annulation
+  config         Json?    // Configuration utilisée pour ce run
+  createdAt      DateTime @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime? @db.Timestamp(6)
+
+  @@index([startedAt])
+  @@index([status])
+}

@@ -97,13 +97,22 @@ function LoginContent() {
                 className="border rounded px-3 py-2"
                 required
               />
-              <button
+                            <button
                 type="submit"
                 disabled={loading}
                 className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-60"
               >
                 Se connecter
               </button>
+              <div className="text-center mt-2">
+                <button
+                  type="button"
+                  onClick={() => router.push("/reset-password")}
+                  className="text-sm text-blue-600 hover:text-blue-700 underline"
+                >
+                  Mot de passe oublié ?
+                </button>
+              </div>
             </form>
           )}
         </div>

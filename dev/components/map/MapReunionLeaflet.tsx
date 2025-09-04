@@ -96,18 +96,28 @@ export default function MapReunionLeaflet({
     return () => { mounted = false; };
   }, []);
 
-  // Notifier sélection (seulement si elle change réellement)
+  // Notifier sélection (seulement si elle change réellement et vient d'une interaction utilisateur)
   const lastSentRef = useRef<string[] | null>(null);
+  const isUpdatingFromParentRef = useRef(false);
+  
   useEffect(() => {
     const arr = Array.from(selected);
     const prev = lastSentRef.current;
     const same = prev && prev.length === arr.length && prev.every((v, i) => v === arr[i]);
     if (same) return;
+    
+    // Ne pas notifier si la mise à jour vient du parent
+    if (isUpdatingFromParentRef.current) {
+      isUpdatingFromParentRef.current = false;
+      lastSentRef.current = arr;
+      return;
+    }
+    
     lastSentRef.current = arr;
     onChangeRef.current?.(arr);
   }, [selected]);
 
-  // Sync contrôlé: si le parent fournit selected, on aligne l’état interne
+  // Sync contrôlé: si le parent fournit selected, on aligne l'état interne
   useEffect(() => {
     if (!selectedProp) return;
     // Normalise via le mapping alt->canon (aligne avec les IDs des polygones)
@@ -118,7 +128,10 @@ export default function MapReunionLeaflet({
     );
     // évite les setState inutiles
     const same = incoming.size === selected.size && Array.from(incoming).every((s) => selected.has(s));
-    if (!same) setSelected(incoming);
+    if (!same) {
+      isUpdatingFromParentRef.current = true; // Marquer que la mise à jour vient du parent
+      setSelected(incoming);
+    }
   }, [selectedProp, canon, selected]);
 
   // Quand les features arrivent (ou changent), re-normaliser la sélection existante

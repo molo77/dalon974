@@ -1,7 +1,10 @@
 // NOTE: Ces services sont appelés côté client. Utiliser les routes API Next (serveur) pour accéder à Prisma.
 
 export async function listUsers() {
-  const res = await fetch('/api/admin/users', { cache: 'no-store' });
+  const res = await fetch('/api/admin/users', { 
+    cache: 'no-store',
+    credentials: 'include'
+  });
   if (!res.ok) throw new Error('Erreur API users');
   return await res.json();
 }
@@ -9,7 +12,10 @@ export async function listUsers() {
 // Récupération du rôle via l’API NextAuth session (mieux) ou une route dédiée si nécessaire.
 export async function getUserRole(_uid: string): Promise<string | null> {
   try {
-    const res = await fetch('/api/auth/session', { cache: 'no-store' });
+    const res = await fetch('/api/auth/session', { 
+      cache: 'no-store',
+      credentials: 'include'
+    });
     if (!res.ok) return null;
     const data = await res.json();
     return (data?.user?.role as string) || null;
@@ -22,18 +28,31 @@ export async function ensureUserDoc(_uid: string, _data: { email: string; displa
 }
 
 export async function createUserDoc(data: { email: string; displayName?: string; role: string; ville?: string; telephone?: string }) {
-  const res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  const res = await fetch('/api/admin/users', { 
+    method: 'POST', 
+    headers: { 'Content-Type': 'application/json' }, 
+    body: JSON.stringify(data),
+    credentials: 'include'
+  });
   if (!res.ok) throw new Error('Erreur API création utilisateur');
   return await res.json();
 }
 
 export async function updateUserDoc(id: string, patch: { email: string; displayName: string; role: string; ville?: string; telephone?: string }) {
-  const res = await fetch(`/api/admin/users/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+  const res = await fetch(`/api/admin/users/${id}`, { 
+    method: 'PATCH', 
+    headers: { 'Content-Type': 'application/json' }, 
+    body: JSON.stringify(patch),
+    credentials: 'include'
+  });
   if (!res.ok) throw new Error('Erreur API mise à jour utilisateur');
 }
 
 export async function deleteUserDoc(id: string) {
-  const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+  const res = await fetch(`/api/admin/users/${id}`, { 
+    method: 'DELETE',
+    credentials: 'include'
+  });
   if (!res.ok) throw new Error('Erreur API suppression utilisateur');
 }
 

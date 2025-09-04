@@ -1,8 +1,10 @@
 import { useState } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
+import { useSession } from "next-auth/react";
 
 const ImageLightbox = dynamic(() => import("@/components/modals/ImageLightbox"), { ssr: false });
+const MessageModal = dynamic(() => import("@/components/modals/MessageModal"), { ssr: false });
 
 type AnnonceProps = {
   id: string;
@@ -13,6 +15,7 @@ type AnnonceProps = {
   description?: string;
   createdAt?: any;
   userEmail?: string;
+  userId?: string; // ID de l'utilisateur propriétaire de l'annonce
   onDelete?: () => void;
   onEdit?: () => void;
   imageUrl: string;
@@ -36,6 +39,7 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
     description,
     createdAt,
   userEmail: _userEmail,
+    userId,
     onDelete,
     onEdit,
     imageUrl,
@@ -48,6 +52,9 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
   const thumbUrl = imageUrl || (zonesLabel ? defaultColocImg : defaultAnnonceImg);
   
   const [openImg, setOpenImg] = useState(false);
+  const [messageModalOpen, setMessageModalOpen] = useState(false);
+  const { data: session } = useSession();
+  const currentUser = session?.user as any;
 
   const formatDate = (v: any): string | null => {
     if (!v) return null;
@@ -170,6 +177,7 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
           <button
             onClick={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               onDelete();
             }}
             className="absolute top-2 right-2 text-red-500 hover:text-red-700"
@@ -182,6 +190,7 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
           <button
             onClick={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               onEdit();
             }}
             className="absolute top-2 right-10 text-gray-500 hover:text-black"
@@ -190,9 +199,38 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
             ✏️
           </button>
         )}
+        
+        {/* Bouton Envoyer un message */}
+        {userId && currentUser?.id !== userId && (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setMessageModalOpen(true);
+            }}
+            className="absolute bottom-2 right-2 bg-blue-600 text-white px-3 py-1 rounded-md text-sm hover:bg-blue-700 transition-colors"
+            title="Envoyer un message"
+          >
+            💬 Message
+          </button>
+        )}
       </div>
       {openImg && (
         <ImageLightbox images={[thumbUrl]} initialIndex={0} onClose={() => setOpenImg(false)} />
+      )}
+      
+      {/* Modal d'envoi de message */}
+      {messageModalOpen && userId && (
+        <MessageModal
+          annonceId={_id}
+          annonceOwnerId={userId}
+          isOpen={messageModalOpen}
+          onClose={() => setMessageModalOpen(false)}
+          onSent={() => {
+            setMessageModalOpen(false);
+            // Optionnel: afficher une notification de succès
+          }}
+        />
       )}
     </div>
   );

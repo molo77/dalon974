@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prismaClient";
-import { getServerSession } from "next-auth";
-import type { Session } from "next-auth";
-import { authOptions } from "../auth/[...nextauth]/authOptions";
+import { auth } from "@/lib/auth";
+// import type { Session } from "next-auth";
 
 export async function GET(req: Request) {
   try {
@@ -113,20 +112,44 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const session = (await getServerSession(authOptions as any)) as Session | null;
+            const session = await auth();
     const body = await req.json();
     
-    // Pour les tests admin, permettre la création sans authentification
+    console.log("[API][annonces][POST] Session:", session);
+    console.log("[API][annonces][POST] Session user:", session?.user);
+    
+    // Récupérer l'ID de l'utilisateur connecté
     let userId = null;
     if (session?.user?.email) {
-      userId = (session.user as any)?.id || null;
+      // Essayer plusieurs façons de récupérer l'ID
+      userId = (session.user as any)?.id || 
+               (session.user as any)?.sub || 
+               null;
+      
+      console.log("[API][annonces][POST] User ID from session:", userId);
+      
+      // Si l'ID n'est pas dans la session, le récupérer depuis la base de données
+      if (!userId) {
+        console.log("[API][annonces][POST] User ID not in session, fetching from DB");
+        const user = await prisma.user.findUnique({
+          where: { email: session.user.email }
+        });
+        userId = user?.id || null;
+        console.log("[API][annonces][POST] User ID from DB:", userId);
+      }
     } else {
       // Si pas d'utilisateur connecté, utiliser l'utilisateur admin par défaut
-      console.log("[API][annonces][POST] No session, using default admin user");
+      console.log("[API][annonces][POST] No session found, using default admin user");
       const adminUser = await prisma.user.findFirst({
         where: { role: 'admin' }
       });
-      userId = adminUser?.id || null;
+      if (adminUser) {
+        userId = adminUser.id;
+        console.log("[API][annonces][POST] Using default admin user:", adminUser.email);
+      } else {
+        console.error("[API][annonces][POST] No admin user found");
+        return NextResponse.json({ error: "No admin user available" }, { status: 500 });
+      }
     }
     const input: any = { ...body };
     // Map UI -> Prisma
@@ -142,9 +165,31 @@ export async function POST(req: Request) {
     const data: any = {};
     for (const k of allowed) if (k in input) data[k] = input[k];
     // Générer un id si manquant
-    if (!data.id) data.id = (globalThis.crypto?.randomUUID?.() || require('crypto').randomUUID());
+    if (!data.id) data.id = (globalThis.crypto?.randomUUID?.() || (await import('crypto')).randomUUID());
+    // Vérifier que l'utilisateur est connecté
+    if (!userId) {
+      console.error("[API][annonces][POST] No user ID found");
+      return NextResponse.json({ error: "User not authenticated" }, { status: 401 });
+    }
+    
+    // Vérifier que l'utilisateur existe et a un rôle
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, role: true }
+    });
+    
+    if (!user) {
+      console.error("[API][annonces][POST] User not found in database");
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    
+    console.log("[API][annonces][POST] User found:", { id: user.id, email: user.email, role: user.role });
+    
     // Attribuer l'utilisateur
     data.userId = userId;
+    console.log("[API][annonces][POST] Creating annonce with userId:", userId);
+    console.log("[API][annonces][POST] Session user:", session?.user);
+    
     // Timestamp de création si pas fourni
     if (!data.createdAt) data.createdAt = new Date();
 
