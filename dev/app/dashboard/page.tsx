@@ -841,6 +841,7 @@ export default function DashboardPage() {
                           description={annonce.description || "Aucune description disponible"}
                           surface={annonce.surface || 0}
                           subCommunesLabel={subLabel || undefined}
+                          onClick={() => openAnnonceDetail(annonce.id)}
                           onDelete={() => {
                             setSelectedAnnonceToDelete(annonce);
                             setConfirmModalOpen(true);

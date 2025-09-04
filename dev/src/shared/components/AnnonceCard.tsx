@@ -5,7 +5,6 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 
-const ImageLightbox = dynamic(() => import("./ImageLightbox"), { ssr: false });
 const MessageModal = dynamic(() => import("./MessageModal"), { ssr: false });
 
 type AnnonceProps = {
@@ -56,7 +55,6 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
   const defaultColocImg = "/images/coloc-holder.svg";
   const thumbUrl = imageUrl || (zonesLabel ? defaultColocImg : defaultAnnonceImg);
   
-  const [openImg, setOpenImg] = useState(false);
   const [messageModalOpen, setMessageModalOpen] = useState(false);
   const { data: session } = useSession();
   const currentUser = session?.user as any;
@@ -105,7 +103,6 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
               className="object-cover"
               sizes="112px"
               priority={priority}
-              onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); setOpenImg(true); }}
             />
           </div>
 
@@ -221,9 +218,6 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
           </button>
         )}
       </div>
-      {openImg && (
-        <ImageLightbox images={[thumbUrl]} initialIndex={0} onClose={() => setOpenImg(false)} />
-      )}
       
       {/* Modal d'envoi de message */}
       {messageModalOpen && userId && (
