@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useAuthGuard } from "@/hooks/useAuthGuard";
+import useAuthGuard from "@/hooks/useAuthGuard";
 
 interface AuthGuardProps {
   children: React.ReactNode;
