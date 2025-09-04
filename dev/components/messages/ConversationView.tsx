@@ -34,19 +34,39 @@ export default function ConversationView({ conversationId }: ConversationViewPro
   };
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setError('Utilisateur non authentifié');
+      setLoading(false);
+      return;
+    }
     
     const fetchMessages = async () => {
       try {
+        console.log('[ConversationView] Fetching messages for conversation:', conversationId);
+        console.log('[ConversationView] User ID:', user.id);
+        
         const response = await fetch(`/api/conversations/${conversationId}`);
+        console.log('[ConversationView] Response status:', response.status);
+        
         if (response.ok) {
           const data = await response.json();
+          console.log('[ConversationView] Messages received:', data.length);
           setMessages(data);
         } else {
-          setError('Erreur lors du chargement des messages');
+          const errorData = await response.json().catch(() => ({}));
+          console.error('[ConversationView] API Error:', response.status, errorData);
+          
+          if (response.status === 401) {
+            setError('Session expirée. Veuillez vous reconnecter.');
+          } else if (response.status === 403) {
+            setError('Accès non autorisé à cette conversation.');
+          } else {
+            setError(`Erreur lors du chargement des messages (${response.status})`);
+          }
         }
       } catch (err) {
-        setError('Erreur de connexion');
+        console.error('[ConversationView] Network error:', err);
+        setError('Erreur de connexion au serveur');
       } finally {
         setLoading(false);
       }
@@ -64,7 +84,11 @@ export default function ConversationView({ conversationId }: ConversationViewPro
     if (!newMessage.trim() || sending) return;
 
     setSending(true);
+    setError(null); // Clear previous errors
+    
     try {
+      console.log('[ConversationView] Sending message:', newMessage.trim());
+      
       const response = await fetch(`/api/conversations/${conversationId}`, {
         method: 'POST',
         headers: {
@@ -75,15 +99,28 @@ export default function ConversationView({ conversationId }: ConversationViewPro
         }),
       });
 
+      console.log('[ConversationView] Send response status:', response.status);
+
       if (response.ok) {
         const result = await response.json();
+        console.log('[ConversationView] Message sent successfully:', result.data);
         setMessages(prev => [...prev, result.data]);
         setNewMessage("");
       } else {
-        setError('Erreur lors de l\'envoi du message');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[ConversationView] Send error:', response.status, errorData);
+        
+        if (response.status === 401) {
+          setError('Session expirée. Veuillez vous reconnecter.');
+        } else if (response.status === 403) {
+          setError('Accès non autorisé à cette conversation.');
+        } else {
+          setError(`Erreur lors de l'envoi du message (${response.status})`);
+        }
       }
     } catch (err) {
-      setError('Erreur de connexion');
+      console.error('[ConversationView] Send network error:', err);
+      setError('Erreur de connexion au serveur');
     } finally {
       setSending(false);
     }
@@ -118,7 +155,15 @@ export default function ConversationView({ conversationId }: ConversationViewPro
   if (error) {
     return (
       <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-        <p className="text-red-600">{error}</p>
+        <p className="text-red-600 mb-3">{error}</p>
+        {(error.includes('Session expirée') || error.includes('non authentifié')) && (
+          <button
+            onClick={() => window.location.href = '/login'}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Se reconnecter
+          </button>
+        )}
       </div>
     );
   }
