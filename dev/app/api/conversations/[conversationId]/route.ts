@@ -6,10 +6,41 @@ import prisma from "@/lib/prismaClient";
 function parseConversationId(conversationId: string) {
   const parts = conversationId.split('-');
   
-  // Les deux dernières parties sont toujours les participants (UUIDs de 36 caractères)
-  const participant2 = parts[parts.length - 1]; // Dernier élément
-  const participant1 = parts[parts.length - 2]; // Avant-dernier élément
-  const annonceId = parts.slice(0, -2).join('-'); // Tout le reste est l'annonceId
+  // Les UUIDs ont toujours 36 caractères (8-4-4-4-12)
+  // On cherche les deux derniers UUIDs complets
+  let participant2 = '';
+  let participant1 = '';
+  let annonceId = '';
+  
+  // Parcourir depuis la fin pour trouver les UUIDs
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const currentPart = parts[i];
+    
+    // Si on n'a pas encore trouvé participant2, vérifier si c'est un UUID
+    if (!participant2) {
+      // Vérifier si les 4 dernières parties forment un UUID (8-4-4-4-12)
+      if (i >= 4) {
+        const potentialUuid = parts.slice(i - 4, i + 1).join('-');
+        if (potentialUuid.length === 36) {
+          participant2 = potentialUuid;
+          i = i - 4; // Skip les parties déjà utilisées
+          continue;
+        }
+      }
+    }
+    
+    // Si on a participant2 mais pas participant1, chercher le suivant
+    if (participant2 && !participant1) {
+      if (i >= 4) {
+        const potentialUuid = parts.slice(i - 4, i + 1).join('-');
+        if (potentialUuid.length === 36) {
+          participant1 = potentialUuid;
+          annonceId = parts.slice(0, i - 4).join('-');
+          break;
+        }
+      }
+    }
+  }
   
   return { annonceId, participant1, participant2 };
 }
