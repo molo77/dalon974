@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
+    const { searchParams: _searchParams } = new URL(request.url);
     const userId = session.user.id;
 
     // Récupérer toutes les conversations de l'utilisateur

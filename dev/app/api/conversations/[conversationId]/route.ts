@@ -14,7 +14,7 @@ function parseConversationId(conversationId: string) {
   
   // Parcourir depuis la fin pour trouver les UUIDs
   for (let i = parts.length - 1; i >= 0; i--) {
-    const currentPart = parts[i];
+    const _currentPart = parts[i];
     
     // Si on n'a pas encore trouvé participant2, vérifier si c'est un UUID
     if (!participant2) {

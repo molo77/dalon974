@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 interface ServerStatusCheckerProps {
@@ -18,7 +18,7 @@ export default function ServerStatusChecker({
   const [isChecking, setIsChecking] = useState(false);
   const router = useRouter();
 
-  const checkServerHealth = async () => {
+  const checkServerHealth = useCallback(async () => {
     if (isChecking) return;
     
     setIsChecking(true);
@@ -48,7 +48,7 @@ export default function ServerStatusChecker({
     } finally {
       setIsChecking(false);
     }
-  };
+  }, [isChecking, timeout, router]);
 
   useEffect(() => {
     // Vérification initiale
@@ -58,7 +58,7 @@ export default function ServerStatusChecker({
     const interval = setInterval(checkServerHealth, checkInterval);
 
     return () => clearInterval(interval);
-  }, [checkInterval, timeout]);
+  }, [checkInterval, timeout, checkServerHealth]);
 
   // Si le serveur n'est pas sain, ne pas rendre les enfants
   if (!isServerHealthy) {

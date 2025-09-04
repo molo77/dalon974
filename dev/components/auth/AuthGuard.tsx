@@ -18,7 +18,7 @@ export default function AuthGuard({
   fallback,
   onUnauthorized 
 }: AuthGuardProps) {
-  const { user, loading, isAuthenticated, isReady } = useAuthGuard({
+  const { loading, isAuthenticated, isReady } = useAuthGuard({
     redirectTo,
     requireAuth,
     onUnauthorized
