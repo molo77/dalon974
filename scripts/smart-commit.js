@@ -341,7 +341,8 @@ async function main() {
     // Afficher les changements
     logInfo('Changements qui vont être commités:');
     try {
-      execSync('git diff --cached --stat', { stdio: 'inherit' });
+      const changes = execSync('git diff --cached --stat', { encoding: 'utf8' });
+      console.log(changes);
     } catch (error) {
       logWarning('Impossible d\'afficher les changements');
     }
