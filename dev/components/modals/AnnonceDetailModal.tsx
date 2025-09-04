@@ -24,10 +24,16 @@ export default function AnnonceDetailModal({ open, onClose, annonce, isAdmin, on
   console.log("[AnnonceDetailModal] Annonce reçue:", { 
     id: annonce?.id, 
     userId: annonce?.userId, 
-    currentUserId: currentUser?.id 
+    currentUserId: currentUser?.id,
+    session: !!session,
+    annonceComplete: !!annonce
   });
 
-  if (!open || !annonce) return null;
+  // Vérifier que l'annonce a les données nécessaires
+  if (!open || !annonce || !annonce.id) {
+    console.log("[AnnonceDetailModal] Modal fermé ou annonce incomplète:", { open, annonce: !!annonce, annonceId: annonce?.id });
+    return null;
+  }
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 relative">
@@ -128,7 +134,7 @@ export default function AnnonceDetailModal({ open, onClose, annonce, isAdmin, on
       </div>
       
       {/* Modal d'envoi de message */}
-      {messageModalOpen && annonce.userId && (
+      {messageModalOpen && annonce.userId && currentUser?.id && (
         <MessageModal
           annonceId={annonce.id}
           annonceOwnerId={annonce.userId}

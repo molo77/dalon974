@@ -2,12 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prismaClient";
 
-// Fonction pour générer un ID de conversation unique
-function generateConversationId(annonceId: string, senderId: string, ownerId: string): string {
-  const participants = [senderId, ownerId].sort();
-  return `${annonceId}-${participants.join('-')}`;
-}
-
 // Fonction pour parser un ID de conversation
 function parseConversationId(conversationId: string) {
   const parts = conversationId.split('-');
