@@ -14,14 +14,12 @@ import ConfirmModal from "@/components/modals/ConfirmModal";
 import AnnonceDetailModal from "@/components/modals/AnnonceDetailModal";
 import { toast as appToast } from "@/components/ui/feedback/Toast";
 // import { v4 as uuidv4 } from "uuid";
-import MessageModal from "@/components/modals/MessageModal";
 import { listUserAnnoncesPage, addAnnonce, updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/lib/services/annonceService";
-import { listMessagesForOwner } from "@/lib/services/messageService";
 import { getUserRole } from "@/lib/services/userService";
 import Link from "next/link";
 import useCommuneSelection from "@/hooks/useCommuneSelection";
-import useMessagesData from "@/hooks/useMessagesData";
 import CommuneZoneSelector from "@/components/map/CommuneZoneSelector";
+import MessagesSection from "@/components/dashboard/MessagesSection";
 
 // Liste complète des communes de La Réunion
 const COMMUNES = [
@@ -281,9 +279,6 @@ export default function DashboardPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userDocLoaded, setUserDocLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<"annonces" | "messages" | "coloc">("annonces");
-  const [activeMsgTab, setActiveMsgTab] = useState<"received" | "sent">("received");
-  const [annonceTitles, setAnnonceTitles] = useState<Record<string, string>>({});
-  const [replyTo, setReplyTo] = useState<any | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
 
@@ -372,13 +367,6 @@ export default function DashboardPage() {
       pickOfficialVilleFromInput,
     });
 
-  const { messages, sentMessages } = useMessagesData({
-    user,
-    firestoreError: null,
-    userDocLoaded,
-    showToast,
-    handleFirestoreError: () => {},
-  });
 
   const loadUserDoc = useCallback(async (u: any) => {
     try {
@@ -519,25 +507,6 @@ export default function DashboardPage() {
     if (!loading && !user) router.push("/login");
   }, [user, loading, router]);
 
-  // Récupération des titres d'annonces liés aux messages (cache)
-  useEffect(() => {
-    if (!user || !userDocLoaded) return;
-    const allMessages = [...messages, ...sentMessages];
-    const annonceIds = Array.from(new Set(allMessages.map(m => m.annonceId).filter(Boolean)));
-    if (annonceIds.length === 0) return;
-
-    const fetchAnnonces = async () => {
-      try {
-        // Temporairement désactivé (Firestore supprimé)
-        // TODO: Implémenter avec l'API
-        setAnnonceTitles({});
-      } catch (err: any) {
-        console.error("[Dashboard] Erreur fetchAnnonceTitles:", err);
-      }
-    };
-
-    fetchAnnonces();
-  }, [messages, sentMessages, user, userDocLoaded]);
 
 
   // Pagination activée pour le chargement des annonces
@@ -567,38 +536,7 @@ export default function DashboardPage() {
   // Master checkbox (tout/cocher ou tout/décocher)
   const allSelected = visibleIds.length > 0 && selectedIds.length === visibleIds.length;
 
-  // NOUVEAU: états pour la gestion des messages
-  const [selectedReceivedIds, setSelectedReceivedIds] = useState<string[]>([]);
-  const [selectedSentIds, setSelectedSentIds] = useState<string[]>([]);
-  const [deletingMsgs, setDeletingMsgs] = useState(false);
-  const [confirmMsgBulkOpen, setConfirmMsgBulkOpen] = useState(false);
 
-  // Nettoyer la sélection quand les listes changent
-  useEffect(() => {
-    setSelectedReceivedIds(prev => prev.filter(id => messages.some(m => m.id === id)));
-  }, [messages]);
-  useEffect(() => {
-    setSelectedSentIds(prev => prev.filter(id => sentMessages.some(m => m.id === id)));
-  }, [sentMessages]);
-
-  // Sélection messages selon sous-onglet
-  const visibleMsgs = useMemo(() => (activeMsgTab === "received" ? messages : sentMessages), [activeMsgTab, messages, sentMessages]);
-  const selectedMsgIds = activeMsgTab === "received" ? selectedReceivedIds : selectedSentIds;
-  const allMsgsSelected = visibleMsgs.length > 0 && selectedMsgIds.length === visibleMsgs.length;
-  const setSelectedMsgIds = (updater: (prev: string[]) => string[]) => {
-    if (activeMsgTab === "received") setSelectedReceivedIds(updater);
-    else setSelectedSentIds(updater);
-  };
-  const toggleSelectMsg = (id: string) => {
-    setSelectedMsgIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
-  };
-  const selectAllVisibleMsgs = () => setSelectedMsgIds(() => visibleMsgs.map(m => m.id));
-  const deselectAllMsgs = () => setSelectedMsgIds(() => []);
-
-  const deleteMessageById = async (id: string) => {
-    // Temporairement désactivé (Firestore supprimé)
-    console.warn("Suppression de message temporairement désactivée");
-  };
 
   const openAnnonceDetail = async (annonceId: string) => {
     try {
@@ -615,30 +553,6 @@ export default function DashboardPage() {
     } catch (error) {
       console.error("[Dashboard] Erreur lors du chargement de l'annonce:", error);
       showToast("error", "Erreur lors du chargement de l'annonce");
-    }
-  };
-  const performBulkDeleteMsgs = async () => {
-    const toDelete = selectedMsgIds;
-    if (toDelete.length === 0) return;
-    setDeletingMsgs(true);
-    try {
-      await Promise.all(toDelete.map(id => deleteMessageById(id).catch(e => e)));
-      if (activeMsgTab === "received") setSelectedReceivedIds([]);
-      else setSelectedSentIds([]);
-      showToast("success", "Message(s) supprimé(s) ✅");
-    } catch {
-      showToast("error", "Erreur suppression des messages ❌");
-    } finally {
-      setDeletingMsgs(false);
-    }
-  };
-  const handleDeleteSingleMsg = async (id: string) => {
-    if (!window.confirm("Supprimer ce message ?")) return;
-    try {
-      await deleteMessageById(id);
-      showToast("success", "Message supprimé ✅");
-    } catch {
-      showToast("error", "Erreur lors de la suppression ❌");
     }
   };
 
@@ -927,192 +841,7 @@ export default function DashboardPage() {
         )}
 
         {activeTab === "messages" && (
-          <>
-            <h2 className="text-2xl font-bold mb-4">Messages</h2>
-
-            <div className="flex gap-2 mb-4">
-              <button
-                className={`px-4 py-2 rounded-md font-semibold transition ${activeMsgTab === "received" ? "bg-blue-600 text-white shadow" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-                onClick={() => setActiveMsgTab("received")}
-              >
-                Reçus
-              </button>
-              <button
-                className={`px-4 py-2 rounded-md font-semibold transition ${activeMsgTab === "sent" ? "bg-blue-600 text-white shadow" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-                onClick={() => setActiveMsgTab("sent")}
-              >
-                Envoyés
-              </button>
-            </div>
-
-            {/* Barre d’actions (Messages) */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={allMsgsSelected}
-                  onChange={() => (allMsgsSelected ? deselectAllMsgs() : selectAllVisibleMsgs())}
-                  className="w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem] transition-colors"
-                />
-                <span className="text-sm text-slate-700">Tout ({visibleMsgs.length})</span>
-              </label>
-              <button type="button" onClick={selectAllVisibleMsgs} className="border px-3 py-1.5 text-sm rounded hover:bg-slate-50">Tout sélectionner</button>
-              <button type="button" onClick={deselectAllMsgs} className="border px-3 py-1.5 text-sm rounded hover:bg-slate-50">Tout désélectionner</button>
-              <button
-                type="button"
-                onClick={() => setConfirmMsgBulkOpen(true)}
-                disabled={selectedMsgIds.length === 0 || deletingMsgs}
-                className="bg-rose-600 text-white px-3 py-1.5 text-sm rounded hover:bg-rose-700 disabled:opacity-60"
-              >
-                {deletingMsgs ? "Suppression..." : `Supprimer la sélection (${selectedMsgIds.length})`}
-              </button>
-            </div>
-
-            {activeMsgTab === "received" ? (
-              <>
-                {messages.length === 0 ? (
-                  <p className="text-gray-500">Aucun message reçu.</p>
-                ) : (
-                  <ul className="space-y-4">
-                    {messages.map((msg) => (
-                      <li key={msg.id} className="bg-white rounded shadow p-4">
-                        <div className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedReceivedIds.includes(msg.id)}
-                            onChange={() => toggleSelectMsg(msg.id)}
-                            className="mt-1 w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3 8.2 L6.2 11.4 L13 4.6%22/></svg>')] checked:bg-[length:0.85rem_0.85rem]"
-                          />
-                          <div className="flex-1">
-                            <div className="mb-1 text-gray-600 text-sm">
-                              <span className="font-medium">Annonce :</span>{" "}
-                              <button
-                                onClick={() => {
-                                  // Ouvrir le modal de détail de l'annonce
-                                  if (msg.annonceId) {
-                                    openAnnonceDetail(msg.annonceId);
-                                  }
-                                }}
-                                className="text-blue-600 underline hover:text-blue-700 cursor-pointer"
-                              >
-                                {annonceTitles[msg.annonceId] || "Voir l'annonce"}
-                              </button>
-                            </div>
-                            <div className="mb-2 text-gray-700">
-                              <span className="font-semibold">De :</span> {msg.fromEmail}
-                            </div>
-                            <div className="mb-2 text-gray-700">
-                              <span className="font-semibold">Message :</span>{" "}
-                              <span className="whitespace-pre-line">{msg.content}</span>
-                            </div>
-                            <div className="mb-2 text-gray-500 text-xs">
-                              {msg.createdAt?.seconds
-                                ? new Date(msg.createdAt.seconds * 1000).toLocaleString()
-                                : ""}
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
-                                onClick={() => setReplyTo(msg)}
-                              >
-                                Répondre
-                              </button>
-                              <button
-                                className="bg-rose-600 text-white px-3 py-1 rounded hover:bg-rose-700"
-                                onClick={() => handleDeleteSingleMsg(msg.id)}
-                              >
-                                Supprimer
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {replyTo && (
-                  <MessageModal
-                    annonceId={replyTo.annonceId}
-                    annonceOwnerId={replyTo.senderId}
-                    isOpen={!!replyTo}
-                    onClose={() => setReplyTo(null)}
-                    onSent={() => {
-                      setReplyTo(null);
-                      showToast("success", "Message envoyé ✅");
-                    }}
-                  />
-                )}
-              </>
-            ) : (
-              // Envoyés
-              <>
-                {sentMessages.length === 0 ? (
-                  <p className="text-gray-500">Aucun message envoyé.</p>
-                ) : (
-                  <ul className="space-y-4">
-                    {sentMessages.map((msg) => (
-                      <li key={msg.id} className="bg-white rounded shadow p-4">
-                        <div className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedSentIds.includes(msg.id)}
-                            onChange={() => toggleSelectMsg(msg.id)}
-                            className="mt-1 w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3 8.2 L6.2 11.4 L13 4.6%22/></svg>')] checked:bg-[length:0.85rem_0.85rem]"
-                          />
-                          <div className="flex-1">
-                            <div className="mb-1 text-gray-600 text-sm">
-                              <span className="font-medium">Annonce :</span>{" "}
-                              <button
-                                onClick={() => {
-                                  // Ouvrir le modal de détail de l'annonce
-                                  if (msg.annonceId) {
-                                    openAnnonceDetail(msg.annonceId);
-                                  }
-                                }}
-                                className="text-blue-600 underline hover:text-blue-700 cursor-pointer"
-                              >
-                                {annonceTitles[msg.annonceId] || "Annonce"}
-                              </button>
-                            </div>
-                            <div className="mb-2 text-gray-700">
-                              <span className="font-semibold">À :</span> Propriétaire de l&apos;annonce
-                            </div>
-                            <div className="mb-2 text-gray-700">
-                              <span className="font-semibold">Message :</span>{" "}
-                              <span className="whitespace-pre-line">{msg.content}</span>
-                            </div>
-                            <div className="mb-2 text-gray-500 text-xs">
-                              {msg.createdAt?.seconds
-                                ? new Date(msg.createdAt.seconds * 1000).toLocaleString()
-                                : ""}
-                            </div>
-                            <div>
-                              <button
-                                className="bg-rose-600 text-white px-3 py-1 rounded hover:bg-rose-700"
-                                onClick={() => handleDeleteSingleMsg(msg.id)}
-                              >
-                                Supprimer
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </>
-            )}
-
-            {/* Confirmation suppression multiple (messages) */}
-            <ConfirmModal
-              isOpen={confirmMsgBulkOpen}
-              onClose={() => setConfirmMsgBulkOpen(false)}
-              onConfirm={async () => {
-                await performBulkDeleteMsgs();
-                setConfirmMsgBulkOpen(false);
-              }}
-            />
-          </>
+          <MessagesSection />
         )}
 
         {activeTab === "coloc" && (
