@@ -21,6 +21,7 @@ type AnnonceProps = {
   imageUrl: string;
   // Optionnel: pour les profils colocataires, affiche un badge Zones
   zonesLabel?: string;
+  priority?: boolean; // Pour optimiser le LCP
   // NOUVEAU: sous-communes couvertes par les zones sélectionnées
   subCommunesLabel?: string;
   // Attributs enrichis
@@ -46,7 +47,9 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
     zonesLabel,
     subCommunesLabel,
     onClick,
+    priority = false,
   } = props;
+  
   const defaultAnnonceImg = "/images/annonce-holder.svg";
   const defaultColocImg = "/images/coloc-holder.svg";
   const thumbUrl = imageUrl || (zonesLabel ? defaultColocImg : defaultAnnonceImg);
@@ -78,7 +81,7 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
 
   return (
     <div
-      className="block w-full cursor-pointer relative -z-10"
+      className="block w-full cursor-pointer relative"
       role="button"
       tabIndex={0}
       onClick={onClick}
@@ -99,12 +102,13 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
               fill
               className="object-cover"
               sizes="112px"
+              priority={priority}
               onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); setOpenImg(true); }}
             />
           </div>
 
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-bold truncate">{titre}</h2>
+            <h2 className="text-lg font-bold truncate">{titre || "Titre manquant"}</h2>
             {zonesLabel ? (
               <div className="mt-1">
                 <span className="inline-block px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 border border-slate-200">
@@ -112,7 +116,7 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
                 </span>
               </div>
             ) : (
-              <p className="text-sm text-gray-600">📍 {ville}</p>
+              <p className="text-sm text-gray-600">📍 {ville || "Ville non renseignée"}</p>
             )}
             {subCommunesLabel && (
               <div className="mt-1">
@@ -126,26 +130,24 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
               <p className="text-blue-600 font-semibold truncate">
                 {prix ? `${prix} € / mois` : "Prix non renseigné"}
               </p>
-              {surface && (
-                <p className="text-sm text-gray-700">
-                  <span className="font-semibold">Surface :</span> {surface} m²
-                </p>
-              )}
+              <p className="text-sm text-gray-700">
+                <span className="font-semibold">Surface :</span> {surface ? `${surface} m²` : "Non renseignée"}
+              </p>
             </div>
 
             {dateLabel && (
               <p className="text-xs text-gray-500 mt-1">📅 {dateLabel}</p>
             )}
 
-            {description && (
-              <div className="text-sm text-gray-700 mt-2">
-                {(() => {
+            <div className="text-sm text-gray-700 mt-2">
+              <span className="font-semibold">Description :</span>{" "}
+              {description ? (
+                (() => {
                   const lines = description.split("\n");
                   const firstLines = lines.slice(0, 2);
                   const rest = lines.slice(2);
                   return (
                     <>
-                      <span className="font-semibold">Description :</span>{" "}
                       {firstLines.map((line, idx) => (
                         <span key={idx} className="block truncate">
                           {line}
@@ -158,9 +160,11 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
                       )}
                     </>
                   );
-                })()}
-              </div>
-            )}
+                })()
+              ) : (
+                <span className="text-gray-500 italic">Aucune description disponible</span>
+              )}
+            </div>
             {/* Badges attributs */}
             {(props.typeBien || props.meuble != null || props.nbPieces || props.nbChambres) ? (
               <div className="mt-2 flex flex-wrap gap-2">

@@ -17,6 +17,49 @@ Le système de versioning a été modifié pour permettre une gestion séparée 
 
 ## Commandes disponibles
 
+### 🚀 Smart Commit (NOUVEAU)
+
+Système de commit intelligent qui ne change la version QUE si le commit réussit :
+
+#### Scripts disponibles :
+
+1. **smart-commit.js** (interactif avec confirmation)
+   ```bash
+   node scripts/smart-commit.js commit [patch|minor|major]
+   ```
+   - Analyse les fichiers modifiés
+   - Génère un message intelligent
+   - Demande confirmation avant commit
+   - **Sécurité** : Ne change la version QUE si le commit réussit
+
+2. **quick-commit.sh** (rapide avec confirmation)
+   ```bash
+   ./scripts/quick-commit.sh [patch|minor|major] [message]
+   ```
+   - Commit rapide avec gestion de version
+   - Affiche les changements avant commit
+   - Restaure les versions en cas d'échec
+
+3. **commit-all.sh** (ultra-rapide)
+   ```bash
+   ./scripts/commit-all.sh [message]
+   ```
+   - Ajoute TOUS les fichiers modifiés
+   - Commit immédiat sans confirmation
+   - Version patch automatique
+
+4. **commit-help.sh** (aide)
+   ```bash
+   ./scripts/commit-help.sh
+   ```
+   - Affiche l'aide complète du système
+
+#### Avantages du Smart Commit :
+- ✅ **Sécurité** : Versions restaurées en cas d'échec
+- ✅ **Intelligence** : Messages générés automatiquement
+- ✅ **Flexibilité** : 3 niveaux de rapidité
+- ✅ **Fiabilité** : Pas de version cassée
+
 ### Commandes de base
 ```bash
 # Afficher les versions actuelles

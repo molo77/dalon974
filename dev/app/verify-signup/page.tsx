@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function VerifySignupPage() {
+function VerifySignupContent() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -227,5 +227,22 @@ export default function VerifySignupPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function VerifySignupPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div className="sm:mx-auto sm:w-full sm:max-w-md">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Dalon974</h1>
+            <h2 className="text-xl font-semibold text-gray-600">Chargement...</h2>
+          </div>
+        </div>
+      </div>
+    }>
+      <VerifySignupContent />
+    </Suspense>
   );
 }

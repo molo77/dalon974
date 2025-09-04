@@ -3,13 +3,17 @@
 export async function listUserAnnoncesPage(userId: string, opts?: { lastId?: string; pageSize?: number }) {
   const res = await fetch(`/api/annonces`, { cache: "no-store" });
   if (!res.ok) throw new Error("Erreur de récupération des annonces");
-  const items: any[] = await res.json();
-  const filtered = items.filter(a => a.userId === userId);
-  // Simple pagination côté client par id (à améliorer côté serveur si nécessaire)
+  const data = await res.json();
+  
+      // Filtrage côté client avec userId
+    const userAnnonces = data.items.filter((a: any) => a.userId === userId);
+  
+  // Pagination côté client
   const pageSize = opts?.pageSize ?? 10;
-  const startIndex = opts?.lastId ? filtered.findIndex(a => a.id === opts!.lastId) + 1 : 0;
-  const slice = filtered.slice(startIndex, startIndex + pageSize);
+  const startIndex = opts?.lastId ? userAnnonces.findIndex((a: any) => a.id === opts!.lastId) + 1 : 0;
+  const slice = userAnnonces.slice(startIndex, startIndex + pageSize);
   const newLast = slice.length ? slice[slice.length - 1].id : undefined;
+  
   return { items: slice, lastId: newLast };
 }
 

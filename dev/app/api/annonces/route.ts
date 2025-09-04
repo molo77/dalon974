@@ -95,7 +95,11 @@ export async function GET(req: Request) {
     }
     
     // Map title -> titre for UI compatibility
-    const mapped = finalList.map((a: any) => ({ ...a, titre: a.title ?? null }));
+    const mapped = finalList.map((a: any) => ({ 
+      ...a, 
+      titre: a.title || a.titre || null,
+      userId: a.userId || null
+    }));
     
     // Retourner les données avec le total
     return NextResponse.json({

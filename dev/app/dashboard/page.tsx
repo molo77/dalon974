@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, type MouseEvent } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { db, collection, query, where, orderBy, onSnapshot, doc, serverTimestamp, setDoc, deleteDoc, getDocs } from "@/lib/firebaseShim";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 // import ExpandableImage from "@/components/ui/ExpandableImage";
@@ -12,17 +11,17 @@ const ImageLightbox = dynamic(() => import("@/components/modals/ImageLightbox"),
 import AnnonceCard from "@/components/cards/AnnonceCard";
 import AnnonceModal from "@/components/modals/AnnonceModal";
 import ConfirmModal from "@/components/modals/ConfirmModal";
+import AnnonceDetailModal from "@/components/modals/AnnonceDetailModal";
 import { toast as appToast } from "@/components/ui/feedback/Toast";
 // import { v4 as uuidv4 } from "uuid";
 import MessageModal from "@/components/modals/MessageModal";
 import { listUserAnnoncesPage, addAnnonce, updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/lib/services/annonceService";
-// import { listMessagesForOwner } from "@/lib/services/messageService";
+import { listMessagesForOwner } from "@/lib/services/messageService";
 import { getUserRole } from "@/lib/services/userService";
 import Link from "next/link";
 import useCommuneSelection from "@/hooks/useCommuneSelection";
 import useMessagesData from "@/hooks/useMessagesData";
 import CommuneZoneSelector from "@/components/map/CommuneZoneSelector";
-// import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 // Liste complète des communes de La Réunion
 const COMMUNES = [
@@ -269,6 +268,7 @@ export default function DashboardPage() {
   const [editAnnonce, setEditAnnonce] = useState<any | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [selectedAnnonceToDelete, setSelectedAnnonceToDelete] = useState<any | null>(null);
+  const [selectedAnnonceForDetail, setSelectedAnnonceForDetail] = useState<any | null>(null);
   // local toasts state not used anymore; rely on global appToast
   const showToast = (type: "success" | "error" | "info", message: string) => {
     // Toaster global pour visibilité sur toute page
@@ -278,7 +278,6 @@ export default function DashboardPage() {
   const [lastDoc, setLastDoc] = useState<any | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [firestoreError, setFirestoreError] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userDocLoaded, setUserDocLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<"annonces" | "messages" | "coloc">("annonces");
@@ -363,25 +362,6 @@ export default function DashboardPage() {
   // Formulaire caché par défaut. Ouverture uniquement via actions (Créer/Modifier).
   // On ne force plus la fermeture automatique pendant la saisie.
 
-  const handleFirestoreError = useCallback((err: any, context: string) => {
-    console.error(`[Dashboard][${context}]`, err);
-    const code = err?.code;
-    // Cas spécifique: index requis (en cours de build)
-    if (code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
-      showToast("info", "Index Firestore en cours de création. Le tri peut être temporairement indisponible. Réessayez dans quelques minutes.");
-      return;
-    }
-  if (code === "permission-denied") {
-      let msg = "Accès refusé (permission-denied).";
-      msg += userRole
-        ? ` Rôle Firestore détecté: "${userRole}".`
-        : " Aucun rôle Firestore détecté (doc manquant / champ 'role').";
-      msg += " Vérifie les règles Firestore: utilisent-elles la lecture du doc users ou un custom claim que tu n'emploies plus ?";
-      setFirestoreError(msg);
-      showToast("error", msg);
-      setHasMore(false);
-  }
-  }, [userRole]);
 
   const { overrideVille, setOverrideVille, MAIN_COMMUNES_SORTED, SUB_COMMUNES_SORTED } =
     useCommuneSelection({
@@ -394,10 +374,10 @@ export default function DashboardPage() {
 
   const { messages, sentMessages } = useMessagesData({
     user,
-    firestoreError,
+    firestoreError: null,
     userDocLoaded,
     showToast,
-    handleFirestoreError,
+    handleFirestoreError: () => {},
   });
 
   const loadUserDoc = useCallback(async (u: any) => {
@@ -428,7 +408,7 @@ export default function DashboardPage() {
     return 0;
   }, []);
 
-  // Liste triée par date desc pour l’affichage
+  // Liste triée par date desc pour l'affichage
   const sortedAnnonces = useMemo(
   () => [...mesAnnonces].sort((a, b) => createdAtMs(b) - createdAtMs(a)),
   [mesAnnonces, createdAtMs]
@@ -443,7 +423,7 @@ export default function DashboardPage() {
   }, [visibleIds]);
 
   const loadAnnonces = useCallback(async () => {
-    if (!user || loadingMore || !hasMore || firestoreError) return;
+    if (!user || loadingMore || !hasMore) return;
 
     // Premier chargement: activer le spinner principal
     const isInitial = !lastDoc && mesAnnonces.length === 0;
@@ -451,13 +431,14 @@ export default function DashboardPage() {
 
     setLoadingMore(true);
     try {
-  const { items, lastId: newLast } = await listUserAnnoncesPage(user.uid, { lastId: lastDoc ?? undefined, pageSize: 10 });
+      const { items, lastId: newLast } = await listUserAnnoncesPage(user.id, { lastId: lastDoc ?? undefined, pageSize: 10 });
+      
 
       if (items.length) {
         setLastDoc(newLast);
         setMesAnnonces(prev => {
           const ids = new Set(prev.map(a => a.id));
-          const merged = [...prev, ...items.filter(i => !ids.has(i.id))];
+          const merged = [...prev, ...items.filter((i: any) => !ids.has(i.id))];
           // Tri par date desc après fusion
           merged.sort((a, b) => createdAtMs(b) - createdAtMs(a));
           return merged;
@@ -466,329 +447,37 @@ export default function DashboardPage() {
         setHasMore(false);
       }
     } catch (err:any) {
-      handleFirestoreError(err, "loadAnnonces");
+      console.error("[Dashboard] Erreur loadAnnonces:", err);
+      showToast("error", "Erreur lors du chargement des annonces");
     } finally {
       setLoadingMore(false);
       if (isInitial) setLoadingAnnonces(false);
     }
-  }, [user, loadingMore, hasMore, firestoreError, lastDoc, mesAnnonces, handleFirestoreError, createdAtMs]);
+  }, [user, loadingMore, hasMore, lastDoc, mesAnnonces, createdAtMs]);
 
   // Chargement du profil coloc depuis Firestore
 
-  // NOUVEAU: abonnement live au profil colocataire (création/maj en temps réel)
+  // Profil colocataire - temporairement désactivé (Firestore supprimé)
   useEffect(() => {
     if (activeTab !== "coloc" || !user) return;
-    setLoadingColoc(true);
-    const ref = doc(db, "colocProfiles", user.uid);
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        if (snap.exists()) {
-          const d: any = snap.data();
-          setHasColocDoc(true);
-          setColocNom(d.nom || "");
-          // ville supprimée du profil coloc
-          setColocBudget(typeof d.budget === "number" ? d.budget : "");
-          setColocImageUrl(d.imageUrl || "");
-          // load photos array (if present) into uploader state
-          if (Array.isArray(d.photos) && d.photos.length) {
-            setColocPhotos((d.photos as string[]).map((u: string) => ({ url: u, isMain: (d.imageUrl ? u === d.imageUrl : false) })));
-          } else {
-            setColocPhotos([]);
-          }
-          setColocDescription(d.description || "");
-          setColocAge(typeof d.age === "number" ? d.age : "");
-          setColocProfession(d.profession || "");
-          setColocFumeur(!!d.fumeur);
-          setColocAnimaux(!!d.animaux);
-          setColocDateDispo(d.dateDispo || "");
-          setColocQuartiers(d.quartiers || "");
-          setColocTelephone(d.telephone || "");
-          setColocZones(Array.isArray(d.zones) ? d.zones : []);
-          setColocCommunesSlugs(Array.isArray(d.communesSlugs) ? d.communesSlugs : []);
-          setColocGenre(d.genre || "");
-  
-          setColocBioCourte(d.bioCourte || "");
-          setColocLanguesCsv(Array.isArray(d.langues) ? d.langues.join(", ") : (d.langues || ""));
-          setColocInstagram(d.instagram || "");
-          setColocPhotosCsv(Array.isArray(d.photos) ? d.photos.join(", ") : (d.photos || ""));
-          setPrefGenre(d.prefGenre || "");
-          setPrefAgeMin(typeof d.prefAgeMin === "number" ? d.prefAgeMin : "");
-          setPrefAgeMax(typeof d.prefAgeMax === "number" ? d.prefAgeMax : "");
-          setAccepteFumeurs(!!d.accepteFumeurs);
-          setAccepteAnimaux(!!d.accepteAnimaux);
-          setRythme(d.rythme || "");
-          setProprete(d.proprete || "");
-          setSportif(!!d.sportif);
-          setVegetarien(!!d.vegetarien);
-          setSoirees(!!d.soirees);
-          setMusique(d.musique || "");
-        } else {
-          setHasColocDoc(false);
-          // valeurs par défaut (profil non créé)
-          setColocNom("");
-  // ville supprimée du profil coloc
-          setColocBudget("");
-          setColocImageUrl("");
-          setColocDescription("");
-          setColocAge("");
-          setColocProfession("");
-          setColocFumeur(false);
-          setColocAnimaux(false);
-          setColocDateDispo("");
-          setColocQuartiers("");
-          setColocTelephone("");
-          setColocZones([]);
-          setColocCommunesSlugs([]);
-          setColocGenre(""); setColocBioCourte(""); setColocLanguesCsv(""); setColocInstagram(""); setColocPhotosCsv("");
-          setPrefGenre(""); setPrefAgeMin(""); setPrefAgeMax(""); setAccepteFumeurs(false); setAccepteAnimaux(false);
-          setRythme(""); setProprete(""); setSportif(false); setVegetarien(false); setSoirees(false); setMusique("");
-        }
         setLoadingColoc(false);
         setColocReady(true);
-      },
-      (err) => {
-        handleFirestoreError(err, "colocProfile-live");
-        setLoadingColoc(false);
-      }
-    );
-    return () => {
-      try { unsub(); } catch {}
-      setColocReady(false);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    setHasColocDoc(false);
   }, [activeTab, user]);
 
-  // NOUVEAU: autosave silencieux (création si besoin) avec debounce
-  // track last saved payload to avoid redundant writes
-  const lastSavedRef = useRef<string | null>(null);
+  // Autosave colocataire - temporairement désactivé (Firestore supprimé)
 
-  // NOUVEAU: sauvegarde silencieuse (pas de toast/UI), merge + createdAt au premier enregistrement
-  const autoSaveColoc = useCallback(async () => {
-    if (!user) return;
-    try {
-  // reference kept internal to API route
-      const payload: any = {
-        uid: user.uid,
-        email: user.email || null,
-        nom: colocNom,
-  // ville supprimée du profil coloc
-        budget: typeof colocBudget === "number" ? colocBudget : null,
-        imageUrl: colocImageUrl,
-        description: colocDescription,
-        age: typeof colocAge === "number" ? colocAge : null,
-        profession: colocProfession,
-        fumeur: !!colocFumeur,
-        animaux: !!colocAnimaux,
-        dateDispo: colocDateDispo,
-        quartiers: colocQuartiers,
-        telephone: colocTelephone,
-        zones: colocZones,
-        communesSlugs: colocCommunesSlugs,
-        updatedAt: serverTimestamp(),
-        // Nouveaux champs
-        genre: colocGenre || undefined,
-        bioCourte: colocBioCourte || undefined,
-        langues: colocLanguesCsv ? colocLanguesCsv.split(",").map(s=>s.trim()).filter(Boolean) : undefined,
-        instagram: colocInstagram || undefined,
-  // photos: use uploader / stored array instead of CSV
-  photos: undefined,
-        prefGenre: prefGenre || undefined,
-        prefAgeMin: prefAgeMin !== "" ? Number(prefAgeMin) : undefined,
-        prefAgeMax: prefAgeMax !== "" ? Number(prefAgeMax) : undefined,
-        accepteFumeurs: !!accepteFumeurs,
-        accepteAnimaux: !!accepteAnimaux,
-        rythme: rythme || undefined,
-        proprete: proprete || undefined,
-        sportif: !!sportif,
-        vegetarien: !!vegetarien,
-        soirees: !!soirees,
-        musique: musique || undefined,
-        ...(hasColocDoc ? {} : { createdAt: serverTimestamp() }),
-      };
-      Object.keys(payload).forEach((k) => {
-        const v = (payload as any)[k];
-        if (
-          v === undefined ||
-          v === "" ||
-          v === null ||
-          (Array.isArray(v) && v.length === 0)
-        ) {
-          delete (payload as any)[k];
-        }
-      });
-      // avoid unnecessary writes: only enqueue autosave when payload changed
-      try {
-        const key = JSON.stringify(payload);
-        if (lastSavedRef.current === key) return;
-        // retrieve current user's ID token to authenticate the request
-        try {
-          await fetch('/api/coloc-autosave', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ payload }),
-          });
-          lastSavedRef.current = key;
-        } catch {
-          console.warn('[autoSaveColoc] enqueue failed');
-        }
-      } catch {
-        console.warn('[autoSaveColoc] payload serialisation failed');
-      }
-    } catch {
-      // silencieux
-    }
-  }, [user, colocNom, colocBudget, colocImageUrl, colocDescription, colocAge, colocProfession, colocFumeur, colocAnimaux, colocDateDispo, colocQuartiers, colocTelephone, colocZones, colocCommunesSlugs, colocGenre, colocBioCourte, colocLanguesCsv, colocInstagram, prefGenre, prefAgeMin, prefAgeMax, accepteFumeurs, accepteAnimaux, rythme, proprete, sportif, vegetarien, soirees, musique, hasColocDoc]);
-
-  // Déclenchement auto-save avec debounce (après déclaration pour éviter TDZ)
-  useEffect(() => {
-    if (!colocReady || activeTab !== "coloc" || !user) return;
-    const t = setTimeout(() => {
-      autoSaveColoc();
-    }, 2000); // increased debounce to reduce write frequency
-    return () => clearTimeout(t);
-  }, [
-    colocNom,
-  // ville supprimée du profil coloc
-    colocBudget,
-    colocImageUrl,
-    colocDescription,
-    colocAge,
-    colocProfession,
-    colocFumeur,
-    colocAnimaux,
-    colocDateDispo,
-    colocQuartiers,
-    colocTelephone,
-    colocZones,
-    colocCommunesSlugs,
-    colocGenre,
-    colocBioCourte,
-    colocLanguesCsv,
-    colocInstagram,
-    colocPhotosCsv,
-    prefGenre,
-    prefAgeMin,
-    prefAgeMax,
-    accepteFumeurs,
-    accepteAnimaux,
-    rythme,
-    proprete,
-    sportif,
-    vegetarien,
-    soirees,
-    musique,
-    colocReady,
-    activeTab,
-    user,
-    autoSaveColoc
-  ]);
+  // Autosave useEffect - temporairement désactivé (Firestore supprimé)
 
   const saveColocProfile = async () => {
-    if (!user) return;
-    setSavingColoc(true);
-    try {
-      const ref = doc(db, "colocProfiles", user.uid);
-      const payload: any = {
-        uid: user.uid,
-        email: user.email || null,
-        nom: colocNom,
-  // ville supprimée du profil coloc
-        budget: typeof colocBudget === "number" ? colocBudget : null,
-        imageUrl: colocImageUrl,
-        description: colocDescription,
-        age: typeof colocAge === "number" ? colocAge : null,
-        profession: colocProfession,
-        fumeur: !!colocFumeur,
-        animaux: !!colocAnimaux,
-        dateDispo: colocDateDispo,
-        quartiers: colocQuartiers,
-        telephone: colocTelephone,
-        zones: colocZones,
-        communesSlugs: colocCommunesSlugs,
-        updatedAt: serverTimestamp(),
-        // Nouveaux champs (mêmes conversions qu'autosave)
-        genre: colocGenre || undefined,
-        bioCourte: colocBioCourte || undefined,
-        langues: colocLanguesCsv ? colocLanguesCsv.split(",").map(s=>s.trim()).filter(Boolean) : undefined,
-        instagram: colocInstagram || undefined,
-  photos: colocPhotos && colocPhotos.length ? colocPhotos.map(p => p.url) : undefined,
-        prefGenre: prefGenre || undefined,
-        prefAgeMin: prefAgeMin !== "" ? Number(prefAgeMin) : undefined,
-        prefAgeMax: prefAgeMax !== "" ? Number(prefAgeMax) : undefined,
-        accepteFumeurs: !!accepteFumeurs,
-        accepteAnimaux: !!accepteAnimaux,
-        rythme: rythme || undefined,
-        proprete: proprete || undefined,
-        sportif: !!sportif,
-        vegetarien: !!vegetarien,
-        soirees: !!soirees,
-        musique: musique || undefined,
-        // ...existing cleanup & setDoc
-      };
-      // Nettoyage des champs vides/null/undefined (sauf booléens) et tableaux vides
-      Object.keys(payload).forEach((k) => {
-        const v = payload[k];
-        if (
-          v === undefined ||
-          v === "" ||
-          v === null ||
-          (Array.isArray(v) && v.length === 0)
-        ) {
-          delete payload[k];
-        }
-      });
-      await setDoc(ref, payload, { merge: true });
-      showToast("success", "Profil colocataire enregistré ✅");
-  // Masquer le formulaire après l'enregistrement
-  setColocEditing(false);
-    } catch (err: any) {
-      console.error("[Dashboard][saveColocProfile]", err);
-      showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de l'enregistrement ❌");
-    } finally {
+    // Temporairement désactivé (Firestore supprimé)
+    showToast("info", "Fonctionnalité colocataire temporairement désactivée");
       setSavingColoc(false);
-    }
   };
 
   const deleteColocProfile = async () => {
-    if (!user) return;
-    try {
-      // remove stored photos (meta + storage) when deleting profile
-      try {
-        const { deleteColocPhotoWithMeta } = await import("@/lib/photoService");
-        if (Array.isArray(colocPhotos) && colocPhotos.length) {
-          await Promise.all(colocPhotos.map(p => p.url ? deleteColocPhotoWithMeta(user.uid, p.url).catch(()=>{}) : Promise.resolve()));
-        }
-      } catch (e) {
-        console.warn('Erreur lors de la suppression des photos associées au profil', e);
-      }
-      await deleteDoc(doc(db, "colocProfiles", user.uid));
-      // Reset des états
-      setColocNom("");
-  // ville supprimée du profil coloc
-      setColocBudget("");
-      setColocImageUrl("");
-  setColocPhotos([]);
-      setColocDescription("");
-      setColocAge("");
-      setColocProfession("");
-      setColocFumeur(false);
-      setColocAnimaux(false);
-      setColocDateDispo("");
-      setColocQuartiers("");
-      setColocTelephone("");
-      setColocZones([]);
-      setColocCommunesSlugs([]);
-  setColocGenre(""); setColocBioCourte(""); setColocLanguesCsv(""); setColocInstagram(""); setColocPhotosCsv("");
-  setColocPhotos([]);
-      setPrefGenre(""); setPrefAgeMin(""); setPrefAgeMax(""); setAccepteFumeurs(false); setAccepteAnimaux(false);
-      setRythme(""); setProprete(""); setSportif(false); setVegetarien(false); setSoirees(false); setMusique("");
-  setColocEditing(false);
-      showToast("success", "Profil supprimé ✅");
-    } catch (err: any) {
-      console.error("[Dashboard][deleteColocProfile]", err);
-      showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de la suppression ❌");
-    }
+    // Temporairement désactivé (Firestore supprimé)
+    showToast("info", "Fonctionnalité colocataire temporairement désactivée");
   };
 
   // --- Profil colocataire: états ---
@@ -799,16 +488,18 @@ export default function DashboardPage() {
   }, [user, loadUserDoc]);
 
   useEffect(() => {
-    if (loading || firestoreError) return;
+    if (loading) return;
 
     if (!user) {
       router.push("/login");
       return;
     }
-    // Attendre d’avoir tenté de charger le doc user pour éviter permission-denied précoce
+
+    // Attendre d'avoir tenté de charger le doc user pour éviter permission-denied précoce
     if (!userDocLoaded) return;
+    
     loadAnnonces();
-  }, [user, loading, lastDoc, firestoreError, userDocLoaded, router, loadAnnonces]);
+  }, [user, loading, lastDoc, userDocLoaded, router, loadAnnonces]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -828,114 +519,28 @@ export default function DashboardPage() {
     if (!loading && !user) router.push("/login");
   }, [user, loading, router]);
 
-  // Récupération des titres d’annonces liés aux messages (cache)
+  // Récupération des titres d'annonces liés aux messages (cache)
   useEffect(() => {
-    if (!user || firestoreError || !userDocLoaded) return;
+    if (!user || !userDocLoaded) return;
     const allMessages = [...messages, ...sentMessages];
     const annonceIds = Array.from(new Set(allMessages.map(m => m.annonceId).filter(Boolean)));
     if (annonceIds.length === 0) return;
 
     const fetchAnnonces = async () => {
       try {
-        const q = query(
-          collection(db, "annonces"),
-          where("id", "in", annonceIds),
-        );
-        const snap: any = await getDocs(q as any);
-        const titles: Record<string, string> = {};
-        (snap.docs || []).forEach((d: any) => {
-          const data = d?.data ? d.data() : {};
-          if (data && data.titre) {
-            titles[d.id] = data.titre;
-          }
-        });
-        setAnnonceTitles(titles);
+        // Temporairement désactivé (Firestore supprimé)
+        // TODO: Implémenter avec l'API
+        setAnnonceTitles({});
       } catch (err: any) {
-        handleFirestoreError(err, "fetchAnnonceTitles");
+        console.error("[Dashboard] Erreur fetchAnnonceTitles:", err);
       }
     };
 
     fetchAnnonces();
-  }, [messages, sentMessages, user, firestoreError, userDocLoaded, handleFirestoreError]);
+  }, [messages, sentMessages, user, userDocLoaded]);
 
-  useEffect(() => {
-    if (!user || firestoreError || !userDocLoaded) return;
-    const unsubs: Array<() => void> = [];
-    setLoadingAnnonces(true);
 
-  const attach = (qAny: any, label: string, fallbackField: "uid" | "ownerId" | "userId" = "uid") => {
-      try {
-        const u = onSnapshot(
-          qAny,
-          (snap: { docs: any[]; }) => {
-            const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-            setMesAnnonces((prev) => {
-              const byId = new Map(prev.map((x) => [x.id, x]));
-              docs.forEach((m) => byId.set(m.id, { ...(byId.get(m.id) || {}), ...m }));
-              const arr = Array.from(byId.values());
-              arr.sort((a, b) => createdAtMs(b) - createdAtMs(a));
-              return arr;
-            });
-            setLoadingAnnonces(false);
-          },
-          (err) => {
-            if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
-              // Fallback sans orderBy: tri côté client
-              const u2 = onSnapshot(
-                query(collection(db, "annonces"), where(fallbackField, "==", user.uid)),
-                (snap2) => {
-                  const docs2 = snap2.docs.map((d) => ({ id: d.id, ...d.data() }));
-                  setMesAnnonces((prev) => {
-                    const byId = new Map(prev.map((x) => [x.id, x]));
-                    docs2.forEach((m) => byId.set(m.id, { ...(byId.get(m.id) || {}), ...m }));
-                    const arr = Array.from(byId.values());
-                    arr.sort((a, b) => createdAtMs(b) - createdAtMs(a));
-                    return arr;
-                  });
-                  setLoadingAnnonces(false);
-                }
-              );
-              unsubs.push(u2);
-            } else {
-              handleFirestoreError(err, "annonces-snapshot-" + label);
-              setLoadingAnnonces(false);
-            }
-          }
-        );
-        unsubs.push(u);
-      } catch (e) {
-        console.warn("[Dashboard][annonces] subscribe error", e);
-      }
-    };
-
-    // Essayer avec uid
-    attach(
-      query(collection(db, "annonces"), where("uid", "==", user.uid), orderBy("createdAt", "desc")),
-      "uid",
-      "uid"
-    );
-    // Essayer aussi avec ownerId (selon service)
-    attach(
-      query(collection(db, "annonces"), where("ownerId", "==", user.uid), orderBy("createdAt", "desc")),
-      "ownerId",
-      "ownerId"
-    );
-    // Et avec userId (champ utilisé à la création d'annonce)
-    attach(
-      query(collection(db, "annonces"), where("userId", "==", user.uid), orderBy("createdAt", "desc")),
-      "userId",
-      "userId"
-    );
-
-    return () => {
-      unsubs.forEach((u) => {
-        try { u(); } catch {}
-      });
-    };
-  }, [user, firestoreError, userDocLoaded, handleFirestoreError, createdAtMs]);
-
-  // Option: désactiver la pagination classique (le temps réel s’en charge)
-  useEffect(() => { setHasMore(false); }, []);
+  // Pagination activée pour le chargement des annonces
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
@@ -991,8 +596,26 @@ export default function DashboardPage() {
   const deselectAllMsgs = () => setSelectedMsgIds(() => []);
 
   const deleteMessageById = async (id: string) => {
-    // La suppression peut lever; inutile de l'envelopper dans un try/catch qui relance
-    await deleteDoc(doc(db, "messages", id));
+    // Temporairement désactivé (Firestore supprimé)
+    console.warn("Suppression de message temporairement désactivée");
+  };
+
+  const openAnnonceDetail = async (annonceId: string) => {
+    try {
+      console.log("[Dashboard] openAnnonceDetail appelée avec:", annonceId);
+      const response = await fetch(`/api/annonces/${annonceId}`);
+      if (response.ok) {
+        const annonce = await response.json();
+        console.log("[Dashboard] Annonce récupérée:", { id: annonce.id, userId: annonce.userId });
+        setSelectedAnnonceForDetail(annonce);
+      } else {
+        console.log("[Dashboard] Erreur API:", response.status);
+        showToast("error", "Impossible de charger les détails de l'annonce");
+      }
+    } catch (error) {
+      console.error("[Dashboard] Erreur lors du chargement de l'annonce:", error);
+      showToast("error", "Erreur lors du chargement de l'annonce");
+    }
   };
   const performBulkDeleteMsgs = async () => {
     const toDelete = selectedMsgIds;
@@ -1146,10 +769,13 @@ export default function DashboardPage() {
                     {(() => {
                       const parentSlug = annonce?.communeSlug || (annonce?.ville ? slugify(String(annonce.ville)) : undefined);
                       const subLabel = extractSubCommunesLabel([annonce?.titre, annonce?.description, annonce?.ville], parentSlug);
+                      
                       return (
                         <AnnonceCard
                           {...annonce}
                           imageUrl={annonce.imageUrl || defaultAnnonceImg}
+                          description={annonce.description || "Aucune description disponible"}
+                          surface={annonce.surface || 0}
                           subCommunesLabel={subLabel || undefined}
                           onDelete={() => {
                             setSelectedAnnonceToDelete(annonce);
@@ -1243,11 +869,21 @@ export default function DashboardPage() {
                   if (editAnnonce) {
                     await updateAnnonce(editAnnonce.id, annonceData);
                     showToast("success", "Annonce modifiée avec succès ✅");
+                    
+                    // Rafraîchir la liste des annonces après modification
+                    setMesAnnonces([]); // Reset pour forcer le rechargement
+                    setLastDoc(null); // Reset pagination
+                    setHasMore(true); // Réactiver le chargement
+                    loadAnnonces(); // Recharger les annonces
                   } else {
-                    console.log("[Dashboard] Création annonce - User:", user);
-                    console.log("[Dashboard] Création annonce - AnnonceData:", annonceData);
                     await addAnnonce({ uid: user!.uid, email: user!.email }, annonceData);
                     showToast("success", "Annonce créée avec succès ✅");
+                    
+                    // Rafraîchir la liste des annonces après création
+                    setMesAnnonces([]); // Reset pour forcer le rechargement
+                    setLastDoc(null); // Reset pagination
+                    setHasMore(true); // Réactiver le chargement
+                    loadAnnonces(); // Recharger les annonces
                   }
                 } catch (err: any) {
                   console.error("[Dashboard][AnnonceSubmit] Erreur Firestore brute :", err);
@@ -1273,6 +909,12 @@ export default function DashboardPage() {
                 try {
                   await deleteAnnonceSvc(selectedAnnonceToDelete.id);
                   showToast("success", "Annonce supprimée avec succès ✅");
+                  
+                  // Rafraîchir la liste des annonces après suppression
+                  setMesAnnonces([]); // Reset pour forcer le rechargement
+                  setLastDoc(null); // Reset pagination
+                  setHasMore(true); // Réactiver le chargement
+                  loadAnnonces(); // Recharger les annonces
                 } catch (err: any) {
                   console.error("[Dashboard][DeleteAnnonce] Erreur brute :", err);
                   showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de la suppression ❌");
@@ -1344,14 +986,17 @@ export default function DashboardPage() {
                           <div className="flex-1">
                             <div className="mb-1 text-gray-600 text-sm">
                               <span className="font-medium">Annonce :</span>{" "}
-                              <Link
-                                href={`/annonce/${msg.annonceId}`}
-                                className="text-blue-600 underline hover:text-blue-700"
-                                target="_blank"
-                                rel="noopener noreferrer"
+                              <button
+                                onClick={() => {
+                                  // Ouvrir le modal de détail de l'annonce
+                                  if (msg.annonceId) {
+                                    openAnnonceDetail(msg.annonceId);
+                                  }
+                                }}
+                                className="text-blue-600 underline hover:text-blue-700 cursor-pointer"
                               >
                                 {annonceTitles[msg.annonceId] || "Voir l'annonce"}
-                              </Link>
+                              </button>
                             </div>
                             <div className="mb-2 text-gray-700">
                               <span className="font-semibold">De :</span> {msg.fromEmail}
@@ -1388,7 +1033,7 @@ export default function DashboardPage() {
                 {replyTo && (
                   <MessageModal
                     annonceId={replyTo.annonceId}
-                    annonceOwnerId={replyTo.fromUserId}
+                    annonceOwnerId={replyTo.senderId}
                     isOpen={!!replyTo}
                     onClose={() => setReplyTo(null)}
                     onSent={() => {
@@ -1417,14 +1062,17 @@ export default function DashboardPage() {
                           <div className="flex-1">
                             <div className="mb-1 text-gray-600 text-sm">
                               <span className="font-medium">Annonce :</span>{" "}
-                              <Link
-                                href={`/annonce/${msg.annonceId}`}
-                                className="text-blue-600 underline hover:text-blue-700"
-                                target="_blank"
-                                rel="noopener noreferrer"
+                              <button
+                                onClick={() => {
+                                  // Ouvrir le modal de détail de l'annonce
+                                  if (msg.annonceId) {
+                                    openAnnonceDetail(msg.annonceId);
+                                  }
+                                }}
+                                className="text-blue-600 underline hover:text-blue-700 cursor-pointer"
                               >
                                 {annonceTitles[msg.annonceId] || "Annonce"}
-                              </Link>
+                              </button>
                             </div>
                             <div className="mb-2 text-gray-700">
                               <span className="font-semibold">À :</span> Propriétaire de l&apos;annonce
@@ -1943,6 +1591,17 @@ export default function DashboardPage() {
             ) : null)}
           </>
         )}
+
+        {/* Modal de détail d'annonce */}
+        <AnnonceDetailModal
+          annonce={selectedAnnonceForDetail}
+          open={!!selectedAnnonceForDetail}
+          onClose={() => {
+            console.log("[Dashboard] Fermeture du modal, selectedAnnonceForDetail:", selectedAnnonceForDetail);
+            setSelectedAnnonceForDetail(null);
+          }}
+          currentUser={user}
+        />
       </div>
     </div>
   );

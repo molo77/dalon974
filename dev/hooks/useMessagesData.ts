@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { listMessagesForOwner, listMessagesFromUser } from "@/lib/services/messageService";
+import { useMessages } from "@/contexts/MessagesContext";
 
 export default function useMessagesData(params: {
   user: any;
@@ -8,31 +7,14 @@ export default function useMessagesData(params: {
   showToast: (type: "success" | "error" | "info", msg: string) => void;
   handleFirestoreError: (err: any, ctx: string) => void;
 }) {
-  const { user, firestoreError, userDocLoaded } = params;
-  const [messages, setMessages] = useState<any[]>([]);
-  const [sentMessages, setSentMessages] = useState<any[]>([]);
+  // Utiliser le contexte centralisé pour les messages
+  const { messages, sentMessages, setMessages, setSentMessages, refreshMessages } = useMessages();
 
-  useEffect(() => {
-    if (!user || firestoreError || !userDocLoaded) return;
-    let stopped = false;
-    const load = async () => {
-      try {
-        const [inbox, sent] = await Promise.all([
-          listMessagesForOwner(user.id || user.uid),
-          listMessagesFromUser(user.id || user.uid),
-        ]);
-        if (!stopped) {
-          setMessages(inbox);
-          setSentMessages(sent);
-        }
-  } catch {
-        // silencieux
-      }
-    };
-    load();
-    const t = setInterval(load, 10000);
-    return () => { stopped = true; clearInterval(t); };
-  }, [user, firestoreError, userDocLoaded]);
-
-  return { messages, sentMessages, setMessages, setSentMessages };
+  return { 
+    messages, 
+    sentMessages, 
+    setMessages, 
+    setSentMessages,
+    refreshMessages // Exposer la fonction de rafraîchissement si nécessaire
+  };
 }

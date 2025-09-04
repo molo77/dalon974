@@ -1081,15 +1081,6 @@ export default function AdminPage() {
                             </button>
                             <button
                               type="button"
-                              title="Voir en public"
-                              aria-label="Voir en public"
-                              onClick={(e) => { e.stopPropagation(); window.open(`/annonce/${a.id}`, '_blank'); }}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-600 text-white hover:bg-green-700"
-                            >
-                              🌐
-                            </button>
-                            <button
-                              type="button"
                               title="Modifier"
                               aria-label="Modifier"
                               onClick={(e) => { e.stopPropagation(); setEditAnnonce(a); setModalOpen(true); }}

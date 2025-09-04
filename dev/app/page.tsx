@@ -623,6 +623,7 @@ export default function HomePage() {
       const res = await fetch(`/api/annonces/${id}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
+        console.log("[Accueil][AnnonceDetail] Données récupérées:", { id: data.id, userId: data.userId });
         setAnnonceDetail(data);
       } else {
         setAnnonceDetail(null);
@@ -849,13 +850,13 @@ export default function HomePage() {
                         onClick={(e) => {
                           if (activeHomeTab === "annonces") {
                             e.preventDefault();
-                            setAnnonceDetail(annonce);
+                            openAnnonceDetail(annonce.id);
                           }
                         }}
                         onKeyDown={(e) => {
                           if (activeHomeTab === "annonces" && (e.key === "Enter" || e.key === " ")) {
                             e.preventDefault();
-                            setAnnonceDetail(annonce);
+                            openAnnonceDetail(annonce.id);
                           }
                         }}
                       >
@@ -886,6 +887,7 @@ export default function HomePage() {
                             imageUrl={annonce.imageUrl || defaultAnnonceImg}
                             zonesLabel={annonce.zonesLabel}
                             userId={annonce.userId}
+                            priority={idx < 3} // Priorité pour les 3 premières annonces (above the fold)
                             onEdit={isAdmin ? () => setEditAnnonce(annonce) : undefined}
                             onDelete={isAdmin ? () => setDeleteAnnonceId(annonce.id) : undefined}
                             onClick={() => {
@@ -1390,102 +1392,7 @@ export default function HomePage() {
           </div>
 
 
-          {/* Modal détail annonce */}
-          {activeHomeTab === "annonces" && annonceDetailOpen && (
-            <div
-              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
-              onMouseDown={(e) => { if (e.target === e.currentTarget) closeAnnonceDetail(); }}
-            >
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 relative">
-                <button
-                  onClick={closeAnnonceDetail}
-                  className="absolute top-3 right-3 text-slate-600 hover:text-slate-900"
-                  aria-label="Fermer"
-                >
-                  ✖
-                </button>
-                <h3 className="text-xl font-semibold mb-4">Détail de l'annonce</h3>
-                {annonceDetailLoading ? (
-                  <p className="text-slate-600">Chargement…</p>
-                ) : !annonceDetail ? (
-                  <p className="text-slate-600">Annonce introuvable.</p>
-                ) : (
-                  <div className="flex flex-col gap-4">
-                    <div className="flex gap-4 items-start">
-                      <div className="flex-shrink-0 w-44">
-                        <div className="rounded-lg overflow-hidden bg-gray-100 w-44 h-44 relative">
-                          <ExpandableImage
-                            src={annonceDetail.imageUrl || defaultAnnonceImg}
-                            className="w-full h-full object-cover"
-                            alt={annonceDetail.titre || "Annonce"}
-                          />
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-2xl font-bold">
-                          {annonceDetail.titre || "Annonce sans titre"}
-                        </div>
-                        <div className="text-slate-700">
-                          {annonceDetail.ville || "-"}
-                          {typeof annonceDetail.prix === "number" && (
-                            <span className="ml-2 text-blue-700 font-semibold">• {annonceDetail.prix} €</span>
-                          )}
-                        </div>
-                        <div className="text-slate-600 text-sm mt-1">
-                          {annonceDetail.typeBien ? `${annonceDetail.typeBien}` : ""}
-                          {typeof annonceDetail.surface === "number" ? ` • ${annonceDetail.surface} m²` : ""}
-                          {typeof annonceDetail.nbChambres === "number" ? ` • ${annonceDetail.nbChambres} chambre(s)` : ""}
-                        </div>
-                        <div className="text-xs text-slate-500 mt-1">
-                          {annonceDetail.createdAt ? `Créé le ${new Date(annonceDetail.createdAt).toLocaleDateString('fr-FR')}` : ""}
-                        </div>
-                      </div>
-                    </div>
-
-                    {annonceDetail.description && (
-                      <div className="bg-slate-50 rounded-lg p-4">
-                        <h4 className="font-semibold text-slate-800 mb-2">Description</h4>
-                        <div className="text-sm text-slate-700 whitespace-pre-wrap">{annonceDetail.description}</div>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          window.open(`/annonce/${annonceDetail.id}`, '_blank');
-                        }}
-                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                      >
-                        👁️ Voir en public
-                      </button>
-                      {isAdmin && (
-                        <>
-                          <button
-                            onClick={() => {
-                              setEditAnnonce(annonceDetail);
-                              closeAnnonceDetail();
-                            }}
-                            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                          >
-                            ✏️ Modifier
-                          </button>
-                          <button
-                            onClick={() => {
-                              setDeleteAnnonceId(annonceDetail.id);
-                              closeAnnonceDetail();
-                            }}
-                            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-                          >
-                            🗑️ Supprimer
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          {/* Modal détail annonce - SUPPRIMÉ, remplacé par AnnonceDetailModal */}
 
           {/* Modal détail profil colocataire */}
           {activeHomeTab === "colocataires" && colocDetailOpen && (

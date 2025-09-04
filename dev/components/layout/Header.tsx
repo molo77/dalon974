@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useMessages } from "@/contexts/MessagesContext";
 
 export default function Header() {
   const { data } = useSession();
@@ -13,6 +14,7 @@ export default function Header() {
   const [isDevEnvironment, setIsDevEnvironment] = useState<boolean | null>(null);
   const router = useRouter();
   const isAdmin = (user?.role || (user as any)?.role) === "admin";
+  const { unreadCount, hasNewMessages } = useMessages();
 
   // Récupérer l'environnement au chargement du composant
   useEffect(() => {
@@ -49,13 +51,27 @@ export default function Header() {
           <Link href="/" className="hover:underline">
             Accueil
           </Link>
+          
+          {user && (
+            <Link 
+              href="/messages" 
+              className="hover:underline relative flex items-center gap-1"
+            >
+              Messages
+              {unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </Link>
+          )}
 
           {user ? (
             <>
               {/* Avatar et nom du compte cliquables */}
               <Link
                 href="/dashboard"
-                className="flex items-center gap-2 hover:underline"
+                className="flex items-center gap-2 hover:underline relative"
               >
                 {user.photoURL ? (
                   <Image
@@ -73,6 +89,18 @@ export default function Header() {
                 <span className="font-medium text-gray-700">
                   {user.displayName || user.email?.split("@")[0]}
                 </span>
+                
+                {/* Badge de notification */}
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+                
+                {/* Indicateur de nouveaux messages */}
+                {hasNewMessages && (
+                  <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full h-3 w-3 animate-pulse"></span>
+                )}
               </Link>
               <button
                 onClick={handleLogout}
@@ -109,17 +137,32 @@ export default function Header() {
           <Link href="/" className="hover:underline" onClick={toggleMobile}>
             Accueil
           </Link>
+          
+          {user && (
+            <Link 
+              href="/messages" 
+              className="hover:underline flex items-center gap-2" 
+              onClick={toggleMobile}
+            >
+              Messages
+              {unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </Link>
+          )}
 
           {user ? (
             <>
               {/* Avatar et nom du compte cliquables en mobile, texte personnalisé centré */}
               <Link
                 href="/dashboard"
-                className="flex flex-col items-center gap-1 mb-2 hover:underline"
+                className="flex flex-col items-center gap-1 mb-2 hover:underline relative"
                 onClick={toggleMobile}
                 style={{ minWidth: "120px" }}
               >
-                <div className="flex items-center justify-center gap-2">
+                <div className="flex items-center justify-center gap-2 relative">
                   {user.photoURL ? (
                     <Image
                       src={user.photoURL}
@@ -132,6 +175,18 @@ export default function Header() {
                     <span className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
                       {user.displayName?.charAt(0) || user.email?.charAt(0) || "?"}
                     </span>
+                  )}
+                  
+                  {/* Badge de notification mobile */}
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                  
+                  {/* Indicateur de nouveaux messages mobile */}
+                  {hasNewMessages && (
+                    <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full h-3 w-3 animate-pulse"></span>
                   )}
                 </div>
                 <span className="font-medium text-gray-700 text-center block">

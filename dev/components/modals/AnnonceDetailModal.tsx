@@ -1,5 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import Image from "next/image";
+import { useSession } from "next-auth/react";
+import dynamic from "next/dynamic";
+import { toast as appToast } from "@/components/ui/feedback/Toast";
+
+const MessageModal = dynamic(() => import("@/components/modals/MessageModal"), { ssr: false });
 
 interface AnnonceDetailModalProps {
   open: boolean;
@@ -11,6 +16,17 @@ interface AnnonceDetailModalProps {
 }
 
 export default function AnnonceDetailModal({ open, onClose, annonce, isAdmin, onEdit, onDelete }: AnnonceDetailModalProps) {
+  const [messageModalOpen, setMessageModalOpen] = useState(false);
+  const { data: session } = useSession();
+  const currentUser = session?.user as any;
+
+  // Debug: vérifier les données de l'annonce
+  console.log("[AnnonceDetailModal] Annonce reçue:", { 
+    id: annonce?.id, 
+    userId: annonce?.userId, 
+    currentUserId: currentUser?.id 
+  });
+
   if (!open || !annonce) return null;
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -26,7 +42,13 @@ export default function AnnonceDetailModal({ open, onClose, annonce, isAdmin, on
         <div className="flex flex-col gap-4">
           <div className="flex gap-4 items-start">
             <div className="flex-shrink-0 w-44 h-44 rounded-lg overflow-hidden bg-gray-100 relative">
-              <Image src={annonce.imageUrl} alt={annonce.titre} fill className="object-cover" sizes="176px" />
+              {annonce.imageUrl && annonce.imageUrl.trim() !== "" ? (
+                <Image src={annonce.imageUrl} alt={annonce.titre} fill className="object-cover" sizes="176px" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
+                  📷 Aucune image
+                </div>
+              )}
             </div>
             <div className="flex-1">
               <div className="text-2xl font-bold">{annonce.titre}</div>
@@ -62,28 +84,63 @@ export default function AnnonceDetailModal({ open, onClose, annonce, isAdmin, on
               </div>
             </div>
           )}
-          {isAdmin && (onEdit || onDelete) && (
-            <div className="flex justify-end gap-2">
-              {onEdit && (
-                <button
-                  onClick={() => { onEdit(annonce); onClose(); }}
-                  className="px-4 py-2 rounded bg-yellow-500 text-white hover:bg-yellow-600"
-                >
-                  Modifier
-                </button>
-              )}
-              {onDelete && (
-                <button
-                  onClick={() => { onDelete(annonce.id); onClose(); }}
-                  className="px-4 py-2 rounded bg-rose-600 text-white hover:bg-rose-700"
-                >
-                  Supprimer
-                </button>
-              )}
-            </div>
-          )}
+          <div className="flex justify-end gap-2">
+            {/* Bouton Envoyer un message */}
+            {annonce.userId && currentUser?.id !== annonce.userId && (
+              <button
+                onClick={() => setMessageModalOpen(true)}
+                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2"
+              >
+                💬 Envoyer un message
+              </button>
+            )}
+            
+            {/* Message informatif si pas connecté */}
+            {annonce.userId && !currentUser && (
+              <div className="px-4 py-2 rounded bg-gray-100 text-gray-600 text-sm">
+                Connectez-vous pour envoyer un message
+              </div>
+            )}
+            
+            {/* Boutons admin */}
+            {isAdmin && (onEdit || onDelete) && (
+              <>
+                {onEdit && (
+                  <button
+                    onClick={() => { onEdit(annonce); onClose(); }}
+                    className="px-4 py-2 rounded bg-yellow-500 text-white hover:bg-yellow-600"
+                  >
+                    Modifier
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    onClick={() => { onDelete(annonce.id); onClose(); }}
+                    className="px-4 py-2 rounded bg-rose-600 text-white hover:bg-rose-700"
+                  >
+                    Supprimer
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
+      
+      {/* Modal d'envoi de message */}
+      {messageModalOpen && annonce.userId && (
+        <MessageModal
+          annonceId={annonce.id}
+          annonceOwnerId={annonce.userId}
+          isOpen={messageModalOpen}
+          onClose={() => setMessageModalOpen(false)}
+          onSent={() => {
+            setMessageModalOpen(false);
+            // Afficher une notification de succès
+            appToast.success("Message envoyé avec succès !");
+          }}
+        />
+      )}
     </div>
   );
 }

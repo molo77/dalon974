@@ -234,6 +234,14 @@ function executeCommit(message) {
   }
 }
 
+// Fonction pour restaurer les versions en cas d'échec
+function restoreVersions(currentVersion) {
+  logWarning('Restauration des versions...');
+  updateVersion(DEV_PACKAGE_FILE, currentVersion);
+  updateVersion(PROD_PACKAGE_FILE, currentVersion);
+  logInfo('Versions restaurées à la version précédente');
+}
+
 // Fonction pour afficher l'aide
 function showHelp() {
   log('🚀 Smart Commit - Gestionnaire de version et commit intelligent', 'bright');
@@ -316,30 +324,13 @@ async function main() {
       process.exit(1);
     }
     
-    logInfo(`Mise à jour de la version: ${currentVersion} -> ${newVersion}`);
-    
-    // Mettre à jour les versions
-    if (!updateVersion(DEV_PACKAGE_FILE, newVersion)) {
-      process.exit(1);
-    }
-    
-    if (!updateVersion(PROD_PACKAGE_FILE, newVersion)) {
-      process.exit(1);
-    }
-    
-    // Ajouter les fichiers de version au staging
-    try {
-      execSync('git add dev/package.json package.json', { stdio: 'ignore' });
-      logInfo('Fichiers de version ajoutés au staging');
-    } catch (error) {
-      logWarning('Impossible d\'ajouter les fichiers de version au staging');
-    }
+    logInfo(`Nouvelle version prévue: ${currentVersion} -> ${newVersion}`);
     
     // Analyser les changements
     logInfo('Analyse des changements...');
     const analysis = analyzeChangeType(files);
     
-    // Générer le message de commit
+    // Générer le message de commit (avec la nouvelle version)
     const commitMessage = generateCommitMessage(newVersion, analysis, files);
     
     log('🤖 Message de commit généré:', 'bright');
@@ -359,8 +350,37 @@ async function main() {
     const confirmed = await askConfirmation('Voulez-vous exécuter ce commit ? (y/N): ');
     
     if (confirmed) {
+      // Mettre à jour les versions AVANT le commit
+      logInfo(`Mise à jour de la version: ${currentVersion} -> ${newVersion}`);
+      
+      if (!updateVersion(DEV_PACKAGE_FILE, newVersion)) {
+        logError('Impossible de mettre à jour la version dans dev/package.json');
+        process.exit(1);
+      }
+      
+      if (!updateVersion(PROD_PACKAGE_FILE, newVersion)) {
+        logError('Impossible de mettre à jour la version dans package.json');
+        // Restaurer la version dev en cas d'erreur
+        updateVersion(DEV_PACKAGE_FILE, currentVersion);
+        process.exit(1);
+      }
+      
+      // Ajouter les fichiers de version au staging
+      try {
+        execSync('git add dev/package.json package.json', { stdio: 'ignore' });
+        logInfo('Fichiers de version ajoutés au staging');
+      } catch (error) {
+        logWarning('Impossible d\'ajouter les fichiers de version au staging');
+      }
+      
+      // Exécuter le commit
       if (executeCommit(commitMessage)) {
-        logSuccess(`Commit effectué avec la version ${newVersion} !`);
+        logSuccess(`Commit effectué avec succès ! Version ${newVersion} appliquée.`);
+      } else {
+        // En cas d'échec du commit, restaurer les versions
+        logError('Échec du commit. Restauration des versions...');
+        restoreVersions(currentVersion);
+        process.exit(1);
       }
     } else {
       logInfo('Commit annulé.');
