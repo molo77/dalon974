@@ -1322,14 +1322,16 @@ export default function DashboardPage() {
         )}
 
         {/* Modal de détail d'annonce */}
-        <AnnonceDetailModal
-          annonce={selectedAnnonceForDetail}
-          open={!!selectedAnnonceForDetail}
-          onClose={() => {
-            console.log("[Dashboard] Fermeture du modal, selectedAnnonceForDetail:", selectedAnnonceForDetail);
-            setSelectedAnnonceForDetail(null);
-          }}
-        />
+        {selectedAnnonceForDetail && selectedAnnonceForDetail.id && (
+          <AnnonceDetailModal
+            annonce={selectedAnnonceForDetail}
+            open={true}
+            onClose={() => {
+              console.log("[Dashboard] Fermeture du modal, selectedAnnonceForDetail:", selectedAnnonceForDetail);
+              setSelectedAnnonceForDetail(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );

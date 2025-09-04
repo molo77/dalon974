@@ -952,9 +952,9 @@ export default function HomePage() {
               `}</style>
 
               {/* Modaux globaux au niveau page (hors boucle) */}
-              {activeHomeTab === "annonces" && annonceDetail && (
+              {activeHomeTab === "annonces" && annonceDetail && annonceDetail.id && (
                 <AnnonceDetailModal
-                  open={!!annonceDetail}
+                  open={true}
                   onClose={() => setAnnonceDetail(null)}
                   annonce={annonceDetail}
                   isAdmin={!!isAdmin}
