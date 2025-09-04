@@ -10,7 +10,7 @@ function generateConversationId(annonceId: string, senderId: string, ownerId: st
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { conversationId: string } }
+  { params }: { params: Promise<{ conversationId: string }> }
 ) {
   try {
     const session = await auth();
@@ -18,7 +18,7 @@ export async function GET(
       return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
     }
 
-    const { conversationId } = params;
+    const { conversationId } = await params;
     const userId = session.user.id;
 
     // Extraire les informations de la conversation depuis l'ID
@@ -76,7 +76,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { conversationId: string } }
+  { params }: { params: Promise<{ conversationId: string }> }
 ) {
   try {
     const session = await auth();
@@ -84,7 +84,7 @@ export async function POST(
       return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
     }
 
-    const { conversationId } = params;
+    const { conversationId } = await params;
     const { content, parentMessageId } = await request.json();
     const userId = session.user.id;
 

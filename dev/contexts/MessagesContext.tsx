@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
-import { useToast } from "@/hooks/useToast";
+import { showToast } from "@/lib/toast";
 
 interface MessagesContextType {
   messages: any[];
@@ -19,7 +19,6 @@ const MessagesContext = createContext<MessagesContextType | undefined>(undefined
 export function MessagesProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const user = session?.user as any;
-  const { showToast } = useToast();
   
   const [messages, setMessages] = useState<any[]>([]);
   const [sentMessages, setSentMessages] = useState<any[]>([]);
