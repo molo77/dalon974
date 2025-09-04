@@ -1,172 +1,110 @@
-'use client';
-
-import { useEffect, useState } from 'react';
-import { checkDatabaseHealth } from '@/lib/databaseHealth';
-
 export default function MaintenancePage() {
-  const [healthStatus, setHealthStatus] = useState<{
-    isHealthy: boolean;
-    error?: string;
-    responseTime?: number;
-  } | null>(null);
-  const [isChecking, setIsChecking] = useState(true);
-
-  useEffect(() => {
-    const checkHealth = async () => {
-      try {
-        const health = await checkDatabaseHealth();
-        setHealthStatus(health);
-      } catch {
-        setHealthStatus({
-          isHealthy: false,
-          error: 'Erreur lors de la vérification'
-        });
-      } finally {
-        setIsChecking(false);
-      }
-    };
-
-    checkHealth();
-    
-    // Vérifier toutes les 30 secondes
-    const interval = setInterval(checkHealth, 30000);
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleRetry = async () => {
-    setIsChecking(true);
-    try {
-      const health = await checkDatabaseHealth();
-      setHealthStatus(health);
-      
-      if (health.isHealthy) {
-        // Rediriger vers la page d'accueil si la DB est accessible
-        window.location.href = '/';
-      }
-    } catch {
-      setHealthStatus({
-        isHealthy: false,
-        error: 'Erreur lors de la vérification'
-      });
-    } finally {
-      setIsChecking(false);
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-xl p-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-10 h-10 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="text-center">
+          <div className="mx-auto h-16 w-16 text-yellow-500">
+            <svg
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0l1.403 5.777c.1.413.485.677.904.677h4.518c1.78 0 2.52 2.28 1.09 3.5l-3.657 2.84c-.36.28-.52.72-.42 1.13l1.403 5.777c.426 1.756-1.44 3.2-2.93 2.13l-3.657-2.84a1.25 1.25 0 00-1.52 0l-3.657 2.84c-1.49 1.07-3.356-.374-2.93-2.13l1.403-5.777c.1-.41-.06-.85-.42-1.13L2.93 14.27c-1.43-1.22-.69-3.5 1.09-3.5h4.518c.419 0 .804-.264.904-.677l1.403-5.777z"
+              />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Maintenance en cours
-          </h1>
-          <p className="text-gray-600">
-            Nous effectuons actuellement des travaux de maintenance
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Nous effectuons actuellement une maintenance programmée pour améliorer nos services.
           </p>
         </div>
+      </div>
 
-        {/* Status */}
-        <div className="bg-gray-50 rounded-lg p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            État du système
-          </h2>
-          
-          {isChecking ? (
-            <div className="flex items-center space-x-3">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-              <span className="text-gray-600">Vérification en cours...</span>
-            </div>
-          ) : healthStatus ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-700">Base de données:</span>
-                <div className="flex items-center space-x-2">
-                  {healthStatus.isHealthy ? (
-                    <>
-                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                      <span className="text-green-600 font-medium">Opérationnelle</span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                      <span className="text-red-600 font-medium">Hors service</span>
-                    </>
-                  )}
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+          <div className="space-y-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg
+                    className="h-5 w-5 text-blue-400"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
                 </div>
-              </div>
-              
-              {healthStatus.responseTime && (
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-700">Temps de réponse:</span>
-                  <span className="text-gray-900 font-medium">
-                    {healthStatus.responseTime}ms
-                  </span>
-                </div>
-              )}
-              
-              {healthStatus.error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                  <div className="flex items-start space-x-2">
-                    <svg className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <div>
-                      <p className="text-sm font-medium text-red-800">Erreur détectée</p>
-                      <p className="text-sm text-red-700 mt-1">{healthStatus.error}</p>
-                    </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-blue-800">
+                    Informations sur la maintenance
+                  </h3>
+                  <div className="mt-2 text-sm text-blue-700">
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>Mise à jour des systèmes de sécurité</li>
+                      <li>Optimisation des performances</li>
+                      <li>Amélioration de l'expérience utilisateur</li>
+                    </ul>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
-          ) : (
-            <div className="text-gray-600">Impossible de récupérer l'état du système</div>
-          )}
-        </div>
 
-        {/* Actions */}
-        <div className="space-y-4">
-          <button
-            onClick={handleRetry}
-            disabled={isChecking}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
-          >
-            {isChecking ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                <span>Vérification...</span>
-              </>
-            ) : (
-              <>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>Réessayer</span>
-              </>
-            )}
-          </button>
-          
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-6 rounded-lg transition-colors duration-200"
-          >
-            Actualiser la page
-          </button>
-        </div>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg
+                    className="h-5 w-5 text-yellow-400"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-yellow-800">
+                    Temps estimé
+                  </h3>
+                  <div className="mt-2 text-sm text-yellow-700">
+                    <p>
+                      La maintenance devrait se terminer dans les prochaines minutes. 
+                      Merci de votre patience.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-        {/* Footer */}
-        <div className="mt-8 pt-6 border-t border-gray-200">
-          <div className="text-center text-sm text-gray-500">
-            <p>Nous nous excusons pour la gêne occasionnée.</p>
-            <p className="mt-1">
-              La maintenance devrait être terminée rapidement.
-            </p>
+            <div className="flex justify-center">
+              <button
+                onClick={() => window.location.reload()}
+                className="flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Vérifier le statut
+              </button>
+            </div>
+
+            <div className="text-center">
+              <p className="text-xs text-gray-500">
+                Heure: {new Date().toLocaleString("fr-FR")}
+              </p>
+            </div>
           </div>
         </div>
       </div>

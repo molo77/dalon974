@@ -51,3 +51,4 @@ export default function useAuthGuard(options: UseAuthGuardOptions = {}): UseAuth
     isReady: isReady && (requireAuth ? !!session : true)
   };
 }
+
