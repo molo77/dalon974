@@ -55,18 +55,23 @@ export default function PhotoUploader({
     const initKey = JSON.stringify(initUrls);
     if (lastInitRef.current === initKey) return;
 
-    // compare current uploaded URLs to incoming initial URLs to avoid unnecessary updates
-    const currentUrls = items.filter((it) => it.uploadedUrl).map((it) => String(it.uploadedUrl));
-  const same = currentUrls.length === initUrls.length && currentUrls.every((v: string, idx: number) => v === initUrls[idx]);
-    if (!same) {
-      setItems(init);
-      lastInitRef.current = initKey;
-    } else {
-      // remember that we've seen this initial payload so we don't reapply it repeatedly
-      lastInitRef.current = initKey;
-    }
+    // Use a callback to access current items state without causing dependency loop
+    setItems(currentItems => {
+      // compare current uploaded URLs to incoming initial URLs to avoid unnecessary updates
+      const currentUrls = currentItems.filter((it) => it.uploadedUrl).map((it) => String(it.uploadedUrl));
+      const same = currentUrls.length === initUrls.length && currentUrls.every((v: string, idx: number) => v === initUrls[idx]);
+      
+      if (!same) {
+        lastInitRef.current = initKey;
+        return init;
+      } else {
+        // remember that we've seen this initial payload so we don't reapply it repeatedly
+        lastInitRef.current = initKey;
+        return currentItems; // No change needed
+      }
+    });
     // only re-run when the value of `initial` or `initialMain` changes
-  }, [initialKey, initialMain, items, initial]);
+  }, [initialKey, initialMain, initial]);
 
   // optional site-wide lightbox for thumbnails
   const ImageLightbox = dynamic(() => import("./ImageLightbox"), { ssr: false });

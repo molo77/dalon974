@@ -1,7 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import PhotoUploader from '@/shared/components/forms/PhotoUploader'
+import PhotoUploader from '@/shared/components/PhotoUploader'
 
 // Mock the photoService
 jest.mock('@/infrastructure/storage/photoService', () => ({

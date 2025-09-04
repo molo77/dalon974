@@ -1206,12 +1206,7 @@ export default function HomePage() {
               </div>
             </form>
 
-              {/* Zone pub au-dessus de la carte (juste au-dessus des boutons Réinitialiser / Zoom sélection de la carte) */}
-              <div className="sticky top-[calc(1rem+0px)] z-0 space-y-2 mt-2 mb-2">
-                <AdSlot placementKey="home.list.rightSidebar" />
-              </div>
-
-              {/* Carte (sous la pub et, si visible, le bouton) */}
+              {/* Carte */}
                               {showCommuneMap && !_filtersCollapsed && (
                 <div>
                   <div id="map-section" ref={mapWrapRef} className="rounded-2xl border border-slate-200 overflow-hidden">
@@ -1237,6 +1232,11 @@ export default function HomePage() {
                   </div>
                 </div>
               )}
+
+              {/* Zone pub en dessous de la carte */}
+              <div className="space-y-2 mt-2 mb-2">
+                <AdSlot placementKey="home.list.rightSidebar" />
+              </div>
 
               {/* Bouton Réinitialiser filtre (placé sous la carte) */}
               {!_filtersCollapsed && (

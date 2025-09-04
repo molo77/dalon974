@@ -100,7 +100,7 @@ dev/
 ```typescript
 // src/__tests__/components/PhotoUploader.test.tsx
 import { render, screen } from '@testing-library/react'
-import PhotoUploader from '@/shared/components/forms/PhotoUploader'
+import PhotoUploader from '@/shared/components/PhotoUploader'
 
 test('renders without crashing', () => {
   render(<PhotoUploader />)

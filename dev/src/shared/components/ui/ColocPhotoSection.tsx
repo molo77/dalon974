@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import PhotoUploader from "../forms/PhotoUploader";
+import PhotoUploader from "../PhotoUploader";
 
 export default function ColocPhotoSection({
   initialCsv,

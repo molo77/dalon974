@@ -44,7 +44,22 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       'ville', 'prix', 'surface', 'nbChambres', 'equipements',
     ];
     const data: any = {};
-    for (const k of allowed) if (k in input) data[k] = input[k];
+    for (const k of allowed) {
+      if (k in input) {
+        // Convertir les champs numériques
+        if (k === 'prix' || k === 'surface' || k === 'nbChambres') {
+          const value = input[k];
+          if (value === '' || value === null || value === undefined) {
+            data[k] = null;
+          } else {
+            const numValue = parseInt(String(value), 10);
+            data[k] = isNaN(numValue) ? null : numValue;
+          }
+        } else {
+          data[k] = input[k];
+        }
+      }
+    }
   const updated = await prisma.annonce.update({ where: { id }, data });
     return NextResponse.json(updated);
   } catch (e) {
