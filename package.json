@@ -1,6 +1,6 @@
 {
   "name": "dalon974",
-  "version": "0.3.31",
+  "version": "1.5.0",
   "private": true,
   "scripts": {
     "dev": "./scripts/server-manager.sh dev",
@@ -18,22 +18,13 @@
     "uploads:backup": "./scripts/manage-uploads.sh backup",
     "uploads:restore": "./scripts/manage-uploads.sh restore",
     "fix-scraper": "node scripts/fix-scraper-config.js",
-    "version:patch": "node scripts/version-manager.js patch",
-    "version:minor": "node scripts/version-manager.js minor",
-    "version:major": "node scripts/version-manager.js major",
-    "version:set": "node scripts/version-manager.js set",
-    "commit:version": "node scripts/commit-version.js show",
-    "commit:generate": "node scripts/commit-version.js generate",
-    "commit:ai": "node scripts/ai-commit-generator.js generate",
-    "commit:ai-exec": "node scripts/ai-commit-generator.js commit",
-    "version:sync-prod": "node scripts/version-manager.js sync-prod",
-    "version:auto-sync": "./scripts/auto-version-sync.sh auto-sync",
-    "version:status": "./scripts/auto-version-sync.sh show",
-    "version:setup-hook": "./scripts/auto-version-sync.sh setup-hook",
-    "version:inc-patch": "./scripts/increment-dev-version.sh patch",
-    "version:inc-minor": "./scripts/increment-dev-version.sh minor",
-    "version:inc-major": "./scripts/increment-dev-version.sh major",
-    "version:show": "./scripts/increment-dev-version.sh show"
+    "commit": "node scripts/smart-commit.js commit",
+    "commit:patch": "node scripts/smart-commit.js commit patch",
+    "commit:minor": "node scripts/smart-commit.js commit minor",
+    "commit:major": "node scripts/smart-commit.js commit major",
+    "version:patch": "node scripts/smart-commit.js version patch",
+    "version:minor": "node scripts/smart-commit.js version minor",
+    "version:major": "node scripts/smart-commit.js version major"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",
