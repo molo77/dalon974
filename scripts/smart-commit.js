@@ -339,31 +339,110 @@ function generateCommitMessage(version, analysis, files) {
   const changes = analyzeChanges(files);
   const detailedDescription = generateDetailedDescription(analysis, changes);
   
-  // Construire le message final
+  // Construire le message final avec le style demandé
   const scopePrefix = analysis.scope ? `(${analysis.scope}) ` : '';
   let finalMessage = `[v${version}] ${analysis.type}: ${scopePrefix}${detailedDescription}`;
 
-  // Ajouter des détails sur les fichiers principaux
-  const mainFiles = files.slice(0, 5); // Limiter à 5 fichiers pour éviter un message trop long
-  if (mainFiles.length <= 5) {
-    const fileList = mainFiles.map(f => path.basename(f)).join(', ');
-    finalMessage += `\n\nFichiers: ${fileList}`;
-  } else {
-    const fileList = mainFiles.slice(0, 3).map(f => path.basename(f)).join(', ');
-    finalMessage += `\n\nFichiers principaux: ${fileList} (+${files.length - 3} autres)`;
+  // Ajouter des sections détaillées avec emojis
+  const sections = [];
+
+  // 🗄️ Base de données
+  if (changes.dbChanges.length > 0) {
+    sections.push('🗄️ Base de données :');
+    changes.dbChanges.forEach(file => {
+      const fileName = path.basename(file);
+      if (file.includes('schema.prisma')) {
+        sections.push('- Mise à jour du schéma Prisma');
+      } else if (file.includes('migration')) {
+        sections.push('- Migration de base de données');
+      } else {
+        sections.push(`- Modification de ${fileName}`);
+      }
+    });
   }
 
-  // Ajouter des informations sur les types de changements
-  const changeTypes = [];
-  if (changes.newFiles.length > 0) changeTypes.push(`${changes.newFiles.length} ajout(s)`);
-  if (changes.modifiedFiles.length > 0) changeTypes.push(`${changes.modifiedFiles.length} modification(s)`);
-  if (changes.deletedFiles.length > 0) changeTypes.push(`${changes.deletedFiles.length} suppression(s)`);
-  
-  if (changeTypes.length > 0) {
-    finalMessage += `\nChangements: ${changeTypes.join(', ')}`;
+  // 🔧 Corrections build
+  if (changes.configChanges.length > 0 || changes.scriptChanges.length > 0) {
+    sections.push('🔧 Corrections build :');
+    changes.configChanges.forEach(file => {
+      const fileName = path.basename(file);
+      if (file.includes('package.json')) {
+        sections.push('- Mise à jour des dépendances');
+      } else if (file.includes('package-lock.json')) {
+        sections.push('- Synchronisation des versions de dépendances');
+      } else {
+        sections.push(`- Configuration ${fileName}`);
+      }
+    });
+    changes.scriptChanges.forEach(file => {
+      const fileName = path.basename(file);
+      sections.push(`- Amélioration du script ${fileName}`);
+    });
   }
 
-  // Ajouter le résumé détaillé des actions
+  // 🚀 API et endpoints
+  if (changes.apiChanges.length > 0) {
+    sections.push('🚀 API et endpoints :');
+    changes.apiChanges.forEach(file => {
+      const fileName = path.basename(file, '.ts');
+      const route = file.split('/').slice(-2).join('/');
+      if (file.includes('route.ts')) {
+        sections.push(`- ${fileName} (${route})`);
+      } else {
+        sections.push(`- ${fileName}`);
+      }
+    });
+  }
+
+  // 🎨 Composants et interface
+  if (changes.componentChanges.length > 0) {
+    sections.push('🎨 Composants et interface :');
+    changes.componentChanges.forEach(file => {
+      const fileName = path.basename(file, '.tsx');
+      if (file.includes('modals/')) {
+        sections.push(`- Modal ${fileName}`);
+      } else if (file.includes('admin/')) {
+        sections.push(`- Composant admin ${fileName}`);
+      } else if (file.includes('dashboard/')) {
+        sections.push(`- Composant dashboard ${fileName}`);
+      } else {
+        sections.push(`- Composant ${fileName}`);
+      }
+    });
+  }
+
+  // 📝 Autres modifications
+  const otherFiles = files.filter(f => 
+    !changes.dbChanges.includes(f) && 
+    !changes.configChanges.includes(f) && 
+    !changes.scriptChanges.includes(f) && 
+    !changes.apiChanges.includes(f) && 
+    !changes.componentChanges.includes(f)
+  );
+
+  if (otherFiles.length > 0) {
+    sections.push('📝 Autres modifications :');
+    otherFiles.slice(0, 5).forEach(file => {
+      const fileName = path.basename(file);
+      if (file.includes('page.tsx')) {
+        sections.push(`- Page ${fileName}`);
+      } else if (file.includes('layout.tsx')) {
+        sections.push(`- Layout ${fileName}`);
+      } else {
+        sections.push(`- ${fileName}`);
+      }
+    });
+    if (otherFiles.length > 5) {
+      sections.push(`- ... et ${otherFiles.length - 5} autres fichiers`);
+    }
+  }
+
+  // Ajouter les sections au message
+  if (sections.length > 0) {
+    finalMessage += '\n\n' + sections.join('\n');
+  }
+
+  // Ajouter le résumé des actions
   const actionSummary = changes.actionSummary;
   const actionDetails = [];
   
@@ -391,7 +470,12 @@ function generateCommitMessage(version, analysis, files) {
   }
   
   if (actionDetails.length > 0) {
-    finalMessage += `\nActions: ${actionDetails.join(', ')}`;
+    finalMessage += `\n\nActions: ${actionDetails.join(', ')}`;
+  }
+
+  // Ajouter un statut de build si applicable
+  if (changes.configChanges.length > 0 || changes.scriptChanges.length > 0) {
+    finalMessage += '\n\n✅ Build et configuration mis à jour';
   }
 
   return finalMessage;
