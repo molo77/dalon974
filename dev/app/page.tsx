@@ -794,10 +794,10 @@ export default function HomePage() {
             {activeHomeTab === "annonces" ? "Annonces de colocation" : "Profils de colocataires"}
           </h1>
 
-          {/* Layout 2 colonnes (desktop): filtres | annonces */}
-          <div className="w-full max-w-[1440px] flex flex-col md:flex-row md:items-start gap-6">
-            {/* Colonne annonces (droite en ≥md) */}
-            <div className="flex-1 min-w-0 md:order-2">
+          {/* Layout 3 colonnes (desktop): filtres | annonces | publicité */}
+          <div className="w-full max-w-[1400px] flex flex-col md:flex-row md:items-start gap-6">
+            {/* Colonne annonces (centre en ≥md) */}
+            <div className="flex-1 min-w-0 md:order-2 max-w-2xl">
               {/* Indicateur de filtrage en cours */}
               {filtering && (
                 <div className="w-full mb-3 text-center text-slate-600 text-sm">
@@ -835,7 +835,7 @@ export default function HomePage() {
               </div>
 
               <div ref={resultsTopRef} className="h-0 scroll-mt-28 md:scroll-mt-32" aria-hidden="true" />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 prevent-anchor">
+              <div className="grid grid-cols-1 gap-6 prevent-anchor">
                 {(!filtering && displayedAnnonces.length === 0) ? (
                   <p className="text-slate-500 text-center mt-4 col-span-full">Aucune annonce trouvée.</p>
                 ) : (
@@ -1062,6 +1062,16 @@ export default function HomePage() {
               />
             </div>
 
+            {/* Colonne publicité (droite en ≥md) */}
+            <div className="w-full md:order-3 md:basis-[20%] md:flex-shrink-0">
+              <div className="sticky top-24 space-y-4">
+                <AdSlot placementKey="home.list.rightSidebar" />
+                <div className="text-xs text-slate-400 text-center">
+                  Publicité
+                </div>
+              </div>
+            </div>
+
             {/* Colonne filtres (gauche en ≥md) */}
             <div className="w-full md:order-1 md:basis-[24%] lg:basis-[26%] md:flex-shrink-0">
               <form
@@ -1233,46 +1243,6 @@ export default function HomePage() {
                 </div>
               )}
 
-              {/* Zone pub en dessous de la carte */}
-              <div className="space-y-2 mt-2 mb-2">
-                <AdSlot placementKey="home.list.rightSidebar" />
-              </div>
-
-              {/* Bouton Réinitialiser filtre (placé sous la carte) */}
-              {!_filtersCollapsed && (
-                <div className="mt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFirestoreError(null);
-                      setVille("");
-                      setCodePostal("");
-                      setPrixMax(null);
-                      setSortBy("date");
-                      setCommunesSelected([]);
-                      setZonesSelected([]);
-                      setAnnonces([]);
-                      setHasMore(true);
-                      setZoneFilters([]);
-                      setSelectionSource(null);
-                      // Réinitialiser les filtres de surface
-                      setSurfaceMin(null);
-                      setSurfaceMax(null);
-                      // Réinitialiser les critères colocataires
-                      setCritAgeMin(null);
-                      setCritAgeMax(null);
-                      setCritProfession("");
-                      // Remplacement au 1er snapshot pour éviter les doublons
-                      resetOnFirstSnapshotRef.current = true;
-                      setFiltering(true);
-                      // pas d'appel direct à loadAnnonces: l'effet "filtres" va relancer proprement
-                    }}
-                    className="border border-slate-300 text-slate-700 px-3 py-1.5 rounded-md hover:bg-slate-50 text-sm"
-                  >
-                    Réinitialiser filtre
-                  </button>
-                </div>
-              )}
 
               {/* Blocs de sélection — masqués si filtres repliés */}
               {!_filtersCollapsed && (zonesSelected.length > 0 || communesSelected.length > 0) && (
