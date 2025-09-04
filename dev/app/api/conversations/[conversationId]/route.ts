@@ -81,8 +81,8 @@ export async function GET(
     // Les messages sont stockés avec conversationId, donc on peut les récupérer directement
     const messages = await prisma.message.findMany({
       where: {
-        conversationId: conversationId,
-        annonceId: annonceId
+        conversationId: conversationId
+        // Suppression du filtre annonceId pour récupérer tous les messages de la conversation
       },
       orderBy: {
         createdAt: 'asc' // Ordre chronologique pour l'affichage
@@ -90,6 +90,13 @@ export async function GET(
     });
 
     console.log('[Conversation API] Messages found:', messages.length);
+    console.log('[Conversation API] Messages details:', messages.map(m => ({
+      id: m.id,
+      senderId: m.senderId,
+      annonceOwnerId: m.annonceOwnerId,
+      content: m.content.substring(0, 50) + '...',
+      createdAt: m.createdAt
+    })));
 
     // Marquer tous les messages comme lus pour l'utilisateur actuel
     // Un message est "reçu" par l'utilisateur si l'annonceOwnerId correspond à l'utilisateur

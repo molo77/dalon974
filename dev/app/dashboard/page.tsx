@@ -16,6 +16,7 @@ import { toast as appToast } from "@/components/ui/feedback/Toast";
 // import { v4 as uuidv4 } from "uuid";
 import { listUserAnnoncesPage, addAnnonce, updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/lib/services/annonceService";
 import { getUserRole } from "@/lib/services/userService";
+import { getColocProfile, saveColocProfile, deleteColocProfile, type ColocProfileData } from "@/lib/services/colocProfileService";
 import Link from "next/link";
 import useCommuneSelection from "@/hooks/useCommuneSelection";
 import CommuneZoneSelector from "@/components/map/CommuneZoneSelector";
@@ -443,29 +444,167 @@ export default function DashboardPage() {
     }
   }, [user, loadingMore, hasMore, lastDoc, mesAnnonces, createdAtMs]);
 
-  // Chargement du profil coloc depuis Firestore
-
-  // Profil colocataire - temporairement désactivé (Firestore supprimé)
+  // Chargement du profil coloc depuis Prisma
   useEffect(() => {
     if (activeTab !== "coloc" || !user) return;
-        setLoadingColoc(false);
+    
+    const loadColocProfile = async () => {
+      try {
+        setLoadingColoc(true);
+        const profile = await getColocProfile(user.id);
+        
+        if (profile) {
+          setColocNom(profile.nom || "");
+          setColocBudget(profile.budget || "");
+          setColocImageUrl(profile.imageUrl || "");
+          setColocPhotos(profile.photos ? JSON.parse(profile.photos) : []);
+          setColocDescription(profile.description || "");
+          setColocAge(profile.age || "");
+          setColocProfession(profile.profession || "");
+          setColocFumeur(profile.fumeur || false);
+          setColocAnimaux(profile.animaux || false);
+          setColocDateDispo(profile.dateDispo || "");
+          setColocQuartiers(profile.quartiers || "");
+          setColocTelephone(profile.telephone || "");
+          setColocZones(profile.zones ? JSON.parse(profile.zones) : []);
+          setColocCommunesSlugs(profile.communesSlugs ? JSON.parse(profile.communesSlugs) : []);
+          setColocGenre(profile.genre || "");
+          setColocBioCourte(profile.bioCourte || "");
+          setColocLanguesCsv(profile.languesCsv || "");
+          setColocInstagram(profile.instagram || "");
+          setPrefGenre(profile.prefGenre || "");
+          setPrefAgeMin(profile.prefAgeMin || "");
+          setPrefAgeMax(profile.prefAgeMax || "");
+          setPrefBudgetMin(profile.prefBudgetMin || "");
+          setPrefBudgetMax(profile.prefBudgetMax || "");
+          setPrefZones(profile.prefZones ? JSON.parse(profile.prefZones) : []);
+          setPrefCommunesSlugs(profile.prefCommunesSlugs ? JSON.parse(profile.prefCommunesSlugs) : []);
+          setPrefFumeur(profile.prefFumeur || false);
+          setPrefAnimaux(profile.prefAnimaux || false);
+          setPrefProfession(profile.prefProfession || "");
+          setPrefLangues(profile.prefLangues || "");
+          setPrefMusique(profile.prefMusique || "");
+          setPrefSport(profile.prefSport || "");
+          setPrefCuisine(profile.prefCuisine || "");
+          setPrefVoyage(profile.prefVoyage || "");
+          setPrefSorties(profile.prefSorties || "");
+          setPrefSoirees(profile.prefSoirees || "");
+          setPrefCalme(profile.prefCalme || "");
+          setPrefProprete(profile.prefProprete || "");
+          setPrefInvites(profile.prefInvites || "");
+          setMusique(profile.musique || "");
+          setHasColocDoc(true);
+        } else {
+          setHasColocDoc(false);
+        }
         setColocReady(true);
+      } catch (error) {
+        console.error("Erreur lors du chargement du profil coloc:", error);
+        showToast("error", "Erreur lors du chargement du profil");
     setHasColocDoc(false);
+      } finally {
+        setLoadingColoc(false);
+      }
+    };
+
+    loadColocProfile();
   }, [activeTab, user]);
 
   // Autosave colocataire - temporairement désactivé (Firestore supprimé)
 
   // Autosave useEffect - temporairement désactivé (Firestore supprimé)
 
-  const saveColocProfile = async () => {
-    // Temporairement désactivé (Firestore supprimé)
-    showToast("info", "Fonctionnalité colocataire temporairement désactivée");
+  const handleSaveColocProfile = async () => {
+    if (!user) return;
+    
+    try {
+      setSavingColoc(true);
+      
+      const profileData: ColocProfileData = {
+        nom: colocNom,
+        budget: typeof colocBudget === 'number' ? colocBudget : undefined,
+        imageUrl: colocImageUrl,
+        photos: colocPhotos,
+        description: colocDescription,
+        age: typeof colocAge === 'number' ? colocAge : undefined,
+        profession: colocProfession,
+        fumeur: colocFumeur,
+        animaux: colocAnimaux,
+        dateDispo: colocDateDispo,
+        quartiers: colocQuartiers,
+        telephone: colocTelephone,
+        zones: colocZones,
+        communesSlugs: colocCommunesSlugs,
+        genre: colocGenre,
+        bioCourte: colocBioCourte,
+        languesCsv: colocLanguesCsv,
+        instagram: colocInstagram,
+        prefGenre,
+        prefAgeMin: typeof prefAgeMin === 'number' ? prefAgeMin : undefined,
+        prefAgeMax: typeof prefAgeMax === 'number' ? prefAgeMax : undefined,
+        prefBudgetMin: typeof prefBudgetMin === 'number' ? prefBudgetMin : undefined,
+        prefBudgetMax: typeof prefBudgetMax === 'number' ? prefBudgetMax : undefined,
+        prefZones,
+        prefCommunesSlugs,
+        prefFumeur,
+        prefAnimaux,
+        prefProfession,
+        prefLangues,
+        prefMusique,
+        prefSport,
+        prefCuisine,
+        prefVoyage,
+        prefSorties,
+        prefSoirees,
+        prefCalme,
+        prefProprete,
+        prefInvites,
+        musique
+      };
+      
+      await saveColocProfile(user.id, profileData);
+      setHasColocDoc(true);
+      setColocEditing(false);
+      showToast("success", "Profil colocataire sauvegardé avec succès !");
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde:", error);
+      showToast("error", "Erreur lors de la sauvegarde du profil");
+    } finally {
       setSavingColoc(false);
+    }
   };
 
-  const deleteColocProfile = async () => {
-    // Temporairement désactivé (Firestore supprimé)
-    showToast("info", "Fonctionnalité colocataire temporairement désactivée");
+  const handleDeleteColocProfile = async () => {
+    if (!user) return;
+    
+    try {
+      await deleteColocProfile(user.id);
+      setHasColocDoc(false);
+      setColocEditing(false);
+      // Reset all form fields
+      setColocNom("");
+      setColocBudget("");
+      setColocImageUrl("");
+      setColocPhotos([]);
+      setColocDescription("");
+      setColocAge("");
+      setColocProfession("");
+      setColocFumeur(false);
+      setColocAnimaux(false);
+      setColocDateDispo("");
+      setColocQuartiers("");
+      setColocTelephone("");
+      setColocZones([]);
+      setColocCommunesSlugs([]);
+      setColocGenre("");
+      setColocBioCourte("");
+      setColocLanguesCsv("");
+      setColocInstagram("");
+      showToast("success", "Profil colocataire supprimé avec succès !");
+    } catch (error) {
+      console.error("Erreur lors de la suppression:", error);
+      showToast("error", "Erreur lors de la suppression du profil");
+    }
   };
 
   // --- Profil colocataire: états ---
@@ -863,7 +1002,7 @@ export default function DashboardPage() {
                     </button>
                     <button
                       className="px-4 py-2 rounded-md bg-rose-600 text-white font-semibold hover:bg-rose-700 transition"
-                      onClick={deleteColocProfile}
+                      onClick={handleDeleteColocProfile}
                     >
                       Supprimer
                     </button>
@@ -1076,13 +1215,13 @@ export default function DashboardPage() {
             {loadingColoc ? (
               <p className="text-gray-500">Chargement du profil…</p>
             ) : (colocEditing ? (
-              <form ref={colocFormRef} onSubmit={(e)=>{e.preventDefault(); saveColocProfile();}} className="flex flex-col gap-4">
+              <form ref={colocFormRef} onSubmit={(e)=>{e.preventDefault(); handleSaveColocProfile();}} className="flex flex-col gap-4">
                 {/* Actions en haut du formulaire */}
                 <div className="sticky top-16 z-20 -mx-6 px-6 py-3 bg-white flex justify-center gap-3 border-b border-slate-200 shadow-sm">
                   {hasColocDoc && hasMeaningfulColocData && (
                     <button
                       type="button"
-                      onClick={deleteColocProfile}
+                      onClick={handleDeleteColocProfile}
                       className="px-4 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-700 transition"
                     >
                       Supprimer le profil
@@ -1323,14 +1462,14 @@ export default function DashboardPage() {
 
         {/* Modal de détail d'annonce */}
         {selectedAnnonceForDetail && selectedAnnonceForDetail.id && (
-          <AnnonceDetailModal
-            annonce={selectedAnnonceForDetail}
+        <AnnonceDetailModal
+          annonce={selectedAnnonceForDetail}
             open={true}
-            onClose={() => {
-              console.log("[Dashboard] Fermeture du modal, selectedAnnonceForDetail:", selectedAnnonceForDetail);
-              setSelectedAnnonceForDetail(null);
-            }}
-          />
+          onClose={() => {
+            console.log("[Dashboard] Fermeture du modal, selectedAnnonceForDetail:", selectedAnnonceForDetail);
+            setSelectedAnnonceForDetail(null);
+          }}
+        />
         )}
       </div>
     </div>

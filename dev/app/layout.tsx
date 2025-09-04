@@ -27,7 +27,7 @@ export default function RootLayout({
     <html lang="fr" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
         <ErrorBoundary>
-          <ServerStatusChecker>
+          {/* <ServerStatusChecker> */}
             <AuthProvider>
               <MessagesProvider>
                 <Header />
@@ -46,7 +46,7 @@ export default function RootLayout({
                 <GlobalToast />
               </MessagesProvider>
             </AuthProvider>
-          </ServerStatusChecker>
+          {/* </ServerStatusChecker> */}
         </ErrorBoundary>
       </body>
     </html>
