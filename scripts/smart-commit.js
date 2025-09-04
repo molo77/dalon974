@@ -171,7 +171,16 @@ function analyzeChanges(files) {
     componentChanges: [],
     dbChanges: [],
     scriptChanges: [],
-    configChanges: []
+    configChanges: [],
+    actionSummary: {
+      linesAdded: 0,
+      linesRemoved: 0,
+      functionsAdded: 0,
+      functionsModified: 0,
+      functionsRemoved: 0,
+      importsAdded: 0,
+      importsRemoved: 0
+    }
   };
 
   files.forEach(file => {
@@ -185,6 +194,30 @@ function analyzeChanges(files) {
         changes.modifiedFiles.push(file);
       } else if (status === 'D') {
         changes.deletedFiles.push(file);
+      }
+
+      // Analyser les détails du diff pour les fichiers modifiés
+      if (status === 'M' || status === 'A') {
+        try {
+          const diffOutput = execSync(`git diff --cached --numstat ${file}`, { encoding: 'utf8' });
+          const diffLines = diffOutput.trim().split('\n');
+          diffLines.forEach(line => {
+            const parts = line.split('\t');
+            if (parts.length >= 3) {
+              const added = parseInt(parts[0]) || 0;
+              const removed = parseInt(parts[1]) || 0;
+              changes.actionSummary.linesAdded += added;
+              changes.actionSummary.linesRemoved += removed;
+            }
+          });
+
+          // Analyser les fonctions et imports pour les fichiers TypeScript/JavaScript
+          if (file.endsWith('.ts') || file.endsWith('.tsx') || file.endsWith('.js') || file.endsWith('.jsx')) {
+            analyzeCodeChanges(file, changes.actionSummary);
+          }
+        } catch (error) {
+          // Ignorer les erreurs d'analyse de diff
+        }
       }
 
       // Catégoriser par type
@@ -205,6 +238,37 @@ function analyzeChanges(files) {
   });
 
   return changes;
+}
+
+// Fonction pour analyser les changements de code
+function analyzeCodeChanges(file, actionSummary) {
+  try {
+    const diffOutput = execSync(`git diff --cached ${file}`, { encoding: 'utf8' });
+    const lines = diffOutput.split('\n');
+    
+    lines.forEach(line => {
+      // Compter les fonctions ajoutées/modifiées/supprimées
+      if (line.startsWith('+') && (line.includes('function ') || line.includes('const ') || line.includes('export '))) {
+        if (line.includes('function ') || line.includes('=>')) {
+          actionSummary.functionsAdded++;
+        }
+        if (line.includes('import ')) {
+          actionSummary.importsAdded++;
+        }
+      } else if (line.startsWith('-') && (line.includes('function ') || line.includes('const ') || line.includes('export '))) {
+        if (line.includes('function ') || line.includes('=>')) {
+          actionSummary.functionsRemoved++;
+        }
+        if (line.includes('import ')) {
+          actionSummary.importsRemoved++;
+        }
+      } else if (line.startsWith('+') && line.includes('function ') && line.includes('{')) {
+        actionSummary.functionsModified++;
+      }
+    });
+  } catch (error) {
+    // Ignorer les erreurs d'analyse
+  }
 }
 
 // Fonction pour générer une description détaillée
@@ -297,6 +361,37 @@ function generateCommitMessage(version, analysis, files) {
   
   if (changeTypes.length > 0) {
     finalMessage += `\nChangements: ${changeTypes.join(', ')}`;
+  }
+
+  // Ajouter le résumé détaillé des actions
+  const actionSummary = changes.actionSummary;
+  const actionDetails = [];
+  
+  if (actionSummary.linesAdded > 0 || actionSummary.linesRemoved > 0) {
+    actionDetails.push(`${actionSummary.linesAdded}+ lignes, ${actionSummary.linesRemoved}- lignes`);
+  }
+  
+  if (actionSummary.functionsAdded > 0) {
+    actionDetails.push(`${actionSummary.functionsAdded} fonction(s) ajoutée(s)`);
+  }
+  
+  if (actionSummary.functionsModified > 0) {
+    actionDetails.push(`${actionSummary.functionsModified} fonction(s) modifiée(s)`);
+  }
+  
+  if (actionSummary.functionsRemoved > 0) {
+    actionDetails.push(`${actionSummary.functionsRemoved} fonction(s) supprimée(s)`);
+  }
+  
+  if (actionSummary.importsAdded > 0 || actionSummary.importsRemoved > 0) {
+    const importChanges = [];
+    if (actionSummary.importsAdded > 0) importChanges.push(`${actionSummary.importsAdded} ajout(s)`);
+    if (actionSummary.importsRemoved > 0) importChanges.push(`${actionSummary.importsRemoved} suppression(s)`);
+    actionDetails.push(`Imports: ${importChanges.join(', ')}`);
+  }
+  
+  if (actionDetails.length > 0) {
+    finalMessage += `\nActions: ${actionDetails.join(', ')}`;
   }
 
   return finalMessage;
