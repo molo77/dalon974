@@ -161,46 +161,142 @@ function analyzeChangeType(files) {
   return analysis;
 }
 
-// Fonction pour générer un message de commit intelligent
-function generateCommitMessage(version, analysis, files) {
-  // Générer une description basée sur les fichiers modifiés
-  let description = '';
-  
-  if (files.length === 1) {
-    const file = files[0];
-    if (file.includes('api/')) {
-      description = `Mise à jour de l'API ${path.basename(file, '.ts')}`;
-    } else if (file.includes('components/')) {
-      description = `Amélioration du composant ${path.basename(file, '.tsx')}`;
-    } else if (file.includes('lib/')) {
-      description = `Mise à jour de la bibliothèque ${path.basename(file, '.ts')}`;
-    } else if (file.includes('scripts/')) {
-      description = `Amélioration du script ${path.basename(file, '.js')}`;
-    } else if (file.includes('prisma/')) {
-      description = 'Mise à jour du schéma de base de données';
-    } else if (file.includes('package.json')) {
-      description = 'Mise à jour des dépendances';
-    } else {
-      description = `Modification de ${path.basename(file)}`;
+// Fonction pour analyser les changements en détail
+function analyzeChanges(files) {
+  const changes = {
+    newFiles: [],
+    modifiedFiles: [],
+    deletedFiles: [],
+    apiChanges: [],
+    componentChanges: [],
+    dbChanges: [],
+    scriptChanges: [],
+    configChanges: []
+  };
+
+  files.forEach(file => {
+    try {
+      const output = execSync(`git diff --cached --name-status ${file}`, { encoding: 'utf8' });
+      const status = output.charAt(0);
+      
+      if (status === 'A') {
+        changes.newFiles.push(file);
+      } else if (status === 'M') {
+        changes.modifiedFiles.push(file);
+      } else if (status === 'D') {
+        changes.deletedFiles.push(file);
+      }
+
+      // Catégoriser par type
+      if (file.includes('api/')) {
+        changes.apiChanges.push(file);
+      } else if (file.includes('components/')) {
+        changes.componentChanges.push(file);
+      } else if (file.includes('prisma/') || file.includes('schema.prisma')) {
+        changes.dbChanges.push(file);
+      } else if (file.includes('scripts/')) {
+        changes.scriptChanges.push(file);
+      } else if (file.includes('package.json') || file.includes('package-lock.json')) {
+        changes.configChanges.push(file);
+      }
+    } catch (error) {
+      // Ignorer les erreurs pour les fichiers non suivis
     }
-  } else {
-    const uniqueDirs = [...new Set(files.map(f => path.dirname(f).split('/')[0]))];
-    if (uniqueDirs.length === 1) {
-      const dir = uniqueDirs[0];
-      description = `Mise à jour de ${dir} (${files.length} fichiers)`;
+  });
+
+  return changes;
+}
+
+// Fonction pour générer une description détaillée
+function generateDetailedDescription(analysis, changes) {
+  const descriptions = [];
+  
+  // Nouveaux fichiers
+  if (changes.newFiles.length > 0) {
+    if (changes.newFiles.length === 1) {
+      const file = changes.newFiles[0];
+      if (file.includes('api/')) {
+        descriptions.push(`Ajout de l'API ${path.basename(file, '.ts')}`);
+      } else if (file.includes('components/')) {
+        descriptions.push(`Nouveau composant ${path.basename(file, '.tsx')}`);
+      } else if (file.includes('contexts/')) {
+        descriptions.push(`Nouveau contexte ${path.basename(file, '.tsx')}`);
+      } else if (file.includes('hooks/')) {
+        descriptions.push(`Nouveau hook ${path.basename(file, '.ts')}`);
+      } else if (file.includes('scripts/')) {
+        descriptions.push(`Nouveau script ${path.basename(file, '.js')}`);
+      } else {
+        descriptions.push(`Nouveau fichier ${path.basename(file)}`);
+      }
     } else {
-      description = `Modifications multiples (${files.length} fichiers)`;
+      descriptions.push(`${changes.newFiles.length} nouveaux fichiers ajoutés`);
     }
   }
 
+  // Modifications
+  if (changes.modifiedFiles.length > 0) {
+    if (changes.modifiedFiles.length === 1) {
+      const file = changes.modifiedFiles[0];
+      if (file.includes('api/')) {
+        descriptions.push(`Amélioration de l'API ${path.basename(file, '.ts')}`);
+      } else if (file.includes('components/')) {
+        descriptions.push(`Mise à jour du composant ${path.basename(file, '.tsx')}`);
+      } else if (file.includes('lib/')) {
+        descriptions.push(`Amélioration de la bibliothèque ${path.basename(file, '.ts')}`);
+      } else if (file.includes('scripts/')) {
+        descriptions.push(`Amélioration du script ${path.basename(file, '.js')}`);
+      } else {
+        descriptions.push(`Modification de ${path.basename(file)}`);
+      }
+    } else {
+      descriptions.push(`${changes.modifiedFiles.length} fichiers modifiés`);
+    }
+  }
+
+  // Suppressions
+  if (changes.deletedFiles.length > 0) {
+    descriptions.push(`${changes.deletedFiles.length} fichier(s) supprimé(s)`);
+  }
+
+  // Changements spécifiques
+  if (changes.dbChanges.length > 0) {
+    descriptions.push('Mise à jour du schéma de base de données');
+  }
+  
+  if (changes.configChanges.length > 0) {
+    descriptions.push('Mise à jour de la configuration');
+  }
+
+  return descriptions.join(', ');
+}
+
+// Fonction pour générer un message de commit intelligent
+function generateCommitMessage(version, analysis, files) {
+  const changes = analyzeChanges(files);
+  const detailedDescription = generateDetailedDescription(analysis, changes);
+  
   // Construire le message final
   const scopePrefix = analysis.scope ? `(${analysis.scope}) ` : '';
-  let finalMessage = `[v${version}] ${analysis.type}: ${scopePrefix}${description}`;
+  let finalMessage = `[v${version}] ${analysis.type}: ${scopePrefix}${detailedDescription}`;
 
-  // Ajouter des détails si nécessaire
-  if (files.length <= 3) {
-    const fileList = files.map(f => path.basename(f)).join(', ');
-    finalMessage += ` - ${fileList}`;
+  // Ajouter des détails sur les fichiers principaux
+  const mainFiles = files.slice(0, 5); // Limiter à 5 fichiers pour éviter un message trop long
+  if (mainFiles.length <= 5) {
+    const fileList = mainFiles.map(f => path.basename(f)).join(', ');
+    finalMessage += `\n\nFichiers: ${fileList}`;
+  } else {
+    const fileList = mainFiles.slice(0, 3).map(f => path.basename(f)).join(', ');
+    finalMessage += `\n\nFichiers principaux: ${fileList} (+${files.length - 3} autres)`;
+  }
+
+  // Ajouter des informations sur les types de changements
+  const changeTypes = [];
+  if (changes.newFiles.length > 0) changeTypes.push(`${changes.newFiles.length} ajout(s)`);
+  if (changes.modifiedFiles.length > 0) changeTypes.push(`${changes.modifiedFiles.length} modification(s)`);
+  if (changes.deletedFiles.length > 0) changeTypes.push(`${changes.deletedFiles.length} suppression(s)`);
+  
+  if (changeTypes.length > 0) {
+    finalMessage += `\nChangements: ${changeTypes.join(', ')}`;
   }
 
   return finalMessage;
@@ -335,7 +431,19 @@ async function main() {
     
     log('🤖 Message de commit généré:', 'bright');
     log('');
-    log(commitMessage, 'green');
+    // Afficher le message avec une meilleure mise en forme
+    const lines = commitMessage.split('\n');
+    lines.forEach((line, index) => {
+      if (index === 0) {
+        log(line, 'green'); // Première ligne en vert
+      } else if (line.startsWith('Fichiers:')) {
+        log(line, 'cyan'); // Section fichiers en cyan
+      } else if (line.startsWith('Changements:')) {
+        log(line, 'yellow'); // Section changements en jaune
+      } else {
+        log(line, 'green'); // Autres lignes en vert
+      }
+    });
     log('');
     
     // Afficher les changements

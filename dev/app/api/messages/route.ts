@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const ownerId = searchParams.get('ownerId');
     const from = searchParams.get('from');
 
-    let whereClause: any = {};
+    const whereClause: any = {};
 
     if (ownerId) {
       // Messages reçus par l'utilisateur (en tant que propriétaire d'annonce)

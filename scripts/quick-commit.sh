@@ -89,6 +89,11 @@ FILE_COUNT=$(echo "$FILES" | wc -l)
 if [ -n "$CUSTOM_MESSAGE" ]; then
     COMMIT_MESSAGE="[v$NEW_VERSION] $CUSTOM_MESSAGE"
 else
+    # Analyser les changements en détail
+    NEW_FILES=$(echo "$FILES" | xargs -I {} sh -c 'git diff --cached --name-status {} | grep "^A" | wc -l' | awk '{sum+=$1} END {print sum}')
+    MODIFIED_FILES=$(echo "$FILES" | xargs -I {} sh -c 'git diff --cached --name-status {} | grep "^M" | wc -l' | awk '{sum+=$1} END {print sum}')
+    DELETED_FILES=$(echo "$FILES" | xargs -I {} sh -c 'git diff --cached --name-status {} | grep "^D" | wc -l' | awk '{sum+=$1} END {print sum}')
+    
     # Analyser le type de changement
     if echo "$FILES" | grep -q "api/"; then
         SCOPE="(api)"
@@ -111,15 +116,65 @@ else
         TYPE="fix"
     fi
 
-    # Générer la description
-    if [ "$FILE_COUNT" -eq 1 ]; then
-        FILE_NAME=$(basename "$FILES")
-        DESCRIPTION="Mise à jour de $FILE_NAME"
-    else
-        DESCRIPTION="Modifications multiples ($FILE_COUNT fichiers)"
+    # Générer la description détaillée
+    DESCRIPTION_PARTS=()
+    
+    if [ "$NEW_FILES" -gt 0 ]; then
+        if [ "$NEW_FILES" -eq 1 ]; then
+            DESCRIPTION_PARTS+=("1 nouveau fichier ajouté")
+        else
+            DESCRIPTION_PARTS+=("$NEW_FILES nouveaux fichiers ajoutés")
+        fi
     fi
-
+    
+    if [ "$MODIFIED_FILES" -gt 0 ]; then
+        if [ "$MODIFIED_FILES" -eq 1 ]; then
+            DESCRIPTION_PARTS+=("1 fichier modifié")
+        else
+            DESCRIPTION_PARTS+=("$MODIFIED_FILES fichiers modifiés")
+        fi
+    fi
+    
+    if [ "$DELETED_FILES" -gt 0 ]; then
+        DESCRIPTION_PARTS+=("$DELETED_FILES fichier(s) supprimé(s)")
+    fi
+    
+    # Ajouter des détails spécifiques
+    if echo "$FILES" | grep -q "prisma/"; then
+        DESCRIPTION_PARTS+=("Mise à jour du schéma de base de données")
+    fi
+    
+    if echo "$FILES" | grep -q "package.json"; then
+        DESCRIPTION_PARTS+=("Mise à jour de la configuration")
+    fi
+    
+    DESCRIPTION=$(IFS=", "; echo "${DESCRIPTION_PARTS[*]}")
+    
+    # Construire le message final
     COMMIT_MESSAGE="[v$NEW_VERSION] $TYPE: $SCOPE$DESCRIPTION"
+    
+    # Ajouter la liste des fichiers principaux (max 3)
+    MAIN_FILES=$(echo "$FILES" | head -3 | xargs -I {} basename {} | tr '\n' ', ' | sed 's/,$//')
+    if [ "$FILE_COUNT" -le 3 ]; then
+        COMMIT_MESSAGE="$COMMIT_MESSAGE
+
+Fichiers: $MAIN_FILES"
+    else
+        COMMIT_MESSAGE="$COMMIT_MESSAGE
+
+Fichiers principaux: $MAIN_FILES (+$((FILE_COUNT - 3)) autres)"
+    fi
+    
+    # Ajouter le résumé des changements
+    CHANGE_SUMMARY=""
+    [ "$NEW_FILES" -gt 0 ] && CHANGE_SUMMARY="${CHANGE_SUMMARY}${NEW_FILES} ajout(s)"
+    [ "$MODIFIED_FILES" -gt 0 ] && CHANGE_SUMMARY="${CHANGE_SUMMARY}${CHANGE_SUMMARY:+, }${MODIFIED_FILES} modification(s)"
+    [ "$DELETED_FILES" -gt 0 ] && CHANGE_SUMMARY="${CHANGE_SUMMARY}${CHANGE_SUMMARY:+, }${DELETED_FILES} suppression(s)"
+    
+    if [ -n "$CHANGE_SUMMARY" ]; then
+        COMMIT_MESSAGE="$COMMIT_MESSAGE
+Changements: $CHANGE_SUMMARY"
+    fi
 fi
 
 log_info "Message de commit: $COMMIT_MESSAGE"
