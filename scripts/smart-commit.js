@@ -522,7 +522,7 @@ function showHelp() {
   log('🚀 Smart Commit - Gestionnaire de version et commit intelligent', 'bright');
   log('');
   log('Usage:', 'bright');
-  log('  node scripts/smart-commit.js [commande] [options]');
+  log('  node scripts/smart-commit.js [commande] [type] [options]');
   log('');
   log('Commandes:', 'bright');
   log('  commit [type]           Générer version, message et commit automatiquement');
@@ -534,9 +534,13 @@ function showHelp() {
   log('  minor                   Incrémenter la version minor (1.0.0 -> 1.1.0)');
   log('  major                   Incrémenter la version major (1.0.0 -> 2.0.0)');
   log('');
+  log('Options:', 'bright');
+  log('  --yes, -y               Exécuter sans demander de confirmation');
+  log('');
   log('Exemples:', 'bright');
   log('  node scripts/smart-commit.js commit');
   log('  node scripts/smart-commit.js commit minor');
+  log('  node scripts/smart-commit.js commit patch --yes');
   log('  node scripts/smart-commit.js version patch');
   log('');
   log('Version actuelle de dev:', 'bright');
@@ -553,6 +557,9 @@ async function main() {
   const args = process.argv.slice(2);
   const command = args[0] || 'commit';
   const versionType = args[1] || 'patch';
+  
+  // Vérifier les options
+  const skipConfirmation = args.includes('--yes') || args.includes('-y');
   
   if (command === 'help') {
     showHelp();
@@ -634,8 +641,13 @@ async function main() {
       logWarning('Impossible d\'afficher les changements');
     }
     
-    // Demander confirmation
-    const confirmed = await askConfirmation('Voulez-vous exécuter ce commit ? (y/N): ');
+    // Demander confirmation (sauf si --yes ou -y)
+    let confirmed = true;
+    if (!skipConfirmation) {
+      confirmed = await askConfirmation('Voulez-vous exécuter ce commit ? (y/N): ');
+    } else {
+      logInfo('Confirmation automatique activée (--yes)');
+    }
     
     if (confirmed) {
       // Mettre à jour les versions AVANT le commit
