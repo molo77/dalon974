@@ -34,9 +34,10 @@ export default function ConversationView({ conversationId }: ConversationViewPro
   };
 
   useEffect(() => {
+    // Ne pas charger les messages si l'utilisateur n'est pas authentifié
     if (!user?.id) {
-      setError('Utilisateur non authentifié');
-      setLoading(false);
+      console.log('[ConversationView] Utilisateur non authentifié, attente...');
+      setLoading(true);
       return;
     }
     
