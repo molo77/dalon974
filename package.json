@@ -24,6 +24,8 @@
     "version:set": "node scripts/version-manager.js set",
     "commit:version": "node scripts/commit-version.js show",
     "commit:generate": "node scripts/commit-version.js generate",
+    "commit:ai": "node scripts/ai-commit-generator.js generate",
+    "commit:ai-exec": "node scripts/ai-commit-generator.js commit",
     "version:sync-prod": "node scripts/version-manager.js sync-prod",
     "version:auto-sync": "./scripts/auto-version-sync.sh auto-sync",
     "version:status": "./scripts/auto-version-sync.sh show",
