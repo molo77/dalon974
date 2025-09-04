@@ -29,9 +29,20 @@ export async function GET(
 
     // Extraire les informations de la conversation depuis l'ID
     const { annonceId, participant1, participant2 } = parseConversationId(conversationId);
+    
+    console.log('[Conversation API] Debug info:', {
+      conversationId,
+      userId,
+      participant1,
+      participant2,
+      annonceId,
+      isParticipant1: userId === participant1,
+      isParticipant2: userId === participant2
+    });
 
     // Vérifier que l'utilisateur fait partie de cette conversation
     if (userId !== participant1 && userId !== participant2) {
+      console.log('[Conversation API] Access denied - user not a participant');
       return NextResponse.json({ error: "Accès non autorisé" }, { status: 403 });
     }
 
@@ -99,9 +110,20 @@ export async function POST(
 
     // Extraire les informations de la conversation depuis l'ID
     const { annonceId, participant1, participant2 } = parseConversationId(conversationId);
+    
+    console.log('[Conversation API POST] Debug info:', {
+      conversationId,
+      userId,
+      participant1,
+      participant2,
+      annonceId,
+      isParticipant1: userId === participant1,
+      isParticipant2: userId === participant2
+    });
 
     // Vérifier que l'utilisateur fait partie de cette conversation
     if (userId !== participant1 && userId !== participant2) {
+      console.log('[Conversation API POST] Access denied - user not a participant');
       return NextResponse.json({ error: "Accès non autorisé" }, { status: 403 });
     }
 
