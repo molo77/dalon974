@@ -1329,7 +1329,6 @@ export default function DashboardPage() {
             console.log("[Dashboard] Fermeture du modal, selectedAnnonceForDetail:", selectedAnnonceForDetail);
             setSelectedAnnonceForDetail(null);
           }}
-          currentUser={user}
         />
       </div>
     </div>

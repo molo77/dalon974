@@ -29,9 +29,6 @@ export async function GET(request: NextRequest) {
       },
       orderBy: {
         createdAt: 'desc'
-      },
-      include: {
-        // Inclure les informations de l'annonce si nécessaire
       }
     });
 

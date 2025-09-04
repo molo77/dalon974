@@ -8,6 +8,18 @@ function generateConversationId(annonceId: string, senderId: string, ownerId: st
   return `${annonceId}-${participants.join('-')}`;
 }
 
+// Fonction pour parser un ID de conversation
+function parseConversationId(conversationId: string) {
+  const parts = conversationId.split('-');
+  
+  // Les deux dernières parties sont toujours les participants (UUIDs de 36 caractères)
+  const participant2 = parts[parts.length - 1]; // Dernier élément
+  const participant1 = parts[parts.length - 2]; // Avant-dernier élément
+  const annonceId = parts.slice(0, -2).join('-'); // Tout le reste est l'annonceId
+  
+  return { annonceId, participant1, participant2 };
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ conversationId: string }> }
@@ -22,8 +34,7 @@ export async function GET(
     const userId = session.user.id;
 
     // Extraire les informations de la conversation depuis l'ID
-    const [annonceId, ...participants] = conversationId.split('-');
-    const [participant1, participant2] = participants;
+    const { annonceId, participant1, participant2 } = parseConversationId(conversationId);
 
     // Vérifier que l'utilisateur fait partie de cette conversation
     if (userId !== participant1 && userId !== participant2) {
@@ -93,8 +104,7 @@ export async function POST(
     }
 
     // Extraire les informations de la conversation depuis l'ID
-    const [annonceId, ...participants] = conversationId.split('-');
-    const [participant1, participant2] = participants;
+    const { annonceId, participant1, participant2 } = parseConversationId(conversationId);
 
     // Vérifier que l'utilisateur fait partie de cette conversation
     if (userId !== participant1 && userId !== participant2) {
