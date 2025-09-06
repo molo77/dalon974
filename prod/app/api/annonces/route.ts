@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prismaClient";
-import { auth } from "@/lib/auth";
+import prisma from "@/infrastructure/database/prismaClient";
+import { auth } from "@/config/auth";
 // import type { Session } from "next-auth";
 
 export async function GET(req: Request) {
@@ -95,7 +95,11 @@ export async function GET(req: Request) {
     }
     
     // Map title -> titre for UI compatibility
-    const mapped = finalList.map((a: any) => ({ ...a, titre: a.title ?? null }));
+    const mapped = finalList.map((a: any) => ({ 
+      ...a, 
+      titre: a.title || a.titre || null,
+      userId: a.userId || null
+    }));
     
     // Retourner les données avec le total
     return NextResponse.json({
@@ -163,7 +167,22 @@ export async function POST(req: Request) {
       'ville', 'prix', 'surface', 'nbChambres', 'equipements', 'typeBien', 'meuble', 'nbPieces',
     ];
     const data: any = {};
-    for (const k of allowed) if (k in input) data[k] = input[k];
+    for (const k of allowed) {
+      if (k in input) {
+        // Convertir les champs numériques
+        if (k === 'prix' || k === 'surface' || k === 'nbChambres' || k === 'nbPieces') {
+          const value = input[k];
+          if (value === '' || value === null || value === undefined) {
+            data[k] = null;
+          } else {
+            const numValue = parseInt(String(value), 10);
+            data[k] = isNaN(numValue) ? null : numValue;
+          }
+        } else {
+          data[k] = input[k];
+        }
+      }
+    }
     // Générer un id si manquant
     if (!data.id) data.id = (globalThis.crypto?.randomUUID?.() || (await import('crypto')).randomUUID());
     // Vérifier que l'utilisateur est connecté

@@ -1,28 +1,27 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef, type MouseEvent } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, type MouseEvent, Suspense } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { db, collection, query, where, orderBy, onSnapshot, doc, serverTimestamp, setDoc, deleteDoc, getDocs } from "@/lib/firebaseShim";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-// import ExpandableImage from "@/components/ui/ExpandableImage";
-import PhotoUploader from "@/components/forms/PhotoUploader";
-const ImageLightbox = dynamic(() => import("@/components/modals/ImageLightbox"), { ssr: false });
-import AnnonceCard from "@/components/cards/AnnonceCard";
-import AnnonceModal from "@/components/modals/AnnonceModal";
-import ConfirmModal from "@/components/modals/ConfirmModal";
-import { toast as appToast } from "@/components/ui/feedback/Toast";
+// import ExpandableImage from "@/shared/components/ExpandableImage";
+import PhotoUploader from "@/shared/components/PhotoUploader";
+const ImageLightbox = dynamic(() => import("@/shared/components/ImageLightbox"), { ssr: false });
+import AnnonceCard from "@/shared/components/AnnonceCard";
+import AnnonceModal from "@/shared/components/AnnonceModal";
+import ConfirmModal from "@/shared/components/ConfirmModal";
+import AnnonceDetailModal from "@/shared/components/AnnonceDetailModal";
+import { toast as appToast } from "@/shared/components/feedback/Toast";
 // import { v4 as uuidv4 } from "uuid";
-import MessageModal from "@/components/modals/MessageModal";
-import { listUserAnnoncesPage, addAnnonce, updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/lib/services/annonceService";
-// import { listMessagesForOwner } from "@/lib/services/messageService";
-import { getUserRole } from "@/lib/services/userService";
+import { listUserAnnoncesPage, addAnnonce, updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/core/business/annonceService";
+import { getUserRole } from "@/core/business/userService";
+import { getColocProfile, saveColocProfile, deleteColocProfile, type ColocProfileData } from "@/core/business/colocProfileClientService";
 import Link from "next/link";
-import useCommuneSelection from "@/hooks/useCommuneSelection";
-import useMessagesData from "@/hooks/useMessagesData";
-import CommuneZoneSelector from "@/components/map/CommuneZoneSelector";
-// import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import AdBlock from "@/shared/components/AdBlock";
+import useCommuneSelection from "@/shared/hooks/useCommuneSelection";
+import CommuneZoneSelector from "@/shared/components/map/CommuneZoneSelector";
+import MessagesSection from "@/features/dashboard/MessagesSection";
 
 // Liste complète des communes de La Réunion
 const COMMUNES = [
@@ -218,7 +217,8 @@ const SLUG_TO_NAME = (COMMUNES as string[]).reduce<Record<string, string>>((acc,
 }, {});
 
 // NOUVEAU: déduire les zones depuis les slugs sélectionnés
-function computeZonesFromSlugs(slugs: string[]): string[] {
+function computeZonesFromSlugs(slugs: string[] | undefined | null): string[] {
+  if (!slugs || !Array.isArray(slugs)) return [];
   const names = slugs.map((s) => SLUG_TO_NAME[s]).filter(Boolean);
   const zones: string[] = [];
   Object.entries(GROUPES).forEach(([zone, list]) => {
@@ -258,17 +258,20 @@ function translateFirebaseError(code: string): string {
   }
 }
 
-export default function DashboardPage() {
+// Composant pour gérer les paramètres de recherche avec Suspense
+function DashboardContent() {
   const { data: session, status } = useSession();
   const user = session?.user as any;
   const loading = status === "loading";
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mesAnnonces, setMesAnnonces] = useState<any[]>([]);
   const [loadingAnnonces, setLoadingAnnonces] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editAnnonce, setEditAnnonce] = useState<any | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [selectedAnnonceToDelete, setSelectedAnnonceToDelete] = useState<any | null>(null);
+  const [selectedAnnonceForDetail, setSelectedAnnonceForDetail] = useState<any | null>(null);
   // local toasts state not used anymore; rely on global appToast
   const showToast = (type: "success" | "error" | "info", message: string) => {
     // Toaster global pour visibilité sur toute page
@@ -278,15 +281,18 @@ export default function DashboardPage() {
   const [lastDoc, setLastDoc] = useState<any | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [firestoreError, setFirestoreError] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userDocLoaded, setUserDocLoaded] = useState(false);
-  const [activeTab, setActiveTab] = useState<"annonces" | "messages" | "coloc">("annonces");
-  const [activeMsgTab, setActiveMsgTab] = useState<"received" | "sent">("received");
-  const [annonceTitles, setAnnonceTitles] = useState<Record<string, string>>({});
-  const [replyTo, setReplyTo] = useState<any | null>(null);
+  const [activeTab, setActiveTab] = useState<"annonces" | "messages" | "coloc" | "match">("annonces");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
+
+  // États pour l'onglet Match
+  const [matchLoading, setMatchLoading] = useState(false);
+  const [matches, setMatches] = useState<any[]>([]);
+  const [matchType, setMatchType] = useState<"annonces" | "profils">("annonces");
+  const [colocDetailOpen, setColocDetailOpen] = useState(false);
+  const [colocDetail, setColocDetail] = useState<any | null>(null);
 
   // --- Profil colocataire: états (déplacé plus haut pour éviter l'usage avant déclaration) ---
   const [loadingColoc, setLoadingColoc] = useState(true);
@@ -320,6 +326,21 @@ export default function DashboardPage() {
   const [prefGenre, setPrefGenre] = useState("");
   const [prefAgeMin, setPrefAgeMin] = useState<number | "">("");
   const [prefAgeMax, setPrefAgeMax] = useState<number | "">("");
+  const [prefZones, setPrefZones] = useState<string[]>([]);
+  const [prefCommunesSlugs, setPrefCommunesSlugs] = useState<string[]>([]);
+  const [prefFumeur, setPrefFumeur] = useState(false);
+  const [prefAnimaux, setPrefAnimaux] = useState(false);
+  const [prefProfession, setPrefProfession] = useState("");
+  const [prefLangues, setPrefLangues] = useState("");
+  const [prefMusique, setPrefMusique] = useState("");
+  const [prefSport, setPrefSport] = useState("");
+  const [prefCuisine, setPrefCuisine] = useState("");
+  const [prefVoyage, setPrefVoyage] = useState("");
+  const [prefSorties, setPrefSorties] = useState("");
+  const [prefSoirees, setPrefSoirees] = useState("");
+  const [prefCalme, setPrefCalme] = useState("");
+  const [prefProprete, setPrefProprete] = useState("");
+  const [prefInvites, setPrefInvites] = useState("");
   const [accepteFumeurs, setAccepteFumeurs] = useState(false);
   const [accepteAnimaux, setAccepteAnimaux] = useState(false);
   const [rythme, setRythme] = useState("");
@@ -363,25 +384,6 @@ export default function DashboardPage() {
   // Formulaire caché par défaut. Ouverture uniquement via actions (Créer/Modifier).
   // On ne force plus la fermeture automatique pendant la saisie.
 
-  const handleFirestoreError = useCallback((err: any, context: string) => {
-    console.error(`[Dashboard][${context}]`, err);
-    const code = err?.code;
-    // Cas spécifique: index requis (en cours de build)
-    if (code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
-      showToast("info", "Index Firestore en cours de création. Le tri peut être temporairement indisponible. Réessayez dans quelques minutes.");
-      return;
-    }
-  if (code === "permission-denied") {
-      let msg = "Accès refusé (permission-denied).";
-      msg += userRole
-        ? ` Rôle Firestore détecté: "${userRole}".`
-        : " Aucun rôle Firestore détecté (doc manquant / champ 'role').";
-      msg += " Vérifie les règles Firestore: utilisent-elles la lecture du doc users ou un custom claim que tu n'emploies plus ?";
-      setFirestoreError(msg);
-      showToast("error", msg);
-      setHasMore(false);
-  }
-  }, [userRole]);
 
   const { overrideVille, setOverrideVille, MAIN_COMMUNES_SORTED, SUB_COMMUNES_SORTED } =
     useCommuneSelection({
@@ -392,13 +394,6 @@ export default function DashboardPage() {
       pickOfficialVilleFromInput,
     });
 
-  const { messages, sentMessages } = useMessagesData({
-    user,
-    firestoreError,
-    userDocLoaded,
-    showToast,
-    handleFirestoreError,
-  });
 
   const loadUserDoc = useCallback(async (u: any) => {
     try {
@@ -428,7 +423,7 @@ export default function DashboardPage() {
     return 0;
   }, []);
 
-  // Liste triée par date desc pour l’affichage
+  // Liste triée par date desc pour l'affichage
   const sortedAnnonces = useMemo(
   () => [...mesAnnonces].sort((a, b) => createdAtMs(b) - createdAtMs(a)),
   [mesAnnonces, createdAtMs]
@@ -443,7 +438,7 @@ export default function DashboardPage() {
   }, [visibleIds]);
 
   const loadAnnonces = useCallback(async () => {
-    if (!user || loadingMore || !hasMore || firestoreError) return;
+    if (!user || loadingMore || !hasMore) return;
 
     // Premier chargement: activer le spinner principal
     const isInitial = !lastDoc && mesAnnonces.length === 0;
@@ -451,13 +446,14 @@ export default function DashboardPage() {
 
     setLoadingMore(true);
     try {
-  const { items, lastId: newLast } = await listUserAnnoncesPage(user.uid, { lastId: lastDoc ?? undefined, pageSize: 10 });
+      const { items, lastId: newLast } = await listUserAnnoncesPage(user.id, { lastId: lastDoc ?? undefined, pageSize: 10 });
+      
 
       if (items.length) {
         setLastDoc(newLast);
         setMesAnnonces(prev => {
           const ids = new Set(prev.map(a => a.id));
-          const merged = [...prev, ...items.filter(i => !ids.has(i.id))];
+          const merged = [...prev, ...items.filter((i: any) => !ids.has(i.id))];
           // Tri par date desc après fusion
           merged.sort((a, b) => createdAtMs(b) - createdAtMs(a));
           return merged;
@@ -466,309 +462,152 @@ export default function DashboardPage() {
         setHasMore(false);
       }
     } catch (err:any) {
-      handleFirestoreError(err, "loadAnnonces");
+      console.error("[Dashboard] Erreur loadAnnonces:", err);
+      showToast("error", "Erreur lors du chargement des annonces");
     } finally {
       setLoadingMore(false);
       if (isInitial) setLoadingAnnonces(false);
     }
-  }, [user, loadingMore, hasMore, firestoreError, lastDoc, mesAnnonces, handleFirestoreError, createdAtMs]);
+  }, [user, loadingMore, hasMore, lastDoc, mesAnnonces, createdAtMs]);
 
-  // Chargement du profil coloc depuis Firestore
-
-  // NOUVEAU: abonnement live au profil colocataire (création/maj en temps réel)
+  // Chargement du profil coloc depuis Prisma
   useEffect(() => {
     if (activeTab !== "coloc" || !user) return;
-    setLoadingColoc(true);
-    const ref = doc(db, "colocProfiles", user.uid);
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        if (snap.exists()) {
-          const d: any = snap.data();
+    
+    const loadColocProfile = async () => {
+      try {
+        setLoadingColoc(true);
+        const profile = await getColocProfile();
+        
+        if (profile) {
+          setColocNom(profile.nom || "");
+          setColocBudget(profile.budget || "");
+          setColocImageUrl(profile.imageUrl || "");
+          setColocPhotos(profile.photos ? JSON.parse(profile.photos as string) : []);
+          setColocDescription(profile.description || "");
+          setColocAge(profile.age || "");
+          setColocProfession(profile.profession || "");
+          setColocFumeur(profile.fumeur || false);
+          setColocAnimaux(profile.animaux || false);
+          setColocDateDispo(profile.dateDispo || "");
+          setColocQuartiers(profile.quartiers || "");
+          setColocTelephone(profile.telephone || "");
+          setColocZones(profile.zones ? JSON.parse(profile.zones as string) : []);
+          setColocCommunesSlugs(profile.communesSlugs ? JSON.parse(profile.communesSlugs as string) : []);
+          setColocGenre(profile.genre || "");
+          setColocBioCourte(profile.bioCourte || "");
+          setColocLanguesCsv(profile.langues ? JSON.stringify(profile.langues) : "");
+          setColocInstagram(profile.instagram || "");
+          setPrefGenre(profile.prefGenre || "");
+          setPrefAgeMin(profile.prefAgeMin || "");
+          setPrefAgeMax(profile.prefAgeMax || "");
+          setPrefZones([]);
+          setPrefCommunesSlugs([]);
+          setPrefFumeur(false);
+          setPrefAnimaux(false);
+          setPrefProfession("");
+          setPrefLangues("");
+          setPrefMusique("");
+          setPrefSport("");
+          setPrefCuisine("");
+          setPrefVoyage("");
+          setPrefSorties("");
+          setPrefSoirees("");
+          setPrefCalme("");
+          setPrefProprete("");
+          setPrefInvites("");
+          setMusique(profile.musique || "");
           setHasColocDoc(true);
-          setColocNom(d.nom || "");
-          // ville supprimée du profil coloc
-          setColocBudget(typeof d.budget === "number" ? d.budget : "");
-          setColocImageUrl(d.imageUrl || "");
-          // load photos array (if present) into uploader state
-          if (Array.isArray(d.photos) && d.photos.length) {
-            setColocPhotos((d.photos as string[]).map((u: string) => ({ url: u, isMain: (d.imageUrl ? u === d.imageUrl : false) })));
-          } else {
-            setColocPhotos([]);
-          }
-          setColocDescription(d.description || "");
-          setColocAge(typeof d.age === "number" ? d.age : "");
-          setColocProfession(d.profession || "");
-          setColocFumeur(!!d.fumeur);
-          setColocAnimaux(!!d.animaux);
-          setColocDateDispo(d.dateDispo || "");
-          setColocQuartiers(d.quartiers || "");
-          setColocTelephone(d.telephone || "");
-          setColocZones(Array.isArray(d.zones) ? d.zones : []);
-          setColocCommunesSlugs(Array.isArray(d.communesSlugs) ? d.communesSlugs : []);
-          setColocGenre(d.genre || "");
-  
-          setColocBioCourte(d.bioCourte || "");
-          setColocLanguesCsv(Array.isArray(d.langues) ? d.langues.join(", ") : (d.langues || ""));
-          setColocInstagram(d.instagram || "");
-          setColocPhotosCsv(Array.isArray(d.photos) ? d.photos.join(", ") : (d.photos || ""));
-          setPrefGenre(d.prefGenre || "");
-          setPrefAgeMin(typeof d.prefAgeMin === "number" ? d.prefAgeMin : "");
-          setPrefAgeMax(typeof d.prefAgeMax === "number" ? d.prefAgeMax : "");
-          setAccepteFumeurs(!!d.accepteFumeurs);
-          setAccepteAnimaux(!!d.accepteAnimaux);
-          setRythme(d.rythme || "");
-          setProprete(d.proprete || "");
-          setSportif(!!d.sportif);
-          setVegetarien(!!d.vegetarien);
-          setSoirees(!!d.soirees);
-          setMusique(d.musique || "");
         } else {
           setHasColocDoc(false);
-          // valeurs par défaut (profil non créé)
-          setColocNom("");
-  // ville supprimée du profil coloc
-          setColocBudget("");
-          setColocImageUrl("");
-          setColocDescription("");
-          setColocAge("");
-          setColocProfession("");
-          setColocFumeur(false);
-          setColocAnimaux(false);
-          setColocDateDispo("");
-          setColocQuartiers("");
-          setColocTelephone("");
-          setColocZones([]);
-          setColocCommunesSlugs([]);
-          setColocGenre(""); setColocBioCourte(""); setColocLanguesCsv(""); setColocInstagram(""); setColocPhotosCsv("");
-          setPrefGenre(""); setPrefAgeMin(""); setPrefAgeMax(""); setAccepteFumeurs(false); setAccepteAnimaux(false);
-          setRythme(""); setProprete(""); setSportif(false); setVegetarien(false); setSoirees(false); setMusique("");
         }
-        setLoadingColoc(false);
         setColocReady(true);
-      },
-      (err) => {
-        handleFirestoreError(err, "colocProfile-live");
+      } catch (error) {
+        console.error("Erreur lors du chargement du profil coloc:", error);
+        showToast("error", "Erreur lors du chargement du profil");
+    setHasColocDoc(false);
+      } finally {
         setLoadingColoc(false);
       }
-    );
-    return () => {
-      try { unsub(); } catch {}
-      setColocReady(false);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    loadColocProfile();
   }, [activeTab, user]);
 
-  // NOUVEAU: autosave silencieux (création si besoin) avec debounce
-  // track last saved payload to avoid redundant writes
-  const lastSavedRef = useRef<string | null>(null);
+  // Autosave colocataire - temporairement désactivé (Firestore supprimé)
 
-  // NOUVEAU: sauvegarde silencieuse (pas de toast/UI), merge + createdAt au premier enregistrement
-  const autoSaveColoc = useCallback(async () => {
+  // Autosave useEffect - temporairement désactivé (Firestore supprimé)
+
+  const handleSaveColocProfile = async () => {
     if (!user) return;
+    
     try {
-  // reference kept internal to API route
-      const payload: any = {
-        uid: user.uid,
-        email: user.email || null,
+      setSavingColoc(true);
+      
+      const profileData: ColocProfileData = {
         nom: colocNom,
-  // ville supprimée du profil coloc
-        budget: typeof colocBudget === "number" ? colocBudget : null,
+        budget: typeof colocBudget === 'number' ? colocBudget : undefined,
         imageUrl: colocImageUrl,
+        photos: colocPhotos,
         description: colocDescription,
-        age: typeof colocAge === "number" ? colocAge : null,
+        age: typeof colocAge === 'number' ? colocAge : undefined,
         profession: colocProfession,
-        fumeur: !!colocFumeur,
-        animaux: !!colocAnimaux,
+        fumeur: colocFumeur,
+        animaux: colocAnimaux,
         dateDispo: colocDateDispo,
         quartiers: colocQuartiers,
         telephone: colocTelephone,
         zones: colocZones,
         communesSlugs: colocCommunesSlugs,
-        updatedAt: serverTimestamp(),
-        // Nouveaux champs
-        genre: colocGenre || undefined,
-        bioCourte: colocBioCourte || undefined,
-        langues: colocLanguesCsv ? colocLanguesCsv.split(",").map(s=>s.trim()).filter(Boolean) : undefined,
-        instagram: colocInstagram || undefined,
-  // photos: use uploader / stored array instead of CSV
-  photos: undefined,
-        prefGenre: prefGenre || undefined,
-        prefAgeMin: prefAgeMin !== "" ? Number(prefAgeMin) : undefined,
-        prefAgeMax: prefAgeMax !== "" ? Number(prefAgeMax) : undefined,
-        accepteFumeurs: !!accepteFumeurs,
-        accepteAnimaux: !!accepteAnimaux,
-        rythme: rythme || undefined,
-        proprete: proprete || undefined,
-        sportif: !!sportif,
-        vegetarien: !!vegetarien,
-        soirees: !!soirees,
-        musique: musique || undefined,
-        ...(hasColocDoc ? {} : { createdAt: serverTimestamp() }),
+        genre: colocGenre,
+        bioCourte: colocBioCourte,
+        languesCsv: colocLanguesCsv,
+        instagram: colocInstagram,
+        prefGenre,
+        prefAgeMin: typeof prefAgeMin === 'number' ? prefAgeMin : undefined,
+        prefAgeMax: typeof prefAgeMax === 'number' ? prefAgeMax : undefined,
+        prefZones,
+        prefCommunesSlugs,
+        prefFumeur,
+        prefAnimaux,
+        prefProfession,
+        prefLangues,
+        prefMusique,
+        prefSport,
+        prefCuisine,
+        prefVoyage,
+        prefSorties,
+        prefSoirees,
+        prefCalme,
+        prefProprete,
+        prefInvites,
+        musique
       };
-      Object.keys(payload).forEach((k) => {
-        const v = (payload as any)[k];
-        if (
-          v === undefined ||
-          v === "" ||
-          v === null ||
-          (Array.isArray(v) && v.length === 0)
-        ) {
-          delete (payload as any)[k];
-        }
-      });
-      // avoid unnecessary writes: only enqueue autosave when payload changed
-      try {
-        const key = JSON.stringify(payload);
-        if (lastSavedRef.current === key) return;
-        // retrieve current user's ID token to authenticate the request
-        try {
-          await fetch('/api/coloc-autosave', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ payload }),
-          });
-          lastSavedRef.current = key;
-        } catch {
-          console.warn('[autoSaveColoc] enqueue failed');
-        }
-      } catch {
-        console.warn('[autoSaveColoc] payload serialisation failed');
-      }
-    } catch {
-      // silencieux
-    }
-  }, [user, colocNom, colocBudget, colocImageUrl, colocDescription, colocAge, colocProfession, colocFumeur, colocAnimaux, colocDateDispo, colocQuartiers, colocTelephone, colocZones, colocCommunesSlugs, colocGenre, colocBioCourte, colocLanguesCsv, colocInstagram, prefGenre, prefAgeMin, prefAgeMax, accepteFumeurs, accepteAnimaux, rythme, proprete, sportif, vegetarien, soirees, musique, hasColocDoc]);
-
-  // Déclenchement auto-save avec debounce (après déclaration pour éviter TDZ)
-  useEffect(() => {
-    if (!colocReady || activeTab !== "coloc" || !user) return;
-    const t = setTimeout(() => {
-      autoSaveColoc();
-    }, 2000); // increased debounce to reduce write frequency
-    return () => clearTimeout(t);
-  }, [
-    colocNom,
-  // ville supprimée du profil coloc
-    colocBudget,
-    colocImageUrl,
-    colocDescription,
-    colocAge,
-    colocProfession,
-    colocFumeur,
-    colocAnimaux,
-    colocDateDispo,
-    colocQuartiers,
-    colocTelephone,
-    colocZones,
-    colocCommunesSlugs,
-    colocGenre,
-    colocBioCourte,
-    colocLanguesCsv,
-    colocInstagram,
-    colocPhotosCsv,
-    prefGenre,
-    prefAgeMin,
-    prefAgeMax,
-    accepteFumeurs,
-    accepteAnimaux,
-    rythme,
-    proprete,
-    sportif,
-    vegetarien,
-    soirees,
-    musique,
-    colocReady,
-    activeTab,
-    user,
-    autoSaveColoc
-  ]);
-
-  const saveColocProfile = async () => {
-    if (!user) return;
-    setSavingColoc(true);
-    try {
-      const ref = doc(db, "colocProfiles", user.uid);
-      const payload: any = {
-        uid: user.uid,
-        email: user.email || null,
-        nom: colocNom,
-  // ville supprimée du profil coloc
-        budget: typeof colocBudget === "number" ? colocBudget : null,
-        imageUrl: colocImageUrl,
-        description: colocDescription,
-        age: typeof colocAge === "number" ? colocAge : null,
-        profession: colocProfession,
-        fumeur: !!colocFumeur,
-        animaux: !!colocAnimaux,
-        dateDispo: colocDateDispo,
-        quartiers: colocQuartiers,
-        telephone: colocTelephone,
-        zones: colocZones,
-        communesSlugs: colocCommunesSlugs,
-        updatedAt: serverTimestamp(),
-        // Nouveaux champs (mêmes conversions qu'autosave)
-        genre: colocGenre || undefined,
-        bioCourte: colocBioCourte || undefined,
-        langues: colocLanguesCsv ? colocLanguesCsv.split(",").map(s=>s.trim()).filter(Boolean) : undefined,
-        instagram: colocInstagram || undefined,
-  photos: colocPhotos && colocPhotos.length ? colocPhotos.map(p => p.url) : undefined,
-        prefGenre: prefGenre || undefined,
-        prefAgeMin: prefAgeMin !== "" ? Number(prefAgeMin) : undefined,
-        prefAgeMax: prefAgeMax !== "" ? Number(prefAgeMax) : undefined,
-        accepteFumeurs: !!accepteFumeurs,
-        accepteAnimaux: !!accepteAnimaux,
-        rythme: rythme || undefined,
-        proprete: proprete || undefined,
-        sportif: !!sportif,
-        vegetarien: !!vegetarien,
-        soirees: !!soirees,
-        musique: musique || undefined,
-        // ...existing cleanup & setDoc
-      };
-      // Nettoyage des champs vides/null/undefined (sauf booléens) et tableaux vides
-      Object.keys(payload).forEach((k) => {
-        const v = payload[k];
-        if (
-          v === undefined ||
-          v === "" ||
-          v === null ||
-          (Array.isArray(v) && v.length === 0)
-        ) {
-          delete payload[k];
-        }
-      });
-      await setDoc(ref, payload, { merge: true });
-      showToast("success", "Profil colocataire enregistré ✅");
-  // Masquer le formulaire après l'enregistrement
-  setColocEditing(false);
-    } catch (err: any) {
-      console.error("[Dashboard][saveColocProfile]", err);
-      showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de l'enregistrement ❌");
+      
+      await saveColocProfile(profileData);
+      setHasColocDoc(true);
+      setColocEditing(false);
+      showToast("success", "Profil colocataire sauvegardé avec succès !");
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde:", error);
+      showToast("error", "Erreur lors de la sauvegarde du profil");
     } finally {
       setSavingColoc(false);
     }
   };
 
-  const deleteColocProfile = async () => {
+  const handleDeleteColocProfile = async () => {
     if (!user) return;
+    
     try {
-      // remove stored photos (meta + storage) when deleting profile
-      try {
-        const { deleteColocPhotoWithMeta } = await import("@/lib/photoService");
-        if (Array.isArray(colocPhotos) && colocPhotos.length) {
-          await Promise.all(colocPhotos.map(p => p.url ? deleteColocPhotoWithMeta(user.uid, p.url).catch(()=>{}) : Promise.resolve()));
-        }
-      } catch (e) {
-        console.warn('Erreur lors de la suppression des photos associées au profil', e);
-      }
-      await deleteDoc(doc(db, "colocProfiles", user.uid));
-      // Reset des états
+      await deleteColocProfile();
+      setHasColocDoc(false);
+      setColocEditing(false);
+      // Reset all form fields
       setColocNom("");
-  // ville supprimée du profil coloc
       setColocBudget("");
       setColocImageUrl("");
-  setColocPhotos([]);
+      setColocPhotos([]);
       setColocDescription("");
       setColocAge("");
       setColocProfession("");
@@ -779,15 +618,14 @@ export default function DashboardPage() {
       setColocTelephone("");
       setColocZones([]);
       setColocCommunesSlugs([]);
-  setColocGenre(""); setColocBioCourte(""); setColocLanguesCsv(""); setColocInstagram(""); setColocPhotosCsv("");
-  setColocPhotos([]);
-      setPrefGenre(""); setPrefAgeMin(""); setPrefAgeMax(""); setAccepteFumeurs(false); setAccepteAnimaux(false);
-      setRythme(""); setProprete(""); setSportif(false); setVegetarien(false); setSoirees(false); setMusique("");
-  setColocEditing(false);
-      showToast("success", "Profil supprimé ✅");
-    } catch (err: any) {
-      console.error("[Dashboard][deleteColocProfile]", err);
-      showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de la suppression ❌");
+      setColocGenre("");
+      setColocBioCourte("");
+      setColocLanguesCsv("");
+      setColocInstagram("");
+      showToast("success", "Profil colocataire supprimé avec succès !");
+    } catch (error) {
+      console.error("Erreur lors de la suppression:", error);
+      showToast("error", "Erreur lors de la suppression du profil");
     }
   };
 
@@ -798,17 +636,34 @@ export default function DashboardPage() {
     if (user) loadUserDoc(user);
   }, [user, loadUserDoc]);
 
+  // Détecter le paramètre tab dans l'URL et définir l'onglet actif
   useEffect(() => {
-    if (loading || firestoreError) return;
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['annonces', 'messages', 'coloc', 'match'].includes(tabParam)) {
+      setActiveTab(tabParam as "annonces" | "messages" | "coloc" | "match");
+    }
+  }, [searchParams]);
+
+  // Charger les matches quand l'onglet match est sélectionné
+  useEffect(() => {
+    if (activeTab === "match") {
+      loadMatches();
+    }
+  }, [activeTab, matchType, user]);
+
+  useEffect(() => {
+    if (loading) return;
 
     if (!user) {
       router.push("/login");
       return;
     }
-    // Attendre d’avoir tenté de charger le doc user pour éviter permission-denied précoce
+
+    // Attendre d'avoir tenté de charger le doc user pour éviter permission-denied précoce
     if (!userDocLoaded) return;
+    
     loadAnnonces();
-  }, [user, loading, lastDoc, firestoreError, userDocLoaded, router, loadAnnonces]);
+  }, [user, loading, lastDoc, userDocLoaded, router, loadAnnonces]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -828,114 +683,9 @@ export default function DashboardPage() {
     if (!loading && !user) router.push("/login");
   }, [user, loading, router]);
 
-  // Récupération des titres d’annonces liés aux messages (cache)
-  useEffect(() => {
-    if (!user || firestoreError || !userDocLoaded) return;
-    const allMessages = [...messages, ...sentMessages];
-    const annonceIds = Array.from(new Set(allMessages.map(m => m.annonceId).filter(Boolean)));
-    if (annonceIds.length === 0) return;
 
-    const fetchAnnonces = async () => {
-      try {
-        const q = query(
-          collection(db, "annonces"),
-          where("id", "in", annonceIds),
-        );
-        const snap: any = await getDocs(q as any);
-        const titles: Record<string, string> = {};
-        (snap.docs || []).forEach((d: any) => {
-          const data = d?.data ? d.data() : {};
-          if (data && data.titre) {
-            titles[d.id] = data.titre;
-          }
-        });
-        setAnnonceTitles(titles);
-      } catch (err: any) {
-        handleFirestoreError(err, "fetchAnnonceTitles");
-      }
-    };
 
-    fetchAnnonces();
-  }, [messages, sentMessages, user, firestoreError, userDocLoaded, handleFirestoreError]);
-
-  useEffect(() => {
-    if (!user || firestoreError || !userDocLoaded) return;
-    const unsubs: Array<() => void> = [];
-    setLoadingAnnonces(true);
-
-  const attach = (qAny: any, label: string, fallbackField: "uid" | "ownerId" | "userId" = "uid") => {
-      try {
-        const u = onSnapshot(
-          qAny,
-          (snap: { docs: any[]; }) => {
-            const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-            setMesAnnonces((prev) => {
-              const byId = new Map(prev.map((x) => [x.id, x]));
-              docs.forEach((m) => byId.set(m.id, { ...(byId.get(m.id) || {}), ...m }));
-              const arr = Array.from(byId.values());
-              arr.sort((a, b) => createdAtMs(b) - createdAtMs(a));
-              return arr;
-            });
-            setLoadingAnnonces(false);
-          },
-          (err) => {
-            if (err?.code === "failed-precondition" && String(err?.message || "").toLowerCase().includes("index")) {
-              // Fallback sans orderBy: tri côté client
-              const u2 = onSnapshot(
-                query(collection(db, "annonces"), where(fallbackField, "==", user.uid)),
-                (snap2) => {
-                  const docs2 = snap2.docs.map((d) => ({ id: d.id, ...d.data() }));
-                  setMesAnnonces((prev) => {
-                    const byId = new Map(prev.map((x) => [x.id, x]));
-                    docs2.forEach((m) => byId.set(m.id, { ...(byId.get(m.id) || {}), ...m }));
-                    const arr = Array.from(byId.values());
-                    arr.sort((a, b) => createdAtMs(b) - createdAtMs(a));
-                    return arr;
-                  });
-                  setLoadingAnnonces(false);
-                }
-              );
-              unsubs.push(u2);
-            } else {
-              handleFirestoreError(err, "annonces-snapshot-" + label);
-              setLoadingAnnonces(false);
-            }
-          }
-        );
-        unsubs.push(u);
-      } catch (e) {
-        console.warn("[Dashboard][annonces] subscribe error", e);
-      }
-    };
-
-    // Essayer avec uid
-    attach(
-      query(collection(db, "annonces"), where("uid", "==", user.uid), orderBy("createdAt", "desc")),
-      "uid",
-      "uid"
-    );
-    // Essayer aussi avec ownerId (selon service)
-    attach(
-      query(collection(db, "annonces"), where("ownerId", "==", user.uid), orderBy("createdAt", "desc")),
-      "ownerId",
-      "ownerId"
-    );
-    // Et avec userId (champ utilisé à la création d'annonce)
-    attach(
-      query(collection(db, "annonces"), where("userId", "==", user.uid), orderBy("createdAt", "desc")),
-      "userId",
-      "userId"
-    );
-
-    return () => {
-      unsubs.forEach((u) => {
-        try { u(); } catch {}
-      });
-    };
-  }, [user, firestoreError, userDocLoaded, handleFirestoreError, createdAtMs]);
-
-  // Option: désactiver la pagination classique (le temps réel s’en charge)
-  useEffect(() => { setHasMore(false); }, []);
+  // Pagination activée pour le chargement des annonces
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
@@ -962,113 +712,301 @@ export default function DashboardPage() {
   // Master checkbox (tout/cocher ou tout/décocher)
   const allSelected = visibleIds.length > 0 && selectedIds.length === visibleIds.length;
 
-  // NOUVEAU: états pour la gestion des messages
-  const [selectedReceivedIds, setSelectedReceivedIds] = useState<string[]>([]);
-  const [selectedSentIds, setSelectedSentIds] = useState<string[]>([]);
-  const [deletingMsgs, setDeletingMsgs] = useState(false);
-  const [confirmMsgBulkOpen, setConfirmMsgBulkOpen] = useState(false);
 
-  // Nettoyer la sélection quand les listes changent
-  useEffect(() => {
-    setSelectedReceivedIds(prev => prev.filter(id => messages.some(m => m.id === id)));
-  }, [messages]);
-  useEffect(() => {
-    setSelectedSentIds(prev => prev.filter(id => sentMessages.some(m => m.id === id)));
-  }, [sentMessages]);
 
-  // Sélection messages selon sous-onglet
-  const visibleMsgs = useMemo(() => (activeMsgTab === "received" ? messages : sentMessages), [activeMsgTab, messages, sentMessages]);
-  const selectedMsgIds = activeMsgTab === "received" ? selectedReceivedIds : selectedSentIds;
-  const allMsgsSelected = visibleMsgs.length > 0 && selectedMsgIds.length === visibleMsgs.length;
-  const setSelectedMsgIds = (updater: (prev: string[]) => string[]) => {
-    if (activeMsgTab === "received") setSelectedReceivedIds(updater);
-    else setSelectedSentIds(updater);
-  };
-  const toggleSelectMsg = (id: string) => {
-    setSelectedMsgIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
-  };
-  const selectAllVisibleMsgs = () => setSelectedMsgIds(() => visibleMsgs.map(m => m.id));
-  const deselectAllMsgs = () => setSelectedMsgIds(() => []);
-
-  const deleteMessageById = async (id: string) => {
-    // La suppression peut lever; inutile de l'envelopper dans un try/catch qui relance
-    await deleteDoc(doc(db, "messages", id));
-  };
-  const performBulkDeleteMsgs = async () => {
-    const toDelete = selectedMsgIds;
-    if (toDelete.length === 0) return;
-    setDeletingMsgs(true);
+  const openAnnonceDetail = async (annonceId: string) => {
     try {
-      await Promise.all(toDelete.map(id => deleteMessageById(id).catch(e => e)));
-      if (activeMsgTab === "received") setSelectedReceivedIds([]);
-      else setSelectedSentIds([]);
-      showToast("success", "Message(s) supprimé(s) ✅");
-    } catch {
-      showToast("error", "Erreur suppression des messages ❌");
-    } finally {
-      setDeletingMsgs(false);
+      console.log("[Dashboard] openAnnonceDetail appelée avec:", annonceId);
+      const response = await fetch(`/api/annonces/${annonceId}`);
+      if (response.ok) {
+        const annonce = await response.json();
+        console.log("[Dashboard] Annonce récupérée:", { id: annonce.id, userId: annonce.userId });
+        setSelectedAnnonceForDetail(annonce);
+      } else {
+        console.log("[Dashboard] Erreur API:", response.status);
+        showToast("error", "Impossible de charger les détails de l'annonce");
+      }
+    } catch (error) {
+      console.error("[Dashboard] Erreur lors du chargement de l'annonce:", error);
+      showToast("error", "Erreur lors du chargement de l'annonce");
     }
   };
-  const handleDeleteSingleMsg = async (id: string) => {
-    if (!window.confirm("Supprimer ce message ?")) return;
+
+  // Fonction pour calculer un score de compatibilité
+  const calculateCompatibilityScore = (item: any, userProfile: any, isAnnonce: boolean) => {
+    let score = 0;
+    let maxScore = 0;
+
+    if (isAnnonce) {
+      // Matching annonce -> profil colocataire
+      maxScore = 100;
+      
+      // Budget (40 points)
+      if (userProfile.budget && item.prix) {
+        const budgetRatio = item.prix / userProfile.budget;
+        if (budgetRatio <= 0.8) score += 40; // Excellent match
+        else if (budgetRatio <= 1.0) score += 30; // Bon match
+        else if (budgetRatio <= 1.2) score += 20; // Match acceptable
+        else if (budgetRatio <= 1.5) score += 10; // Match limite
+      } else if (!userProfile.budget || !item.prix) {
+        score += 20; // Pas de critère budget
+      }
+
+      // Zone géographique (30 points)
+      if (userProfile.communesSlugs && Array.isArray(userProfile.communesSlugs) && userProfile.communesSlugs.length > 0 && item.communeSlug) {
+        if (userProfile.communesSlugs.includes(item.communeSlug)) {
+          score += 30; // Même commune
+        } else {
+          // Vérifier si c'est dans la même zone
+          const userZones = computeZonesFromSlugs(userProfile.communesSlugs);
+          const annonceZones = computeZonesFromSlugs([item.communeSlug]);
+          if (userZones.some(zone => annonceZones.includes(zone))) {
+            score += 20; // Même zone
+          } else {
+            score += 5; // Zone différente
+          }
+        }
+      } else {
+        score += 15; // Pas de critère géographique
+      }
+
+      // Surface (20 points)
+      if (item.surface) {
+        if (item.surface >= 20 && item.surface <= 100) score += 20; // Surface idéale
+        else if (item.surface >= 15 && item.surface <= 120) score += 15; // Surface acceptable
+        else score += 10; // Surface limite
+      } else {
+        score += 10; // Surface non renseignée
+      }
+
+      // Équipements et description (10 points)
+      if (item.description && item.description.length > 50) score += 10;
+      else if (item.description && item.description.length > 20) score += 5;
+
+    } else {
+      // Matching profil -> annonce
+      maxScore = 100;
+      
+      // Budget (40 points)
+      if (item.budget && mesAnnonces.length > 0) {
+        const avgPrix = mesAnnonces.reduce((sum, annonce) => sum + (annonce.prix || 0), 0) / mesAnnonces.length;
+        const budgetRatio = item.budget / avgPrix;
+        if (budgetRatio >= 0.8 && budgetRatio <= 1.2) score += 40; // Excellent match
+        else if (budgetRatio >= 0.6 && budgetRatio <= 1.5) score += 30; // Bon match
+        else if (budgetRatio >= 0.4 && budgetRatio <= 2.0) score += 20; // Match acceptable
+        else score += 10; // Match limite
+      } else {
+        score += 20; // Pas de critère budget
+      }
+
+      // Zone géographique (30 points)
+      if (item.communesSlugs && Array.isArray(item.communesSlugs) && item.communesSlugs.length > 0 && mesAnnonces.length > 0) {
+        const hasZoneMatch = mesAnnonces.some(annonce => 
+          annonce.communeSlug && item.communesSlugs.includes(annonce.communeSlug)
+        );
+        if (hasZoneMatch) {
+          score += 30; // Même commune
+        } else {
+          // Vérifier les zones
+          const profilZones = computeZonesFromSlugs(item.communesSlugs);
+          const hasZoneOverlap = mesAnnonces.some(annonce => {
+            if (!annonce.communeSlug) return false;
+            const annonceZones = computeZonesFromSlugs([annonce.communeSlug]);
+            return profilZones.some(zone => annonceZones.includes(zone));
+          });
+          if (hasZoneOverlap) score += 20; // Même zone
+          else score += 5; // Zone différente
+        }
+      } else {
+        score += 15; // Pas de critère géographique
+      }
+
+      // Âge et profession (20 points)
+      if (item.age && item.profession) score += 20;
+      else if (item.age || item.profession) score += 10;
+
+      // Description complète (10 points)
+      if (item.description && item.description.length > 100) score += 10;
+      else if (item.description && item.description.length > 50) score += 5;
+    }
+
+    return { score, maxScore, percentage: Math.round((score / maxScore) * 100) };
+  };
+
+  // Fonction pour charger les matches
+  const loadMatches = async () => {
+    if (!user) return;
+    
+    setMatchLoading(true);
     try {
-      await deleteMessageById(id);
-      showToast("success", "Message supprimé ✅");
-    } catch {
-      showToast("error", "Erreur lors de la suppression ❌");
+      if (matchType === "annonces") {
+        // Charger les annonces qui correspondent au profil colocataire de l'utilisateur
+        const response = await fetch('/api/annonces');
+        if (response.ok) {
+          const data = await response.json();
+          const userColocProfile = await getColocProfile();
+          
+          if (userColocProfile) {
+            // Calculer les scores de compatibilité pour chaque annonce
+            const annoncesWithScores = data.items.map((annonce: any) => {
+              const compatibility = calculateCompatibilityScore(annonce, userColocProfile, true);
+              return {
+                ...annonce,
+                compatibilityScore: compatibility.score,
+                compatibilityPercentage: compatibility.percentage
+              };
+            });
+
+            // Filtrer et trier par score de compatibilité
+            const matchedAnnonces = annoncesWithScores
+              .filter((annonce: any) => annonce.compatibilityPercentage >= 30) // Minimum 30% de compatibilité
+              .sort((a: any, b: any) => b.compatibilityScore - a.compatibilityScore)
+              .slice(0, 20); // Limiter à 20 meilleurs matches
+
+            setMatches(matchedAnnonces);
+          } else {
+            setMatches([]);
+          }
+        }
+      } else {
+        // Charger les profils colocataires qui correspondent aux annonces de l'utilisateur
+        const response = await fetch('/api/coloc');
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (mesAnnonces.length > 0) {
+            // Calculer les scores de compatibilité pour chaque profil
+            const profilsWithScores = data.items.map((profil: any) => {
+              const compatibility = calculateCompatibilityScore(profil, null, false);
+              
+              // Trouver les annonces qui matchent avec ce profil
+              const matchingAnnonces = mesAnnonces.filter((annonce: any) => {
+                const budgetMatch = !profil.budget || !annonce.prix || profil.budget >= annonce.prix;
+                const zoneMatch = !profil.communesSlugs || !Array.isArray(profil.communesSlugs) || profil.communesSlugs.length === 0 || 
+                  (annonce.communeSlug && profil.communesSlugs.includes(annonce.communeSlug));
+                return budgetMatch && zoneMatch;
+              });
+              
+              return {
+                ...profil,
+                compatibilityScore: compatibility.score,
+                compatibilityPercentage: compatibility.percentage,
+                matchingAnnonces: matchingAnnonces
+              };
+            });
+
+            // Filtrer et trier par score de compatibilité
+            const matchedProfils = profilsWithScores
+              .filter((profil: any) => profil.compatibilityPercentage >= 30) // Minimum 30% de compatibilité
+              .sort((a: any, b: any) => b.compatibilityScore - a.compatibilityScore)
+              .slice(0, 20); // Limiter à 20 meilleurs matches
+
+            setMatches(matchedProfils);
+          } else {
+            setMatches([]);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[Dashboard] Erreur lors du chargement des matches:", error);
+      showToast("error", "Erreur lors du chargement des matches");
+    } finally {
+      setMatchLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen p-2 sm:p-6 flex flex-col items-center">
-      {/* En-tête */}
-      <div className="w-full max-w-3xl mb-6">
-        <div className="rounded-lg bg-white shadow-md p-4 sm:p-6">
-          <h1 className="text-3xl font-bold mb-2">
-            Tableau de bord
-          </h1>
-          <p className="text-gray-700">
-            Gère tes annonces, messages et ton profil colocataire.
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-emerald-50 to-teal-50 p-2 sm:p-6 flex flex-col items-center">
+      {/* En-tête moderne */}
+      <div className="w-full max-w-6xl mb-8">
+        <div className="relative rounded-3xl bg-gradient-to-br from-white to-slate-50 shadow-2xl border border-slate-200/60 p-6 sm:p-8 overflow-hidden">
+          {/* Éléments décoratifs */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-sky-100 to-cyan-100 rounded-full -translate-y-16 translate-x-16 opacity-50 animate-pulse-slow"></div>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-br from-teal-100 to-cyan-100 rounded-full translate-y-12 -translate-x-12 opacity-50 animate-bounce-slow"></div>
+          
+          <div className="relative z-10">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-16 h-16 bg-gradient-to-br from-sky-600 to-cyan-500 rounded-2xl flex items-center justify-center shadow-lg">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <div>
+                <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-sky-600 via-cyan-500 to-teal-500 bg-clip-text text-transparent mb-2 animate-fade-in">
+                  Tableau de bord
+                </h1>
+                <p className="text-lg text-slate-600">
+                  Organise ta colocation, échange avec tes futurs colocataires et personnalise ton profil
+                  <br />
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Onglets */}
-      <div className="w-full max-w-3xl flex gap-2 mb-6">
-        <button
-          className={`flex-1 px-4 py-2 rounded-t-lg font-semibold transition ${
-            activeTab === "annonces"
-              ? "bg-blue-600 text-white shadow"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
-          onClick={() => setActiveTab("annonces")}
-        >
-          Mes annonces
-        </button>
-        <button
-          className={`flex-1 px-4 py-2 rounded-t-lg font-semibold transition ${
-            activeTab === "messages"
-              ? "bg-blue-600 text-white shadow"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
-          onClick={() => setActiveTab("messages")}
-        >
-          Messages
-        </button>
-        <button
-          className={`flex-1 px-4 py-2 rounded-t-lg font-semibold transition ${
-            activeTab === "coloc"
-              ? "bg-blue-600 text-white shadow"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
-          onClick={() => setActiveTab("coloc")}
-        >
-          Profil colocataire
-        </button>
+      {/* Onglets modernes */}
+      <div className="w-full max-w-6xl mb-8">
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/50 shadow-lg p-2">
+          <div className="flex gap-1">
+            <button
+              className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-300 text-sm flex items-center justify-center gap-2 ${
+                activeTab === "annonces"
+                  ? "bg-gradient-to-r from-sky-600 to-cyan-500 text-white shadow-lg transform scale-105 animate-pulse-slow"
+                  : "text-slate-700 hover:bg-slate-50 hover:text-sky-600"
+              }`}
+              onClick={() => setActiveTab("annonces")}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              Mes annonces
+            </button>
+            <button
+              className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-300 text-sm flex items-center justify-center gap-2 ${
+                activeTab === "messages"
+                  ? "bg-gradient-to-r from-sky-600 to-cyan-500 text-white shadow-lg transform scale-105 animate-pulse-slow"
+                  : "text-slate-700 hover:bg-slate-50 hover:text-sky-600"
+              }`}
+              onClick={() => setActiveTab("messages")}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              Messages
+            </button>
+            <button
+              className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-300 text-sm flex items-center justify-center gap-2 ${
+                activeTab === "coloc"
+                  ? "bg-gradient-to-r from-sky-600 to-cyan-500 text-white shadow-lg transform scale-105 animate-pulse-slow"
+                  : "text-slate-700 hover:bg-slate-50 hover:text-sky-600"
+              }`}
+              onClick={() => setActiveTab("coloc")}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              Profil colocataire
+            </button>
+            <button
+              className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-300 text-sm flex items-center justify-center gap-2 ${
+                activeTab === "match"
+                  ? "bg-gradient-to-r from-sky-600 to-cyan-500 text-white shadow-lg transform scale-105 animate-pulse-slow"
+                  : "text-slate-700 hover:bg-slate-50 hover:text-sky-600"
+              }`}
+              onClick={() => setActiveTab("match")}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+              Match
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Contenu des onglets */}
-      <div className="w-full max-w-3xl bg-white rounded-b-xl shadow p-6">
+      <div className="w-full max-w-6xl bg-white/90 backdrop-blur-sm rounded-3xl border border-slate-200/50 shadow-2xl p-6 sm:p-8">
         {activeTab === "annonces" && (
           <>
             <button
@@ -1076,53 +1014,108 @@ export default function DashboardPage() {
                 setEditAnnonce(null);
                 setModalOpen(true);
               }}
-              className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 mb-6 shadow-sm"
+              className="group inline-flex items-center gap-3 bg-gradient-to-r from-sky-600 to-cyan-500 text-white px-6 py-3 rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-200 mb-8 font-semibold"
             >
-              <span>➕</span> Nouvelle annonce
+              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center group-hover:bg-white/30 transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+              </div>
+              Nouvelle annonce
             </button>
 
-            {/* Barre d’actions toujours visible */}
-            <div className="flex flex-wrap items-center gap-3 mb-4">
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={() => (allSelected ? deselectAll() : selectAllVisible())}
-                  className="w-5 h-5 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 checked:bg-blue-600 checked:border-blue-600 checked:ring-2 checked:ring-blue-300 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%223%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:1rem_1rem]"
-                />
-                <span className="text-sm text-slate-700">
-                  Tout ({visibleIds.length})
-                </span>
-              </label>
-              <button
-                type="button"
-                onClick={selectAllVisible}
-                className="border border-slate-300 px-3 py-1.5 rounded hover:bg-slate-50"
-              >
-                Tout sélectionner
-              </button>
-              <button
-                type="button"
-                onClick={deselectAll}
-                className="border border-slate-300 px-3 py-1.5 rounded hover:bg-slate-50"
-              >
-                Tout désélectionner
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmBulkOpen(true)}
-                disabled={selectedIds.length === 0}
-                className="bg-rose-600 text-white px-3 py-1.5 rounded hover:bg-rose-700 disabled:opacity-60"
-              >
-                Supprimer la sélection ({selectedIds.length})
-              </button>
+            {/* Barre d'actions moderne */}
+            <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-2xl border border-slate-200/50 p-4 mb-6">
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="inline-flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={() => (allSelected ? deselectAll() : selectAllVisible())}
+                    className="w-5 h-5 appearance-none rounded-full border-2 border-slate-400 bg-white bg-center bg-no-repeat transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 checked:bg-gradient-to-r checked:from-blue-600 checked:to-purple-600 checked:border-transparent checked:ring-2 checked:ring-blue-300 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%223%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:1rem_1rem]"
+                  />
+                  <span className="text-sm font-medium text-slate-700">
+                    Tout sélectionner ({visibleIds.length})
+                  </span>
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={selectAllVisible}
+                    className="px-4 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-all duration-200 text-sm font-medium text-slate-700"
+                  >
+                    Tout sélectionner
+                  </button>
+                  <button
+                    type="button"
+                    onClick={deselectAll}
+                    className="px-4 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-all duration-200 text-sm font-medium text-slate-700"
+                  >
+                    Tout désélectionner
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmBulkOpen(true)}
+                    disabled={selectedIds.length === 0}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      selectedIds.length === 0
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-gradient-to-r from-red-600 to-red-700 text-white hover:shadow-lg hover:scale-105"
+                    }`}
+                  >
+                    Supprimer la sélection ({selectedIds.length})
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <h2 className="text-2xl font-semibold mb-4">Mes annonces</h2>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg flex items-center justify-center">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-sky-600 to-cyan-500 bg-clip-text text-transparent">Mes annonces</h2>
+            </div>
+            
+            {/* Publicité dans le dashboard */}
+            <div className="mb-6">
+              <AdBlock 
+                placementKey="dashboard.annonces" 
+                title="Conseils pour vos annonces"
+                variant="compact"
+                showBorder={false}
+              />
+            </div>
             {loadingAnnonces ? (
-              <p className="text-gray-500">Chargement de vos annonces...</p>
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-slate-600 font-medium">Chargement de vos annonces...</p>
+                </div>
+              </div>
             ) : sortedAnnonces.length === 0 ? (
-              <p className="text-gray-500">Aucune annonce pour le moment.</p>
+              <div className="text-center py-12">
+                <div className="w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-12 h-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-slate-700 mb-2">Aucune annonce pour le moment</h3>
+                <p className="text-slate-500 mb-6">Créez votre première annonce pour commencer à trouver des colocataires !</p>
+                <button
+                  onClick={() => {
+                    setEditAnnonce(null);
+                    setModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-sky-600 to-cyan-500 text-white px-6 py-3 rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-200 font-semibold"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  Créer ma première annonce
+                </button>
+              </div>
             ) : (
               <div className="flex flex-col gap-4 w-full">
                 {sortedAnnonces.map((annonce) => (
@@ -1146,11 +1139,15 @@ export default function DashboardPage() {
                     {(() => {
                       const parentSlug = annonce?.communeSlug || (annonce?.ville ? slugify(String(annonce.ville)) : undefined);
                       const subLabel = extractSubCommunesLabel([annonce?.titre, annonce?.description, annonce?.ville], parentSlug);
+                      
                       return (
                         <AnnonceCard
                           {...annonce}
                           imageUrl={annonce.imageUrl || defaultAnnonceImg}
+                          description={annonce.description || "Aucune description disponible"}
+                          surface={annonce.surface || 0}
                           subCommunesLabel={subLabel || undefined}
+                          onClick={() => openAnnonceDetail(annonce.id)}
                           onDelete={() => {
                             setSelectedAnnonceToDelete(annonce);
                             setConfirmModalOpen(true);
@@ -1243,11 +1240,21 @@ export default function DashboardPage() {
                   if (editAnnonce) {
                     await updateAnnonce(editAnnonce.id, annonceData);
                     showToast("success", "Annonce modifiée avec succès ✅");
+                    
+                    // Rafraîchir la liste des annonces après modification
+                    setMesAnnonces([]); // Reset pour forcer le rechargement
+                    setLastDoc(null); // Reset pagination
+                    setHasMore(true); // Réactiver le chargement
+                    loadAnnonces(); // Recharger les annonces
                   } else {
-                    console.log("[Dashboard] Création annonce - User:", user);
-                    console.log("[Dashboard] Création annonce - AnnonceData:", annonceData);
                     await addAnnonce({ uid: user!.uid, email: user!.email }, annonceData);
                     showToast("success", "Annonce créée avec succès ✅");
+                    
+                    // Rafraîchir la liste des annonces après création
+                    setMesAnnonces([]); // Reset pour forcer le rechargement
+                    setLastDoc(null); // Reset pagination
+                    setHasMore(true); // Réactiver le chargement
+                    loadAnnonces(); // Recharger les annonces
                   }
                 } catch (err: any) {
                   console.error("[Dashboard][AnnonceSubmit] Erreur Firestore brute :", err);
@@ -1273,6 +1280,12 @@ export default function DashboardPage() {
                 try {
                   await deleteAnnonceSvc(selectedAnnonceToDelete.id);
                   showToast("success", "Annonce supprimée avec succès ✅");
+                  
+                  // Rafraîchir la liste des annonces après suppression
+                  setMesAnnonces([]); // Reset pour forcer le rechargement
+                  setLastDoc(null); // Reset pagination
+                  setHasMore(true); // Réactiver le chargement
+                  loadAnnonces(); // Recharger les annonces
                 } catch (err: any) {
                   console.error("[Dashboard][DeleteAnnonce] Erreur brute :", err);
                   showToast("error", err?.code ? translateFirebaseError(err.code) : "Erreur lors de la suppression ❌");
@@ -1285,185 +1298,211 @@ export default function DashboardPage() {
         )}
 
         {activeTab === "messages" && (
+          <MessagesSection />
+        )}
+
+        {activeTab === "match" && (
           <>
-            <h2 className="text-2xl font-bold mb-4">Messages</h2>
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold mb-4">💕 Mes matches</h2>
+              <p className="text-gray-600 mb-4">
+                Découvrez les annonces et profils qui correspondent à vos critères.
+              </p>
+              
+              
+              {/* Sélecteur de type de match */}
+              <div className="flex gap-2 mb-6">
+                <button
+                  className={`px-4 py-2 rounded-lg font-medium transition ${
+                    matchType === "annonces"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                  onClick={() => setMatchType("annonces")}
+                >
+                  🏠 Annonces pour moi
+                </button>
+                <button
+                  className={`px-4 py-2 rounded-lg font-medium transition ${
+                    matchType === "profils"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                  onClick={() => setMatchType("profils")}
+                >
+                  👥 Profils pour mes annonces
+                </button>
+              </div>
 
-            <div className="flex gap-2 mb-4">
-              <button
-                className={`px-4 py-2 rounded-md font-semibold transition ${activeMsgTab === "received" ? "bg-blue-600 text-white shadow" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-                onClick={() => setActiveMsgTab("received")}
-              >
-                Reçus
-              </button>
-              <button
-                className={`px-4 py-2 rounded-md font-semibold transition ${activeMsgTab === "sent" ? "bg-blue-600 text-white shadow" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-                onClick={() => setActiveMsgTab("sent")}
-              >
-                Envoyés
-              </button>
-            </div>
+              {matchLoading ? (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <p className="mt-2 text-gray-600">Recherche de matches...</p>
+                </div>
+              ) : matches.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-6xl mb-4">💔</div>
+                  <p className="text-gray-600 mb-2">
+                    {matchType === "annonces" 
+                      ? "Aucune annonce ne correspond à votre profil colocataire pour le moment."
+                      : "Aucun profil ne correspond à vos annonces pour le moment."
+                    }
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {matchType === "annonces" 
+                      ? "Créez ou mettez à jour votre profil colocataire pour améliorer les matches."
+                      : "Créez des annonces ou mettez à jour votre profil pour attirer plus de colocataires."
+                    }
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600">
+                      {matches.length} {matchType === "annonces" ? "annonce(s)" : "profil(s)"} trouvé(s)
+                    </p>
+                    <button
+                      onClick={loadMatches}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      🔄 Actualiser
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {matches.map((item: any) => (
+                      <div key={item.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow relative">
+                        {/* Badge de compatibilité */}
+                        <div className="absolute top-3 right-3">
+                          <div className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            item.compatibilityPercentage >= 80 
+                              ? "bg-green-100 text-green-800" 
+                              : item.compatibilityPercentage >= 60 
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-orange-100 text-orange-800"
+                          }`}>
+                            {item.compatibilityPercentage}% match
+                          </div>
+                        </div>
 
-            {/* Barre d’actions (Messages) */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={allMsgsSelected}
-                  onChange={() => (allMsgsSelected ? deselectAllMsgs() : selectAllVisibleMsgs())}
-                  className="w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem] transition-colors"
-                />
-                <span className="text-sm text-slate-700">Tout ({visibleMsgs.length})</span>
-              </label>
-              <button type="button" onClick={selectAllVisibleMsgs} className="border px-3 py-1.5 text-sm rounded hover:bg-slate-50">Tout sélectionner</button>
-              <button type="button" onClick={deselectAllMsgs} className="border px-3 py-1.5 text-sm rounded hover:bg-slate-50">Tout désélectionner</button>
-              <button
-                type="button"
-                onClick={() => setConfirmMsgBulkOpen(true)}
-                disabled={selectedMsgIds.length === 0 || deletingMsgs}
-                className="bg-rose-600 text-white px-3 py-1.5 text-sm rounded hover:bg-rose-700 disabled:opacity-60"
-              >
-                {deletingMsgs ? "Suppression..." : `Supprimer la sélection (${selectedMsgIds.length})`}
-              </button>
-            </div>
+                        {matchType === "annonces" ? (
+                          <div>
+                            <h3 className="font-semibold text-lg mb-2 pr-16">{item.titre}</h3>
+                            <p className="text-gray-600 mb-2">📍 {item.ville}</p>
+                            <p className="text-blue-600 font-semibold mb-2">
+                              {item.prix ? `${item.prix} €/mois` : "Prix non renseigné"}
+                            </p>
+                            {item.surface && (
+                              <p className="text-sm text-gray-500 mb-2">Surface: {item.surface} m²</p>
+                            )}
+                            <p className="text-sm text-gray-700 line-clamp-2">
+                              {item.description || "Aucune description disponible"}
+                            </p>
+                            
+                            {/* Indicateurs de compatibilité */}
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {item.compatibilityPercentage >= 80 && (
+                                <span className="px-2 py-1 bg-green-50 text-green-700 text-xs rounded-full border border-green-200">
+                                  💚 Excellent match
+                                </span>
+                              )}
+                              {item.compatibilityPercentage >= 60 && item.compatibilityPercentage < 80 && (
+                                <span className="px-2 py-1 bg-yellow-50 text-yellow-700 text-xs rounded-full border border-yellow-200">
+                                  💛 Bon match
+                                </span>
+                              )}
+                              {item.compatibilityPercentage < 60 && (
+                                <span className="px-2 py-1 bg-orange-50 text-orange-700 text-xs rounded-full border border-orange-200">
+                                  🧡 Match acceptable
+                                </span>
+                              )}
+                            </div>
 
-            {activeMsgTab === "received" ? (
-              <>
-                {messages.length === 0 ? (
-                  <p className="text-gray-500">Aucun message reçu.</p>
-                ) : (
-                  <ul className="space-y-4">
-                    {messages.map((msg) => (
-                      <li key={msg.id} className="bg-white rounded shadow p-4">
-                        <div className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedReceivedIds.includes(msg.id)}
-                            onChange={() => toggleSelectMsg(msg.id)}
-                            className="mt-1 w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3 8.2 L6.2 11.4 L13 4.6%22/></svg>')] checked:bg-[length:0.85rem_0.85rem]"
-                          />
-                          <div className="flex-1">
-                            <div className="mb-1 text-gray-600 text-sm">
-                              <span className="font-medium">Annonce :</span>{" "}
-                              <Link
-                                href={`/annonce/${msg.annonceId}`}
-                                className="text-blue-600 underline hover:text-blue-700"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {annonceTitles[msg.annonceId] || "Voir l'annonce"}
-                              </Link>
-                            </div>
-                            <div className="mb-2 text-gray-700">
-                              <span className="font-semibold">De :</span> {msg.fromEmail}
-                            </div>
-                            <div className="mb-2 text-gray-700">
-                              <span className="font-semibold">Message :</span>{" "}
-                              <span className="whitespace-pre-line">{msg.content}</span>
-                            </div>
-                            <div className="mb-2 text-gray-500 text-xs">
-                              {msg.createdAt?.seconds
-                                ? new Date(msg.createdAt.seconds * 1000).toLocaleString()
-                                : ""}
-                            </div>
-                            <div className="flex gap-2">
+                            <div className="mt-3 flex gap-2">
                               <button
-                                className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
-                                onClick={() => setReplyTo(msg)}
+                                onClick={() => openAnnonceDetail(item.id)}
+                                className="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700"
                               >
-                                Répondre
-                              </button>
-                              <button
-                                className="bg-rose-600 text-white px-3 py-1 rounded hover:bg-rose-700"
-                                onClick={() => handleDeleteSingleMsg(msg.id)}
-                              >
-                                Supprimer
+                                Voir détails
                               </button>
                             </div>
                           </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {replyTo && (
-                  <MessageModal
-                    annonceId={replyTo.annonceId}
-                    annonceOwnerId={replyTo.fromUserId}
-                    isOpen={!!replyTo}
-                    onClose={() => setReplyTo(null)}
-                    onSent={() => {
-                      setReplyTo(null);
-                      showToast("success", "Message envoyé ✅");
-                    }}
-                  />
-                )}
-              </>
-            ) : (
-              // Envoyés
-              <>
-                {sentMessages.length === 0 ? (
-                  <p className="text-gray-500">Aucun message envoyé.</p>
-                ) : (
-                  <ul className="space-y-4">
-                    {sentMessages.map((msg) => (
-                      <li key={msg.id} className="bg-white rounded shadow p-4">
-                        <div className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedSentIds.includes(msg.id)}
-                            onChange={() => toggleSelectMsg(msg.id)}
-                            className="mt-1 w-4 h-4 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3 8.2 L6.2 11.4 L13 4.6%22/></svg>')] checked:bg-[length:0.85rem_0.85rem]"
-                          />
-                          <div className="flex-1">
-                            <div className="mb-1 text-gray-600 text-sm">
-                              <span className="font-medium">Annonce :</span>{" "}
-                              <Link
-                                href={`/annonce/${msg.annonceId}`}
-                                className="text-blue-600 underline hover:text-blue-700"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {annonceTitles[msg.annonceId] || "Annonce"}
-                              </Link>
+                        ) : (
+                          <div>
+                            <h3 className="font-semibold text-lg mb-2 pr-16">{item.nom || "Profil colocataire"}</h3>
+                            <p className="text-gray-600 mb-2">
+                              {item.age ? `${item.age} ans` : ""} 
+                              {item.profession ? ` • ${item.profession}` : ""}
+                            </p>
+                            <p className="text-blue-600 font-semibold mb-2">
+                              {item.budget ? `Budget: ${item.budget} €/mois` : "Budget non renseigné"}
+                            </p>
+                            <p className="text-sm text-gray-700 line-clamp-2">
+                              {item.description || "Aucune description disponible"}
+                            </p>
+
+                            {/* Annonces correspondantes */}
+                            {item.matchingAnnonces && item.matchingAnnonces.length > 0 && (
+                              <div className="mt-2 mb-2">
+                                <p className="text-xs font-medium text-gray-600 mb-1">🏠 Correspond à vos annonces :</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {item.matchingAnnonces.slice(0, 3).map((annonce: any, idx: number) => (
+                                    <span 
+                                      key={annonce.id} 
+                                      className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 cursor-pointer hover:bg-blue-100"
+                                      title={`${annonce.titre} - ${annonce.prix}€/mois - ${annonce.ville}`}
+                                      onClick={() => openAnnonceDetail(annonce.id)}
+                                    >
+                                      {annonce.titre.length > 20 ? `${annonce.titre.substring(0, 20)}...` : annonce.titre}
+                                    </span>
+                                  ))}
+                                  {item.matchingAnnonces.length > 3 && (
+                                    <span className="px-2 py-1 bg-gray-50 text-gray-600 text-xs rounded-full border border-gray-200">
+                                      +{item.matchingAnnonces.length - 3} autres
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Indicateurs de compatibilité */}
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {item.compatibilityPercentage >= 80 && (
+                                <span className="px-2 py-1 bg-green-50 text-green-700 text-xs rounded-full border border-green-200">
+                                  💚 Excellent match
+                                </span>
+                              )}
+                              {item.compatibilityPercentage >= 60 && item.compatibilityPercentage < 80 && (
+                                <span className="px-2 py-1 bg-yellow-50 text-yellow-700 text-xs rounded-full border border-yellow-200">
+                                  💛 Bon match
+                                </span>
+                              )}
+                              {item.compatibilityPercentage < 60 && (
+                                <span className="px-2 py-1 bg-orange-50 text-orange-700 text-xs rounded-full border border-orange-200">
+                                  🧡 Match acceptable
+                                </span>
+                              )}
                             </div>
-                            <div className="mb-2 text-gray-700">
-                              <span className="font-semibold">À :</span> Propriétaire de l&apos;annonce
-                            </div>
-                            <div className="mb-2 text-gray-700">
-                              <span className="font-semibold">Message :</span>{" "}
-                              <span className="whitespace-pre-line">{msg.content}</span>
-                            </div>
-                            <div className="mb-2 text-gray-500 text-xs">
-                              {msg.createdAt?.seconds
-                                ? new Date(msg.createdAt.seconds * 1000).toLocaleString()
-                                : ""}
-                            </div>
-                            <div>
+
+                            <div className="mt-3 flex gap-2">
                               <button
-                                className="bg-rose-600 text-white px-3 py-1 rounded hover:bg-rose-700"
-                                onClick={() => handleDeleteSingleMsg(msg.id)}
+                                onClick={() => {
+                                  setColocDetail(item);
+                                  setColocDetailOpen(true);
+                                }}
+                                className="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700"
                               >
-                                Supprimer
+                                Voir profil
                               </button>
                             </div>
                           </div>
-                        </div>
-                      </li>
+                        )}
+                      </div>
                     ))}
-                  </ul>
-                )}
-              </>
-            )}
-
-            {/* Confirmation suppression multiple (messages) */}
-            <ConfirmModal
-              isOpen={confirmMsgBulkOpen}
-              onClose={() => setConfirmMsgBulkOpen(false)}
-              onConfirm={async () => {
-                await performBulkDeleteMsgs();
-                setConfirmMsgBulkOpen(false);
-              }}
-            />
+                  </div>
+                </div>
+              )}
+            </div>
           </>
         )}
 
@@ -1486,7 +1525,7 @@ export default function DashboardPage() {
                     </button>
                     <button
                       className="px-4 py-2 rounded-md bg-rose-600 text-white font-semibold hover:bg-rose-700 transition"
-                      onClick={deleteColocProfile}
+                      onClick={handleDeleteColocProfile}
                     >
                       Supprimer
                     </button>
@@ -1699,13 +1738,13 @@ export default function DashboardPage() {
             {loadingColoc ? (
               <p className="text-gray-500">Chargement du profil…</p>
             ) : (colocEditing ? (
-              <form ref={colocFormRef} onSubmit={(e)=>{e.preventDefault(); saveColocProfile();}} className="flex flex-col gap-4">
+              <form ref={colocFormRef} onSubmit={(e)=>{e.preventDefault(); handleSaveColocProfile();}} className="flex flex-col gap-4">
                 {/* Actions en haut du formulaire */}
                 <div className="sticky top-16 z-20 -mx-6 px-6 py-3 bg-white flex justify-center gap-3 border-b border-slate-200 shadow-sm">
                   {hasColocDoc && hasMeaningfulColocData && (
                     <button
                       type="button"
-                      onClick={deleteColocProfile}
+                      onClick={handleDeleteColocProfile}
                       className="px-4 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-700 transition"
                     >
                       Supprimer le profil
@@ -1943,8 +1982,100 @@ export default function DashboardPage() {
             ) : null)}
           </>
         )}
+
+        {/* Modal de détail d'annonce */}
+        {selectedAnnonceForDetail && selectedAnnonceForDetail.id && (
+        <AnnonceDetailModal
+          annonce={selectedAnnonceForDetail}
+            open={true}
+          onClose={() => {
+            console.log("[Dashboard] Fermeture du modal, selectedAnnonceForDetail:", selectedAnnonceForDetail);
+            setSelectedAnnonceForDetail(null);
+          }}
+        />
+        )}
+
+        {/* Modal de détail du profil colocataire pour l'onglet Match */}
+        {colocDetailOpen && colocDetail && (
+          <div
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setColocDetailOpen(false); }}
+          >
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+              <button
+                onClick={() => setColocDetailOpen(false)}
+                className="absolute top-3 right-3 text-slate-600 hover:text-slate-900"
+                aria-label="Fermer"
+              >
+                ✖
+              </button>
+              <h3 className="text-xl font-semibold mb-4">Profil colocataire</h3>
+              <div className="flex flex-col gap-4">
+                <div className="flex gap-4 items-start">
+                  <div className="flex-shrink-0 w-32 h-32">
+                    <Image
+                      src={colocDetail.imageUrl || defaultColocImg}
+                      alt="Photo de profil"
+                      width={128}
+                      height={128}
+                      className="w-32 h-32 object-cover rounded-lg border"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-2xl font-bold">
+                      {colocDetail.nom || "Profil colocataire"}
+                    </div>
+                    <div className="text-slate-700">
+                      {colocDetail.age ? `${colocDetail.age} ans` : ""} 
+                      {colocDetail.profession ? ` • ${colocDetail.profession}` : ""}
+                    </div>
+                    <div className="text-blue-600 font-semibold">
+                      {colocDetail.budget ? `Budget: ${colocDetail.budget} €/mois` : "Budget non renseigné"}
+                    </div>
+                  </div>
+                </div>
+                
+                {colocDetail.bioCourte && (
+                  <div className="text-slate-700">{colocDetail.bioCourte}</div>
+                )}
+                
+                {colocDetail.description && (
+                  <div>
+                    <div className="text-sm font-medium text-slate-700 mb-1">À propos</div>
+                    <p className="text-slate-800 whitespace-pre-line">{colocDetail.description}</p>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setColocDetailOpen(false)}
+                    className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+// Composant principal avec Suspense boundary
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement du tableau de bord...</p>
+        </div>
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
   );
 }
 

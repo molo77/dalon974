@@ -2,12 +2,20 @@
 module.exports = {
   content: [
     "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
   ],
   theme: {
     extend: {
       animation: {
         fade: "fadeInOut 3s ease-in-out forwards",
+        'fade-in': 'fadeIn 0.8s ease-in-out',
+        'slide-up': 'slideUp 0.6s ease-out',
+        'float': 'float 3s ease-in-out infinite',
+        'wave': 'wave 2s ease-in-out infinite',
+        'pulse-slow': 'pulse 2s ease-in-out 3',
+        'bounce-slow': 'bounce 1s ease-in-out 3',
+        'spin-slow': 'spin 2s linear 2',
       },
       keyframes: {
         fadeInOut: {
@@ -15,6 +23,23 @@ module.exports = {
           "10%": { opacity: 1, transform: "translateY(0)" },
           "90%": { opacity: 1, transform: "translateY(0)" },
           "100%": { opacity: 0, transform: "translateY(20px)" },
+        },
+        fadeIn: {
+          "0%": { opacity: 0, transform: "translateY(10px)" },
+          "100%": { opacity: 1, transform: "translateY(0)" },
+        },
+        slideUp: {
+          "0%": { opacity: 0, transform: "translateY(30px)" },
+          "100%": { opacity: 1, transform: "translateY(0)" },
+        },
+        float: {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-10px)" },
+        },
+        wave: {
+          "0%, 100%": { transform: "rotate(0deg)" },
+          "25%": { transform: "rotate(5deg)" },
+          "75%": { transform: "rotate(-5deg)" },
         },
       },
       colors: {

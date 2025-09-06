@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { auth } from '@/config/auth';
 
 // Import du script de nettoyage
 import { cleanupUnusedImages } from '@/scripts/maintenance/cleanup-unused-images';

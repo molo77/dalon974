@@ -854,7 +854,7 @@ export default function HomePage() {
                 aria-selected={activeHomeTab === "annonces"}
                 className={`px-6 py-3 text-sm font-semibold transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded-xl flex items-center gap-2 ${
                   activeHomeTab === "annonces"
-                    ? "bg-gradient-to-r from-sky-600 to-cyan-500 text-white shadow-lg transform scale-105 animate-pulse-slow"
+                    ? "bg-gradient-to-r from-sky-600 to-cyan-500 text-white shadow-lg transform scale-105"
                     : "text-slate-700 hover:bg-slate-50 hover:text-sky-600"
                 }`}
                 onClick={() => setActiveHomeTab("annonces")}
@@ -869,7 +869,7 @@ export default function HomePage() {
                 aria-selected={activeHomeTab === "colocataires"}
                 className={`px-6 py-3 text-sm font-semibold transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 rounded-xl flex items-center gap-2 ${
                   activeHomeTab === "colocataires"
-                    ? "bg-gradient-to-r from-teal-600 to-cyan-500 text-white shadow-lg transform scale-105 animate-pulse-slow"
+                    ? "bg-gradient-to-r from-teal-600 to-cyan-500 text-white shadow-lg transform scale-105"
                     : "text-slate-700 hover:bg-slate-50 hover:text-teal-600"
                 }`}
                 onClick={() => setActiveHomeTab("colocataires")}
@@ -1193,7 +1193,7 @@ export default function HomePage() {
                 {/* Titre Affiner la recherche avec design moderne */}
                 <div className="bg-gradient-to-r from-sky-50 to-emerald-50 px-4 py-3 border border-sky-200/50 -mx-6 -mt-6 mb-4 rounded-t-3xl">
                   <div className="flex items-center justify-center gap-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-sky-500 to-emerald-500 rounded-lg flex items-center justify-center animate-spin">
+                    <div className="w-8 h-8 bg-gradient-to-br from-sky-500 to-emerald-500 rounded-lg flex items-center justify-center animate-spin-slow">
                       <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                       </svg>
@@ -1230,7 +1230,7 @@ export default function HomePage() {
                           onClick={() => toggleZoneFilter(z)}
                           className={`w-full px-3 py-2 rounded-xl text-xs font-medium leading-none border transition-all duration-200 flex items-center justify-center text-center ${
                             zoneFilters.includes(z)
-                              ? "bg-gradient-to-r from-sky-600 to-emerald-500 text-white border-transparent shadow-lg transform scale-105 animate-bounce"
+                              ? "bg-gradient-to-r from-sky-600 to-emerald-500 text-white border-transparent shadow-lg transform scale-105"
                               : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50 hover:border-sky-400 hover:shadow-sm"
                           }`}
                         >
@@ -1386,7 +1386,7 @@ export default function HomePage() {
                       setFiltering(true);
                       // pas d'appel direct à loadAnnonces: l'effet "filtres" va relancer proprement
                     }}
-                  className="group inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-sky-50 to-emerald-50 border border-sky-200 text-sky-700 rounded-xl hover:from-sky-100 hover:to-emerald-100 hover:border-sky-300 hover:shadow-md transition-all duration-200 text-sm font-medium animate-pulse"
+                  className="group inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-sky-50 to-emerald-50 border border-sky-200 text-sky-700 rounded-xl hover:from-sky-100 hover:to-emerald-100 hover:border-sky-300 hover:shadow-md transition-all duration-200 text-sm font-medium"
                   >
                   <svg className="w-4 h-4 group-hover:rotate-180 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1402,7 +1402,7 @@ export default function HomePage() {
                 <div className="mt-6 bg-gradient-to-br from-white to-slate-50 rounded-3xl border border-slate-200/60 shadow-xl overflow-hidden">
                   <div className="bg-gradient-to-r from-sky-50 to-emerald-50 px-4 py-3 border-b border-sky-200/50">
                       <div className="flex items-center justify-center gap-3">
-                      <div className="w-8 h-8 bg-gradient-to-br from-sky-500 to-emerald-500 rounded-lg flex items-center justify-center animate-pulse">
+                      <div className="w-8 h-8 bg-gradient-to-br from-sky-500 to-emerald-500 rounded-lg flex items-center justify-center">
                         <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                         </svg>

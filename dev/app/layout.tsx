@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import AuthProvider from '@/features/auth/AuthProvider'
 import { MessagesProvider } from '@/shared/MessagesContext'
+import { MatchesProvider } from '@/shared/MatchesContext'
 import MaintenanceAlert from '@/shared/components/maintenance/MaintenanceAlert'
 import Header from '@/shared/components/Header'
 import LeafletStyles from '@/shared/components/map/LeafletStyles'
@@ -29,20 +30,22 @@ export default function RootLayout({
           {/* <ServerStatusChecker> */}
             <AuthProvider>
               <MessagesProvider>
-                <Header />
-                <main>
-                  {children}
-                </main>
-                {/* Alerte de maintenance globale */}
-                <MaintenanceAlert 
-                  showOnHealthy={false}
-                  autoHide={true}
-                  hideDelay={3000}
-                />
-                {/* Styles Leaflet pour la carte */}
-                <LeafletStyles />
-                {/* Toast global */}
-                <GlobalToast />
+                <MatchesProvider>
+                  <Header />
+                  <main>
+                    {children}
+                  </main>
+                  {/* Alerte de maintenance globale */}
+                  <MaintenanceAlert 
+                    showOnHealthy={false}
+                    autoHide={true}
+                    hideDelay={3000}
+                  />
+                  {/* Styles Leaflet pour la carte */}
+                  <LeafletStyles />
+                  {/* Toast global */}
+                  <GlobalToast />
+                </MatchesProvider>
               </MessagesProvider>
             </AuthProvider>
           {/* </ServerStatusChecker> */}

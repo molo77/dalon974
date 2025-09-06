@@ -177,3 +177,43 @@ model Session {
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+// Publicités Google AdSense administrables
+model AdUnit {
+  id                 String   @id @default(uuid())
+  name               String
+  placementKey       String   // ex: "home.initial.belowHero", "listing.inline.1"
+  slot               String   // data-ad-slot
+  format             String?  // ex: "auto"
+  fullWidthResponsive Boolean  @default(true)
+  height             Int?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now()) @db.Timestamp(6)
+  updatedAt          DateTime? @db.Timestamp(6)
+
+  @@index([placementKey])
+  @@index([isActive])
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  annonceId      String?
+  annonceOwnerId String?
+  senderId       String?
+  senderEmail    String?
+  content        String   @db.Text
+  createdAt      DateTime @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime? @db.Timestamp(6)
+  
+  // Nouveaux champs pour le système de conversations
+  conversationId String?  // ID de la conversation (généré à partir de annonceId + participants)
+  parentMessageId String? // ID du message parent (pour les réponses)
+  isRead         Boolean  @default(false) // Statut lu/non lu
+  readAt         DateTime? @db.Timestamp(6) // Date de lecture
+
+  @@index([annonceId])
+  @@index([annonceOwnerId])
+  @@index([senderId])
+  @@index([conversationId])
+  @@index([parentMessageId])
+}

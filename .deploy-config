@@ -1,0 +1,21 @@
+# Configuration du script de déploiement RodColoc
+# Modifiez ces valeurs selon vos besoins
+
+# Ports
+PROD_PORT=3000
+DEV_PORT=3001
+
+# Sauvegardes
+BACKUP_RETENTION=5
+
+# Timeouts (en secondes)
+HEALTH_CHECK_TIMEOUT=30
+BUILD_TIMEOUT=300
+
+# Fonctionnalités
+ENABLE_ROLLBACK=true
+ENABLE_NOTIFICATIONS=false
+
+# Notifications (optionnel)
+# NOTIFICATION_WEBHOOK=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+

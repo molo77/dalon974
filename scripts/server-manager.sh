@@ -163,7 +163,7 @@ start_dev() {
     
     log_info "Installation des dépendances dev..."
     cd "$DEV_DIR"
-    npm install --silent
+    npm install --force
     
     log_info "Démarrage du serveur de développement sur le port 3001..."
     nohup npm run dev > "$LOG_DIR/dev.log" 2>&1 &
@@ -208,25 +208,68 @@ start_prod() {
     
     log_info "Installation des dépendances prod..."
     cd "$PROD_DIR"
-    npm install --silent
+    log_info "📦 Exécution: npm install --force"
+    npm install --force
+    if [ $? -eq 0 ]; then
+        log_success "✅ Dépendances installées avec succès"
+    else
+        log_error "❌ Échec de l'installation des dépendances"
+        exit 1
+    fi
     
     log_info "Build de l'application de production..."
+    log_info "🔨 Exécution: npm run build"
     npm run build
+    if [ $? -eq 0 ]; then
+        log_success "✅ Build réussi"
+    else
+        log_error "❌ Échec du build"
+        exit 1
+    fi
     
     log_info "Démarrage du serveur de production sur le port 3000..."
-    nohup npm run start > "$LOG_DIR/prod.log" 2>&1 &
+    
+    # Fonction pour ajouter un timestamp aux logs
+    add_timestamp() {
+        while IFS= read -r line; do
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] $line"
+        done
+    }
+    
+    # Sauvegarder l'ancien log s'il existe
+    if [ -f "$LOG_DIR/prod.log" ] && [ -s "$LOG_DIR/prod.log" ]; then
+        BACKUP_LOG="$LOG_DIR/prod_$(date +%Y%m%d_%H%M%S).log"
+        log_info "📁 Sauvegarde de l'ancien log vers: $BACKUP_LOG"
+        mv "$LOG_DIR/prod.log" "$BACKUP_LOG"
+    fi
+    
+    log_info "🚀 Lancement du serveur avec: npm run start"
+    nohup bash -c "npm run start 2>&1 | add_timestamp" > "$LOG_DIR/prod.log" 2>&1 &
     PROD_PID=$!
     echo $PROD_PID > "$LOG_DIR/prod.pid"
+    log_info "📝 PID du serveur: $PROD_PID"
     
     # Attendre que le serveur démarre
+    log_info "⏳ Attente du démarrage du serveur (5 secondes)..."
     sleep 5
     
     if check_port 3000; then
-        log_success "Serveur de production démarré avec succès (PID: $PROD_PID)"
-        log_info "Logs disponibles dans: $LOG_DIR/prod.log"
-        log_info "URL: http://localhost:3000"
+        log_success "✅ Serveur de production démarré avec succès (PID: $PROD_PID)"
+        log_info "📋 Logs disponibles dans: $LOG_DIR/prod.log"
+        log_info "🌐 URL: http://localhost:3000"
+        log_info "👀 Pour voir les logs en temps réel: tail -f $LOG_DIR/prod.log"
+        echo ""
+        log_info "📄 Dernières lignes du log:"
+        echo "----------------------------------------"
+        tail -n 10 "$LOG_DIR/prod.log" 2>/dev/null || echo "Log en cours de création..."
+        echo "----------------------------------------"
     else
-        log_error "Échec du démarrage du serveur de production"
+        log_error "❌ Échec du démarrage du serveur de production"
+        log_error "📋 Vérifiez les logs: $LOG_DIR/prod.log"
+        log_info "📄 Contenu du log d'erreur:"
+        echo "----------------------------------------"
+        cat "$LOG_DIR/prod.log" 2>/dev/null || echo "Log non disponible"
+        echo "----------------------------------------"
         exit 1
     fi
 }

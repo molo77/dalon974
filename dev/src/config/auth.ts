@@ -32,12 +32,37 @@ const config = {
       credentials: {
         email: { label: "Email", type: "text" },
         password: { label: "Password", type: "password" },
+        recaptchaToken: { label: "reCAPTCHA Token", type: "text" },
       },
       async authorize(credentials, req) {
         const emailInput = credentials?.email || "";
         const password = credentials?.password || "";
+        const recaptchaToken = credentials?.recaptchaToken || "";
         const email = (emailInput as string).toLowerCase().trim();
         if (!email || !password) return null;
+
+        // Validation reCAPTCHA si configuré
+        if (process.env.RECAPTCHA_SECRET_KEY && recaptchaToken) {
+          try {
+            const recaptchaResponse = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: new URLSearchParams({
+                secret: process.env.RECAPTCHA_SECRET_KEY,
+                response: recaptchaToken,
+                remoteip: getIpFromHeaders((req?.headers as any) || {}),
+              }),
+            });
+            const recaptchaData = await recaptchaResponse.json();
+            if (!recaptchaData.success || recaptchaData.score < 0.5) {
+              console.warn("reCAPTCHA validation failed:", recaptchaData);
+              return null;
+            }
+          } catch (error) {
+            console.error("reCAPTCHA validation error:", error);
+            return null;
+          }
+        }
 
         // Rate limit par IP+email
         const ip = getIpFromHeaders((req?.headers as any) || {});

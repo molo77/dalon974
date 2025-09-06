@@ -1,0 +1,101 @@
+{
+  "timestamp": "2025-09-04T17:49:57.810Z",
+  "summary": {
+    "total": 18,
+    "success": 6,
+    "error": 5,
+    "warning": 0
+  },
+  "results": [
+    {
+      "timestamp": "2025-09-04T17:49:56.526Z",
+      "type": "test",
+      "message": "Vérification des composants..."
+    },
+    {
+      "timestamp": "2025-09-04T17:49:56.527Z",
+      "type": "error",
+      "message": "❌ lib/databaseHealth.ts manquant"
+    },
+    {
+      "timestamp": "2025-09-04T17:49:56.527Z",
+      "type": "error",
+      "message": "❌ components/DatabaseGuard.tsx manquant"
+    },
+    {
+      "timestamp": "2025-09-04T17:49:56.527Z",
+      "type": "error",
+      "message": "❌ components/SystemStatus.tsx manquant"
+    },
+    {
+      "timestamp": "2025-09-04T17:49:56.527Z",
+      "type": "error",
+      "message": "❌ components/MaintenanceAlert.tsx manquant"
+    },
+    {
+      "timestamp": "2025-09-04T17:49:56.527Z",
+      "type": "error",
+      "message": "❌ hooks/useDatabaseHealth.ts manquant"
+    },
+    {
+      "timestamp": "2025-09-04T17:49:56.528Z",
+      "type": "success",
+      "message": "✅ app/maintenance/page.tsx existe"
+    },
+    {
+      "timestamp": "2025-09-04T17:49:56.528Z",
+      "type": "success",
+      "message": "✅ app/api/health/route.ts existe"
+    },
+    {
+      "timestamp": "2025-09-04T17:49:56.528Z",
+      "type": "test",
+      "message": "Test de l'API de santé..."
+    },
+    {
+      "timestamp": "2025-09-04T17:49:57.600Z",
+      "type": "success",
+      "message": "API de santé accessible - Statut: healthy"
+    },
+    {
+      "timestamp": "2025-09-04T17:49:57.600Z",
+      "type": "info",
+      "message": "Temps de réponse DB: 324ms"
+    },
+    {
+      "timestamp": "2025-09-04T17:49:57.600Z",
+      "type": "test",
+      "message": "Test de la page de maintenance..."
+    },
+    {
+      "timestamp": "2025-09-04T17:49:57.769Z",
+      "type": "success",
+      "message": "Page de maintenance accessible"
+    },
+    {
+      "timestamp": "2025-09-04T17:49:57.769Z",
+      "type": "test",
+      "message": "Test du DatabaseGuard..."
+    },
+    {
+      "timestamp": "2025-09-04T17:49:57.788Z",
+      "type": "success",
+      "message": "Page d'accueil accessible"
+    },
+    {
+      "timestamp": "2025-09-04T17:49:57.788Z",
+      "type": "test",
+      "message": "Test du middleware..."
+    },
+    {
+      "timestamp": "2025-09-04T17:49:57.810Z",
+      "type": "success",
+      "message": "Middleware: Page de maintenance accessible"
+    },
+    {
+      "timestamp": "2025-09-04T17:49:57.810Z",
+      "type": "test",
+      "message": "Génération du rapport de test..."
+    }
+  ]
+}
