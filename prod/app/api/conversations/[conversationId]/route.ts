@@ -99,11 +99,11 @@ export async function GET(
     })));
 
     // Marquer tous les messages comme lus pour l'utilisateur actuel
-    // Un message est "reçu" par l'utilisateur si l'annonceOwnerId correspond à l'utilisateur
+    // Un message est "reçu" par l'utilisateur si ce n'est pas lui qui l'a envoyé
     await prisma.message.updateMany({
       where: {
         id: { in: messages.map(m => m.id) },
-        annonceOwnerId: userId,
+        senderId: { not: userId }, // L'utilisateur n'est pas l'expéditeur
         isRead: false
       },
       data: {
