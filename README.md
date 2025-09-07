@@ -136,3 +136,4 @@ Consultez [AUTHENTICATION_SETUP.md](./AUTHENTICATION_SETUP.md) pour la configura
 - `prod/` - Environnement de production
 - `scripts/` - Scripts utilitaires
 - `ADSENSE_SETUP.md` - Documentation complète AdSense
+# Test de l'analyse IA

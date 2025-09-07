@@ -9,6 +9,7 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 
 // Configuration
 const PACKAGE_JSON_PATH = path.join(__dirname, '..', 'package.json');
@@ -36,6 +37,100 @@ const colors = {
 
 function log(message, color = 'reset') {
   console.log(`${colors[color]}${message}${colors.reset}`);
+}
+
+// Fonction pour analyser les changements Git
+function getGitChanges() {
+  try {
+    // Obtenir la liste des fichiers modifiés
+    const modifiedFiles = execSync('git diff --cached --name-only', { encoding: 'utf8' }).trim();
+    if (!modifiedFiles) return { files: [], summary: 'Aucun fichier modifié' };
+    
+    const files = modifiedFiles.split('\n').filter(f => f.trim());
+    
+    // Obtenir les détails des modifications
+    const diff = execSync('git diff --cached --stat', { encoding: 'utf8' });
+    
+    // Analyser les types de changements
+    const changes = {
+      files: files,
+      added: 0,
+      deleted: 0,
+      modified: 0,
+      summary: diff
+    };
+    
+    // Compter les lignes ajoutées/supprimées
+    const statLines = diff.split('\n');
+    statLines.forEach(line => {
+      if (line.includes('|')) {
+        const parts = line.split('|');
+        if (parts.length > 1) {
+          const numbers = parts[1].trim().split(' ');
+          numbers.forEach(num => {
+            if (num.includes('+')) changes.added += parseInt(num.replace('+', '')) || 0;
+            if (num.includes('-')) changes.deleted += parseInt(num.replace('-', '')) || 0;
+          });
+        }
+      }
+    });
+    
+    changes.modified = files.length;
+    
+    return changes;
+  } catch (error) {
+    log(`⚠️ Erreur lors de l'analyse Git: ${error.message}`, 'yellow');
+    return { files: [], summary: 'Erreur lors de l\'analyse des changements' };
+  }
+}
+
+// Fonction pour générer un résumé intelligent des changements
+function generateIntelligentSummary(changes, versionType) {
+  const fileTypes = {
+    'src/': 'Code source',
+    'app/': 'Pages et routes',
+    'components/': 'Composants React',
+    'config/': 'Configuration',
+    'prisma/': 'Base de données',
+    'scripts/': 'Scripts utilitaires',
+    'package.json': 'Dépendances',
+    '.env': 'Variables d\'environnement',
+    'tsconfig.json': 'Configuration TypeScript',
+    'next.config.js': 'Configuration Next.js'
+  };
+  
+  const categories = {};
+  changes.files.forEach(file => {
+    for (const [pattern, category] of Object.entries(fileTypes)) {
+      if (file.includes(pattern)) {
+        categories[category] = (categories[category] || 0) + 1;
+        break;
+      }
+    }
+  });
+  
+  // Générer le résumé basé sur les catégories
+  let summary = '';
+  const categoryEntries = Object.entries(categories);
+  
+  if (categoryEntries.length > 0) {
+    summary = 'Modifications dans: ' + categoryEntries.map(([cat, count]) => 
+      count > 1 ? `${cat} (${count} fichiers)` : cat
+    ).join(', ');
+  }
+  
+  // Ajouter des détails basés sur le type de version
+  const versionDetails = {
+    major: 'Changements majeurs avec impact sur la compatibilité',
+    minor: 'Nouvelles fonctionnalités et améliorations',
+    patch: 'Corrections de bugs et optimisations'
+  };
+  
+  return {
+    summary: summary || 'Modifications diverses',
+    details: versionDetails[versionType] || 'Mise à jour générale',
+    stats: `${changes.added} lignes ajoutées, ${changes.deleted} lignes supprimées, ${changes.modified} fichiers modifiés`
+  };
 }
 
 function getCurrentVersion() {
@@ -99,31 +194,36 @@ function updateVersion(versionType) {
 function getCommitMessage(version, versionType, customMessage = '') {
   const timestamp = new Date().toLocaleString('fr-FR');
   
-  // Message par défaut basé sur le type de version
+  // Analyser les changements Git
+  const changes = getGitChanges();
+  const intelligentSummary = generateIntelligentSummary(changes, versionType);
+  
+  // Message par défaut basé sur l'analyse intelligente
   const defaultMessages = {
     major: 'Mise à jour majeure avec changements incompatibles',
     minor: 'Nouvelle fonctionnalité ajoutée',
     patch: 'Correction de bugs et améliorations mineures'
   };
   
-  const title = customMessage || defaultMessages[versionType] || 'Mise à jour';
+  const title = customMessage || intelligentSummary.summary || defaultMessages[versionType] || 'Mise à jour';
   
-  // Format du message selon les préférences utilisateur
+  // Format du message selon les préférences utilisateur avec analyse IA
   return `[v${version}] ${title}
 
 🗄️ Section:
 - Mise à jour de la version ${version}
 - Type de version: ${versionType}
 - Date: ${timestamp}
+- ${intelligentSummary.stats}
 
 🔧 Corrections:
-- Gestion automatique des versions
-- Synchronisation des package.json
-- Commit automatique sans validation
+- ${intelligentSummary.details}
+- ${intelligentSummary.summary}
 
-✅ Version ${version} déployée avec succès
-✅ Tous les fichiers package.json synchronisés
-✅ Commit effectué automatiquement`;
+✅ Succès:
+- Version ${version} déployée avec succès
+- Tous les fichiers package.json synchronisés
+- Commit effectué automatiquement`;
 }
 
 function commitChanges(version, versionType, customMessage = '') {
@@ -132,6 +232,19 @@ function commitChanges(version, versionType, customMessage = '') {
     
     // Ajout de tous les fichiers modifiés
     execSync('git add .', { stdio: 'inherit' });
+    
+    // Analyser et afficher les changements
+    const changes = getGitChanges();
+    if (changes.files.length > 0) {
+      log('📊 Analyse des changements:', 'cyan');
+      log(`   📁 Fichiers modifiés: ${changes.files.length}`, 'blue');
+      log(`   ➕ Lignes ajoutées: ${changes.added}`, 'green');
+      log(`   ➖ Lignes supprimées: ${changes.deleted}`, 'red');
+      
+      const intelligentSummary = generateIntelligentSummary(changes, versionType);
+      log(`   🧠 Résumé IA: ${intelligentSummary.summary}`, 'magenta');
+      log('');
+    }
     
     // Création du message de commit
     const commitMessage = getCommitMessage(version, versionType, customMessage);
