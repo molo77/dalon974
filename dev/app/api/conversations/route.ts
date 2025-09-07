@@ -141,8 +141,26 @@ export async function DELETE(request: NextRequest) {
     const participant1 = parts[1];
     const participant2 = parts[2];
 
+    // Debug: Afficher les informations pour diagnostiquer le problème
+    console.log("[Conversations API] Debug DELETE:", {
+      conversationId,
+      userId,
+      participant1,
+      participant2,
+      isParticipant1: userId === participant1,
+      isParticipant2: userId === participant2,
+      allParts: parts
+    });
+
     // Vérifier que l'utilisateur fait partie de cette conversation
+    // Les participants sont triés par ordre alphabétique dans generateConversationId
     if (userId !== participant1 && userId !== participant2) {
+      console.log("[Conversations API] Erreur d'autorisation:", {
+        userId,
+        participant1,
+        participant2,
+        reason: "L'utilisateur ne fait pas partie de cette conversation"
+      });
       return NextResponse.json({ error: "Non autorisé" }, { status: 403 });
     }
 
