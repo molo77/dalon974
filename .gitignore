@@ -302,3 +302,4 @@ prod/app/signup/page.tsx
 prod/app/verify-request/page.tsx
 prod/prisma/schema.prisma
 logs/prod.pid
+dev/.env copy.local

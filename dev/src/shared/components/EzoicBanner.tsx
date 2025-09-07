@@ -22,7 +22,7 @@ export default function EzoicBanner({
   const ref = useRef<HTMLDivElement | null>(null);
   const siteId = process.env.NEXT_PUBLIC_EZOIC_SITE_ID;
   const isProd = process.env.NODE_ENV === "production";
-  const isTest = typeof testMode === "boolean" ? testMode : !isProd;
+  const _isTest = typeof testMode === "boolean" ? testMode : !isProd;
 
   useEffect(() => {
     if (!siteId || !slot) return; // pas configuré

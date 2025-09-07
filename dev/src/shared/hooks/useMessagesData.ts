@@ -1,6 +1,6 @@
 import { useMessages } from "@/shared/MessagesContext";
 
-export default function useMessagesData(params: {
+export default function useMessagesData(_params: {
   user: any;
   firestoreError: string | null;
   userDocLoaded: boolean;

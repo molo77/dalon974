@@ -120,7 +120,7 @@ export default function MaintenanceAlert({
                 <p>La base de données est maintenant accessible.</p>
               ) : (
                 <div>
-                  <p>La base de données n&apos;est pas accessible.</p>
+                  <p>La base de données n'est pas accessible.</p>
                   {errorMessage && (
                     <p className="mt-1 text-xs opacity-75">
                       Erreur: {errorMessage}

@@ -20,7 +20,7 @@ interface Conversation {
 export default function MessagesSection() {
   const { data: session } = useSession();
   const user = session?.user as any;
-  const router = useRouter();
+  const _router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +37,7 @@ export default function MessagesSection() {
         } else {
           setError('Erreur lors du chargement des conversations');
         }
-      } catch (err) {
+      } catch {
         setError('Erreur de connexion');
       } finally {
         setLoading(false);

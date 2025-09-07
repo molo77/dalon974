@@ -122,7 +122,7 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
         clearInterval(fetchInterval.current);
       }
     };
-  }, [user?.id]);
+  }, [user?.id, refreshMessages]);
 
   const value: MessagesContextType = {
     messages,

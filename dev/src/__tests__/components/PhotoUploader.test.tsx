@@ -110,7 +110,7 @@ describe('PhotoUploader', () => {
   })
 
   it('handles drag and drop reordering', async () => {
-    const user = userEvent.setup()
+    const _user = userEvent.setup()
     const initialPhotos = [
       'https://example.com/photo1.jpg',
       'https://example.com/photo2.jpg'

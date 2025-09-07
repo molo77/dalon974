@@ -16,7 +16,7 @@ model User {
   emailVerified DateTime?
   password  String?
   name      String?
-  role      String?  // e.g. 'admin', 'user', etc.
+  role      String?  @default("user") // e.g. 'admin', 'user', etc.
   providerId String?
   displayName String?
   image     String?

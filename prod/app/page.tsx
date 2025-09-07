@@ -53,8 +53,8 @@ export default function HomePage() {
   const isAdmin = (session as any)?.user?.role === 'admin';
   const [editAnnonce, setEditAnnonce] = useState<any|null>(null);
   const [annonceDetail, setAnnonceDetail] = useState<any|null>(null);
-  const [annonceDetailOpen, setAnnonceDetailOpen] = useState(false);
-  const [annonceDetailLoading, setAnnonceDetailLoading] = useState(false);
+  const [_annonceDetailOpen, setAnnonceDetailOpen] = useState(false);
+  const [_annonceDetailLoading, setAnnonceDetailLoading] = useState(false);
   const [deleteAnnonceId, setDeleteAnnonceId] = useState<string|null>(null);
   const [editColoc, setEditColoc] = useState<any|null>(null);
   const [deleteColocId, setDeleteColocId] = useState<string|null>(null);
@@ -182,7 +182,7 @@ export default function HomePage() {
   const pageLimit = 20;
   const offsetRef = useRef<number>(0);
   // Permettre de masquer/afficher la barre de filtres
-  const [_filtersCollapsed, setFiltersCollapsed] = useState<boolean>(false);
+  const [_filtersCollapsed, _setFiltersCollapsed] = useState<boolean>(false);
 
   // Refs diverses
   const resultsTopRef = useRef<HTMLDivElement | null>(null);
@@ -637,7 +637,7 @@ export default function HomePage() {
   };
 
   // NOUVEAU: fermer le détail d'une annonce
-  const closeAnnonceDetail = () => {
+  const _closeAnnonceDetail = () => {
     setAnnonceDetailOpen(false);
     setAnnonceDetail(null);
     setAnnonceDetailLoading(false);

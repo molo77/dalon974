@@ -37,7 +37,7 @@ const config = {
       async authorize(credentials, req) {
         const emailInput = credentials?.email || "";
         const password = credentials?.password || "";
-        const recaptchaToken = credentials?.recaptchaToken || "";
+        const recaptchaToken = (credentials?.recaptchaToken as string) || "";
         const email = (emailInput as string).toLowerCase().trim();
         if (!email || !password) return null;
 
@@ -48,8 +48,8 @@ const config = {
               method: "POST",
               headers: { "Content-Type": "application/x-www-form-urlencoded" },
               body: new URLSearchParams({
-                secret: process.env.RECAPTCHA_SECRET_KEY,
-                response: recaptchaToken,
+                secret: process.env.RECAPTCHA_SECRET_KEY || '',
+                response: recaptchaToken || '',
                 remoteip: getIpFromHeaders((req?.headers as any) || {}),
               }),
             });

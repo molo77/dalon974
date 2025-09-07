@@ -7,7 +7,7 @@ import { MatchesProvider } from '@/shared/MatchesContext'
 import MaintenanceAlert from '@/shared/components/maintenance/MaintenanceAlert'
 import Header from '@/shared/components/Header'
 import LeafletStyles from '@/shared/components/map/LeafletStyles'
-import { ErrorBoundary, ServerStatusChecker } from '@/shared/components'
+import { ErrorBoundary } from '@/shared/components'
 
 import { GlobalToast } from '@/shared/components/ui/feedback/Toast'
 

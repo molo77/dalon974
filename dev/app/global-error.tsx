@@ -39,7 +39,7 @@ export default function GlobalError({
                 Erreur système
               </h2>
               <p className="mt-2 text-center text-sm text-gray-600">
-                Une erreur critique s'est produite. Notre équipe technique a été automatiquement notifiée.
+                Une erreur critique s&apos;est produite. Notre équipe technique a été automatiquement notifiée.
               </p>
             </div>
           </div>
@@ -88,13 +88,13 @@ export default function GlobalError({
                     onClick={() => window.location.href = "/"}
                     className="flex-1 flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
-                    Retour à l'accueil
+                    Retour à l&apos;accueil
                   </button>
                 </div>
 
                 <div className="text-center">
                   <p className="text-xs text-gray-500">
-                    Code d'erreur: {error.digest || "CRITICAL_ERROR"}
+                    Code d&apos;erreur: {error.digest || "CRITICAL_ERROR"}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
                     Heure: {new Date().toLocaleString("fr-FR")}

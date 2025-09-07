@@ -17,7 +17,7 @@ import { toast as appToast } from "@/shared/components/feedback/Toast";
 import { listUserAnnoncesPage, addAnnonce, updateAnnonce, deleteAnnonce as deleteAnnonceSvc } from "@/core/business/annonceService";
 import { getUserRole } from "@/core/business/userService";
 import { getColocProfile, saveColocProfile, deleteColocProfile, type ColocProfileData } from "@/core/business/colocProfileClientService";
-import Link from "next/link";
+// import Link from "next/link";
 import AdBlock from "@/shared/components/AdBlock";
 import useCommuneSelection from "@/shared/hooks/useCommuneSelection";
 import CommuneZoneSelector from "@/shared/components/map/CommuneZoneSelector";
@@ -281,7 +281,7 @@ function DashboardContent() {
   const [lastDoc, setLastDoc] = useState<any | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const [_userRole, setUserRole] = useState<string | null>(null);
   const [userDocLoaded, setUserDocLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<"annonces" | "messages" | "coloc" | "match">("annonces");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -318,7 +318,7 @@ function DashboardContent() {
   const [colocLanguesCsv, setColocLanguesCsv] = useState(""); // CSV vers tableau
   const [colocInstagram, setColocInstagram] = useState("");
   // photos are handled via uploader; remove CSV input support
-  const [colocPhotosCsv, setColocPhotosCsv] = useState(""); // legacy - kept for compatibility but not used in UI
+  const [_colocPhotosCsv, _setColocPhotosCsv] = useState(""); // legacy - kept for compatibility but not used in UI
   // Lightbox for coloc profile images
   const [colocGalleryIndex, setColocGalleryIndex] = useState<number>(0);
   const [colocLightboxOpen, setColocLightboxOpen] = useState<boolean>(false);
@@ -351,7 +351,7 @@ function DashboardContent() {
   const [musique, setMusique] = useState("");
   // Suivi existence doc & prêt pour autosave
   const [hasColocDoc, setHasColocDoc] = useState<boolean | null>(null);
-  const [colocReady, setColocReady] = useState(false);
+  const [_colocReady, setColocReady] = useState(false);
   const [colocEditing, setColocEditing] = useState(false);
   // Profil considéré "significatif" si au moins un champ utile est renseigné
   const hasMeaningfulColocData = useMemo(() => {
@@ -1446,7 +1446,7 @@ function DashboardContent() {
                               <div className="mt-2 mb-2">
                                 <p className="text-xs font-medium text-gray-600 mb-1">🏠 Correspond à vos annonces :</p>
                                 <div className="flex flex-wrap gap-1">
-                                  {item.matchingAnnonces.slice(0, 3).map((annonce: any, idx: number) => (
+                                  {item.matchingAnnonces.slice(0, 3).map((annonce: any, _idx: number) => (
                                     <span 
                                       key={annonce.id} 
                                       className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 cursor-pointer hover:bg-blue-100"

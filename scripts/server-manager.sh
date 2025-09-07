@@ -229,13 +229,6 @@ start_prod() {
     
     log_info "Démarrage du serveur de production sur le port 3000..."
     
-    # Fonction pour ajouter un timestamp aux logs
-    add_timestamp() {
-        while IFS= read -r line; do
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] $line"
-        done
-    }
-    
     # Sauvegarder l'ancien log s'il existe
     if [ -f "$LOG_DIR/prod.log" ] && [ -s "$LOG_DIR/prod.log" ]; then
         BACKUP_LOG="$LOG_DIR/prod_$(date +%Y%m%d_%H%M%S).log"
@@ -244,7 +237,17 @@ start_prod() {
     fi
     
     log_info "🚀 Lancement du serveur avec: npm run start"
-    nohup bash -c "npm run start 2>&1 | add_timestamp" > "$LOG_DIR/prod.log" 2>&1 &
+    
+    # Créer un script temporaire pour les logs timestampés
+    cat > /tmp/start_prod_with_timestamps.sh << 'EOF'
+#!/bin/bash
+npm run start 2>&1 | while IFS= read -r line; do
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $line"
+done
+EOF
+    chmod +x /tmp/start_prod_with_timestamps.sh
+    
+    nohup /tmp/start_prod_with_timestamps.sh > "$LOG_DIR/prod.log" 2>&1 &
     PROD_PID=$!
     echo $PROD_PID > "$LOG_DIR/prod.pid"
     log_info "📝 PID du serveur: $PROD_PID"

@@ -78,7 +78,7 @@ export function MatchesProvider({ children }: { children: React.ReactNode }) {
         clearInterval(fetchInterval.current);
       }
     };
-  }, [user?.id]);
+  }, [user?.id, refreshMatches]);
 
   const value: MatchesContextType = {
     newMatchesCount,

@@ -51,6 +51,9 @@ add_timestamp() {
     done
 }
 
+# Exporter la fonction pour qu'elle soit accessible dans nohup
+export -f add_timestamp
+
 # Fonction pour vérifier si un port est utilisé
 check_port() {
     local port=$1
@@ -127,7 +130,17 @@ start_prod_with_logs() {
     
     # Démarrer le serveur avec logs timestampés
     cd "$PROD_DIR"
-    nohup bash -c "npm run start 2>&1 | add_timestamp" > "$LOG_FILE" 2>&1 &
+    
+    # Créer un script temporaire pour les logs timestampés
+    cat > /tmp/start_prod_with_timestamps.sh << 'EOF'
+#!/bin/bash
+npm run start 2>&1 | while IFS= read -r line; do
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $line"
+done
+EOF
+    chmod +x /tmp/start_prod_with_timestamps.sh
+    
+    nohup /tmp/start_prod_with_timestamps.sh > "$LOG_FILE" 2>&1 &
     PROD_PID=$!
     echo $PROD_PID > "$LOG_DIR/prod.pid"
     

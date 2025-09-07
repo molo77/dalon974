@@ -152,10 +152,22 @@ const config = {
         if (verified !== true) return false;
       }
 
-      // Option: promouvoir automatiquement certains emails en admin (liste séparée par des virgules)
+      // Attribuer le rôle par défaut "user" si aucun rôle n'est défini
       try {
-        const admins = (process.env.ADMIN_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
         const emailLower = email.toLowerCase();
+        const existingUser = await prisma.user.findUnique({ where: { email: emailLower } });
+        
+        if (existingUser && !existingUser.role) {
+          // Si l'utilisateur existe mais n'a pas de rôle, lui attribuer "user"
+          await prisma.user.update({ where: { email: emailLower }, data: { role: "user" } });
+          (user as any).role = "user";
+        } else if (!existingUser) {
+          // Si c'est un nouvel utilisateur, le créer avec le rôle "user"
+          (user as any).role = "user";
+        }
+        
+        // Option: promouvoir automatiquement certains emails en admin (liste séparée par des virgules)
+        const admins = (process.env.ADMIN_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
         if (admins.includes(emailLower)) {
           await prisma.user.update({ where: { email: emailLower }, data: { role: "admin" } });
           (user as any).role = "admin";

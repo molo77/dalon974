@@ -52,7 +52,7 @@ function VerifySignupContent() {
         setMessage(data.error || "Lien de vérification invalide ou expiré.");
         setIsSuccess(false);
       }
-    } catch (error) {
+    } catch {
       setMessage("Erreur lors de la vérification du lien.");
       setIsSuccess(false);
     }
@@ -108,7 +108,7 @@ function VerifySignupContent() {
         setMessage(data.error || "Erreur lors de la finalisation de l'inscription.");
         setIsSuccess(false);
       }
-    } catch (error) {
+    } catch {
       setMessage("Erreur lors de la finalisation de l'inscription.");
       setIsSuccess(false);
     } finally {
