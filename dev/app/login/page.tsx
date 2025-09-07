@@ -28,6 +28,7 @@ function LoginContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sessionTimeout, setSessionTimeout] = useState(false);
 
   // Redirection automatique si l'utilisateur est déjà connecté
   useEffect(() => {
@@ -36,8 +37,20 @@ function LoginContent() {
     }
   }, [status, session, router]);
 
-  // Afficher un loader pendant la vérification de la session
-  if (status === "loading") {
+  // Timeout pour la vérification de session (5 secondes)
+  useEffect(() => {
+    if (status === "loading") {
+      const timeout = setTimeout(() => {
+        setSessionTimeout(true);
+      }, 5000);
+      return () => clearTimeout(timeout);
+    } else {
+      setSessionTimeout(false);
+    }
+  }, [status]);
+
+  // Afficher un loader pendant la vérification de la session (avec timeout)
+  if (status === "loading" && !sessionTimeout) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
@@ -51,6 +64,11 @@ function LoginContent() {
         </div>
       </div>
     );
+  }
+
+  // Si timeout, continuer avec le formulaire de connexion
+  if (status === "loading" && sessionTimeout) {
+    console.warn("Session verification timeout, proceeding with login form");
   }
 
   const handleGoogle = async () => {

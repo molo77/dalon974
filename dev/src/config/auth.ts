@@ -25,7 +25,33 @@ function getIpFromHeaders(h: Record<string, string | string[] | undefined>) {
 const config = {
   // Adaptateur Prisma pour le provider Email
   adapter: PrismaAdapter(prisma),
-  session: { strategy: "jwt" as const },
+  session: { 
+    strategy: "jwt" as const,
+    maxAge: 30 * 24 * 60 * 60, // 30 jours
+    updateAge: 24 * 60 * 60, // 24 heures
+  },
+  pages: {
+    signIn: '/login',
+    error: '/login',
+  },
+  callbacks: {
+    async jwt({ token, user, account }) {
+      // Persister l'ID utilisateur dans le token
+      if (user) {
+        token.id = user.id;
+        token.role = user.role;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      // Envoyer les propriétés au client
+      if (token) {
+        session.user.id = token.id as string;
+        session.user.role = token.role as string;
+      }
+      return session;
+    },
+  },
   providers: [
     Credentials({
       name: "Email",
