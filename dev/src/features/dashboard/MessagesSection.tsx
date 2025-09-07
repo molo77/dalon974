@@ -26,6 +26,11 @@ export default function MessagesSection() {
   const [error, setError] = useState<string | null>(null);
   const [deletingConversation, setDeletingConversation] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [showBlockModal, setShowBlockModal] = useState<string | null>(null);
+  const [showReportModal, setShowReportModal] = useState<string | null>(null);
+  const [blockReason, setBlockReason] = useState("");
+  const [reportReason, setReportReason] = useState("");
+  const [reportDescription, setReportDescription] = useState("");
 
   useEffect(() => {
     if (!user?.id) return;
@@ -104,6 +109,84 @@ export default function MessagesSection() {
     setShowDeleteConfirm(null);
   };
 
+  const handleBlockUser = async (userId: string) => {
+    try {
+      const response = await fetch('/api/users/block', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          blockedId: userId,
+          reason: blockReason
+        }),
+      });
+
+      if (response.ok) {
+        setShowBlockModal(null);
+        setBlockReason("");
+        // Rafraîchir les conversations pour exclure l'utilisateur bloqué
+        window.location.reload();
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Erreur lors du blocage');
+      }
+    } catch {
+      setError('Erreur de connexion lors du blocage');
+    }
+  };
+
+  const handleReportUser = async (userId: string) => {
+    try {
+      const response = await fetch('/api/users/report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reportedId: userId,
+          reason: reportReason,
+          description: reportDescription
+        }),
+      });
+
+      if (response.ok) {
+        setShowReportModal(null);
+        setReportReason("");
+        setReportDescription("");
+        alert('Signalement envoyé avec succès');
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Erreur lors du signalement');
+      }
+    } catch {
+      setError('Erreur de connexion lors du signalement');
+    }
+  };
+
+  const handleBlockClick = (userId: string, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setShowBlockModal(userId);
+  };
+
+  const handleReportClick = (userId: string, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setShowReportModal(userId);
+  };
+
+  const handleCancelBlock = () => {
+    setShowBlockModal(null);
+    setBlockReason("");
+  };
+
+  const handleCancelReport = () => {
+    setShowReportModal(null);
+    setReportReason("");
+    setReportDescription("");
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -175,10 +258,34 @@ export default function MessagesSection() {
                         {formatMessageTime(conversation.lastMessageAt)}
                       </p>
                     </div>
-                    <div className="ml-4 flex-shrink-0 flex items-center gap-2">
+                    <div className="ml-4 flex-shrink-0 flex items-center gap-1">
                       {conversation.unreadCount > 0 && (
                         <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
                       )}
+                      
+                      {/* Bouton de signalement */}
+                      <button
+                        onClick={(e) => handleReportClick(isOwner ? conversation.senderId : conversation.annonceOwnerId, e)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-orange-600 transition-all duration-200"
+                        title="Signaler cet utilisateur"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                      </button>
+
+                      {/* Bouton de blocage */}
+                      <button
+                        onClick={(e) => handleBlockClick(isOwner ? conversation.senderId : conversation.annonceOwnerId, e)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 transition-all duration-200"
+                        title="Bloquer cet utilisateur"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728" />
+                        </svg>
+                      </button>
+
+                      {/* Bouton de suppression */}
                       <button
                         onClick={(e) => handleDeleteClick(conversation.id, e)}
                         className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 transition-all duration-200"
@@ -242,6 +349,102 @@ export default function MessagesSection() {
               </Link>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal de blocage */}
+      {showBlockModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Bloquer cet utilisateur</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Cette personne ne pourra plus vous contacter et vous ne verrez plus ses messages.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Raison du blocage (optionnel)
+              </label>
+              <textarea
+                value={blockReason}
+                onChange={(e) => setBlockReason(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={3}
+                placeholder="Expliquez pourquoi vous bloquez cette personne..."
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleCancelBlock}
+                className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleBlockUser(showBlockModal)}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+              >
+                Bloquer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de signalement */}
+      {showReportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Signaler cet utilisateur</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Votre signalement sera examiné par notre équipe de modération.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Raison du signalement *
+              </label>
+              <select
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                <option value="">Sélectionnez une raison</option>
+                <option value="spam">Spam ou publicité</option>
+                <option value="harassment">Harcèlement</option>
+                <option value="inappropriate">Contenu inapproprié</option>
+                <option value="fake">Profil faux ou trompeur</option>
+                <option value="scam">Tentative d'arnaque</option>
+                <option value="other">Autre</option>
+              </select>
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Description (optionnel)
+              </label>
+              <textarea
+                value={reportDescription}
+                onChange={(e) => setReportDescription(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={3}
+                placeholder="Décrivez le problème en détail..."
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleCancelReport}
+                className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleReportUser(showReportModal)}
+                disabled={!reportReason}
+                className="px-4 py-2 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Signaler
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

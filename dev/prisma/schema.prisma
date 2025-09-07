@@ -228,3 +228,33 @@ model ConversationDeletion {
   @@index([conversationId])
   @@index([userId])
 }
+
+model UserBlock {
+  id          String   @id @default(uuid())
+  blockerId   String   // ID de l'utilisateur qui bloque
+  blockedId   String   // ID de l'utilisateur bloqué
+  blockedAt   DateTime @default(now()) @db.Timestamp(6)
+  reason      String?  // Raison du blocage (optionnel)
+  
+  @@unique([blockerId, blockedId]) // Un utilisateur ne peut bloquer qu'une fois la même personne
+  @@index([blockerId])
+  @@index([blockedId])
+}
+
+model UserReport {
+  id          String   @id @default(uuid())
+  reporterId  String   // ID de l'utilisateur qui signale
+  reportedId  String   // ID de l'utilisateur signalé
+  reason      String   // Raison du signalement
+  description String?  @db.Text // Description détaillée (optionnel)
+  status      String   @default("pending") // pending, reviewed, resolved, dismissed
+  createdAt   DateTime @default(now()) @db.Timestamp(6)
+  reviewedAt  DateTime? @db.Timestamp(6)
+  reviewedBy  String?  // ID de l'admin qui a traité le signalement
+  reviewNotes String?  @db.Text // Notes de l'admin
+  
+  @@index([reporterId])
+  @@index([reportedId])
+  @@index([status])
+  @@index([createdAt])
+}

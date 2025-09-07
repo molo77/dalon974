@@ -44,6 +44,18 @@ export async function GET(request: NextRequest) {
 
     const deletedConversationIds = new Set(deletedConversations.map(d => d.conversationId));
 
+    // Récupérer les utilisateurs bloqués par l'utilisateur actuel
+    const blockedUsers = await prisma.userBlock.findMany({
+      where: {
+        blockerId: userId
+      },
+      select: {
+        blockedId: true
+      }
+    });
+
+    const blockedUserIds = new Set(blockedUsers.map(b => b.blockedId));
+
     // Grouper les messages par conversation
     const conversationMap = new Map();
     
@@ -56,6 +68,11 @@ export async function GET(request: NextRequest) {
       
       // Ignorer les conversations supprimées par l'utilisateur
       if (deletedConversationIds.has(conversationId)) {
+        continue;
+      }
+
+      // Ignorer les conversations avec des utilisateurs bloqués
+      if (blockedUserIds.has(message.senderId || '') || blockedUserIds.has(message.annonceOwnerId || '')) {
         continue;
       }
       

@@ -1,6 +1,6 @@
 {
   "name": "rodcoloc",
-  "version": "2.4.16",
+  "version": "2.4.17",
   "private": true,
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3000",
