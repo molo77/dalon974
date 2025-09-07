@@ -5,9 +5,11 @@ const puppeteer = require('puppeteer');
 const { PrismaClient } = require('@prisma/client');
 const { exec } = require('child_process');
 const { promisify } = require('util');
+const ScraperLogger = require('/data/dalon974/logs/scraper/logger');
 
 const execAsync = promisify(exec);
 const prisma = new PrismaClient();
+const logger = new ScraperLogger();
 
 // Configuration par défaut
 const DEFAULT_CONFIG = {
@@ -96,8 +98,80 @@ async function detectBlocking(page) {
   }
 }
 
+async function detectCaptcha(page) {
+  try {
+    const captchaInfo = await page.evaluate(() => {
+      // Chercher différents types de captchas
+      const captchaSelectors = [
+        'iframe[src*="recaptcha"]',
+        'iframe[src*="hcaptcha"]',
+        '.g-recaptcha',
+        '.h-captcha',
+        '[data-sitekey]',
+        'img[src*="captcha"]',
+        'img[alt*="captcha" i]',
+        'img[alt*="verification" i]',
+        '.captcha',
+        '#captcha',
+        '[class*="captcha" i]',
+        '[id*="captcha" i]'
+      ];
+
+      let captchaElement = null;
+      let captchaType = 'unknown';
+
+      for (const selector of captchaSelectors) {
+        const element = document.querySelector(selector);
+        if (element) {
+          captchaElement = element;
+          
+          if (selector.includes('recaptcha')) {
+            captchaType = 'recaptcha';
+          } else if (selector.includes('hcaptcha')) {
+            captchaType = 'hcaptcha';
+          } else if (selector.includes('img')) {
+            captchaType = 'image';
+          } else {
+            captchaType = 'other';
+          }
+          break;
+        }
+      }
+
+      // Vérifier aussi dans le texte de la page
+      const bodyText = document.body.textContent?.toLowerCase() || '';
+      const captchaKeywords = [
+        'captcha',
+        'verification',
+        'robot',
+        'automation',
+        'prove you are human',
+        'vérifiez que vous êtes humain',
+        'anti-robot'
+      ];
+
+      const hasCaptchaText = captchaKeywords.some(keyword => bodyText.includes(keyword));
+
+      return {
+        hasCaptcha: !!(captchaElement || hasCaptchaText),
+        captchaType,
+        captchaElement: captchaElement ? captchaElement.outerHTML.substring(0, 200) : null,
+        hasCaptchaText,
+        bodyTextSnippet: bodyText.substring(0, 500)
+      };
+    });
+
+    return captchaInfo;
+  } catch (e) {
+    logger.error(`Erreur lors de la détection de captcha: ${e.message}`);
+    return { hasCaptcha: false, captchaType: 'unknown', error: e.message };
+  }
+}
+
 async function scrapeWithFixed() {
-  console.log('🔧 Démarrage du scraper Leboncoin corrigé...\n');
+  // Initialiser le système de logs
+  logger.initialize();
+  logger.start('Démarrage du scraper Leboncoin corrigé');
   
   let browser = null;
   let page = null;
@@ -107,12 +181,12 @@ async function scrapeWithFixed() {
   try {
     const config = await getConfig();
     
-    console.log('📋 Configuration:');
-    console.log('- URL:', config.LBC_SEARCH_URL);
-    console.log('- Headless:', config.LBC_BROWSER_HEADLESS);
-    console.log('- Max annonces:', config.LBC_MAX);
-    console.log('- Pages:', config.LBC_PAGES);
-    console.log('- Délai entre requêtes:', config.LBC_DELAY_BETWEEN_REQUESTS + 'ms');
+    logger.info('Configuration du scraper:');
+    logger.info(`- URL: ${config.LBC_SEARCH_URL}`);
+    logger.info(`- Headless: ${config.LBC_BROWSER_HEADLESS}`);
+    logger.info(`- Max annonces: ${config.LBC_MAX}`);
+    logger.info(`- Pages: ${config.LBC_PAGES}`);
+    logger.info(`- Délai entre requêtes: ${config.LBC_DELAY_BETWEEN_REQUESTS}ms`);
     
     // Récupérer le token Datadome
     let datadomeToken = '';
@@ -126,14 +200,14 @@ async function scrapeWithFixed() {
     }
     
     if (datadomeToken) {
-      console.log('- Token Datadome: Présent');
+      logger.info('- Token Datadome: Présent');
     } else {
-      console.log('- Token Datadome: Absent');
+      logger.warning('- Token Datadome: Absent');
     }
     
     // Vérifier l'IP initiale
     const initialIP = await getCurrentIP();
-    console.log(`🌐 IP initiale: ${initialIP || 'Inconnue'}`);
+    logger.info(`IP initiale: ${initialIP || 'Inconnue'}`);
     
     // Lancer le navigateur avec configuration optimisée
     const headless = config.LBC_BROWSER_HEADLESS === 'true';
@@ -185,7 +259,7 @@ async function scrapeWithFixed() {
     // Configuration du user agent aléatoire
     const userAgent = getRandomUserAgent();
     await page.setUserAgent(userAgent);
-    console.log('🤖 User Agent:', userAgent);
+    logger.info(`User Agent: ${userAgent}`);
     
     // Headers réalistes
     await page.setExtraHTTPHeaders({
@@ -210,9 +284,9 @@ async function scrapeWithFixed() {
           domain: '.leboncoin.fr',
           path: '/'
         });
-        console.log('🍪 Cookie Datadome ajouté');
+        logger.success('Cookie Datadome ajouté');
       } catch (error) {
-        console.log('⚠️ Erreur lors de l\'ajout du cookie Datadome');
+        logger.error('Erreur lors de l\'ajout du cookie Datadome');
       }
     }
     
@@ -220,10 +294,10 @@ async function scrapeWithFixed() {
     
     while (!scrapingSuccessful && attemptCount < maxAttempts) {
       attemptCount++;
-      console.log(`\n🌐 Tentative ${attemptCount}/${maxAttempts}...`);
+      logger.info(`Tentative ${attemptCount}/${maxAttempts}`);
       
       try {
-        console.log('🌐 Navigation vers Leboncoin...');
+        logger.info('Navigation vers Leboncoin');
         
         // Navigation avec timeout plus court
         await page.goto(config.LBC_SEARCH_URL, {
@@ -239,25 +313,189 @@ async function scrapeWithFixed() {
         const isBlocked = await detectBlocking(page);
         
         if (isBlocked) {
-          console.log('🚨 Blocage détecté !');
-          console.log('💡 Tentative de contournement...');
+          logger.warning('Blocage détecté !');
+          logger.info('Tentative de contournement...');
           
           // Attendre plus longtemps avant la prochaine tentative
           await sleep(5000);
           continue;
         } else {
-          console.log('✅ Aucun blocage détecté, continuation...');
+          logger.success('Aucun blocage détecté, continuation...');
+        }
+        
+        // Détecter les captchas
+        const captchaInfo = await detectCaptcha(page);
+        
+        if (captchaInfo.hasCaptcha) {
+          logger.warning(`🚨 CAPTCHA DÉTECTÉ ! Type: ${captchaInfo.captchaType}`);
+          logger.warning('Le scraper est bloqué par un captcha.');
+          logger.info('💡 Ouverture automatique du modal de résolution...');
+          logger.info('📋 Détails du captcha:');
+          if (captchaInfo.captchaElement) {
+            logger.info(`- Élément HTML: ${captchaInfo.captchaElement}`);
+          }
+          if (captchaInfo.hasCaptchaText) {
+            logger.info('- Texte de captcha détecté dans la page');
+          }
+          logger.info(`- Extrait de la page: ${captchaInfo.bodyTextSnippet}`);
+          
+          // Capturer l'image du captcha
+          let captchaImageBase64 = null;
+          try {
+            logger.info('📸 Capture de l\'image du captcha...');
+            
+            // Chercher l'élément de captcha et le capturer
+            const captchaImageData = await page.evaluate(() => {
+              // Chercher différents types d'images de captcha
+              const captchaSelectors = [
+                'img[src*="captcha"]',
+                'img[alt*="captcha"]',
+                'img[alt*="Captcha"]',
+                'img[alt*="CAPTCHA"]',
+                '.captcha img',
+                '#captcha img',
+                'img[src*="recaptcha"]',
+                'img[src*="hcaptcha"]'
+              ];
+              
+              for (const selector of captchaSelectors) {
+                const img = document.querySelector(selector);
+                if (img && img.src) {
+                  return {
+                    src: img.src,
+                    alt: img.alt || '',
+                    width: img.width || img.naturalWidth,
+                    height: img.height || img.naturalHeight
+                  };
+                }
+              }
+              
+              return null;
+            });
+            
+            if (captchaImageData && captchaImageData.src) {
+              // Capturer l'image en base64
+              const imageBuffer = await page.screenshot({
+                clip: {
+                  x: 0,
+                  y: 0,
+                  width: await page.viewport().width,
+                  height: await page.viewport().height
+                }
+              });
+              
+              captchaImageBase64 = `data:image/png;base64,${imageBuffer.toString('base64')}`;
+              logger.success('✅ Image du captcha capturée');
+            } else {
+              logger.warning('⚠️ Impossible de trouver l\'image du captcha');
+            }
+          } catch (error) {
+            logger.warning(`⚠️ Erreur lors de la capture du captcha: ${error.message}`);
+          }
+          
+          // Ouvrir un nouvel onglet du navigateur pour résoudre le captcha
+          try {
+            logger.info('🌐 Ouverture d\'un nouvel onglet pour résoudre le captcha...');
+            
+            // Obtenir l'URL actuelle de la page
+            const currentUrl = page.url();
+            logger.info(`📍 URL du captcha: ${currentUrl}`);
+            
+            // Ouvrir un nouvel onglet dans le navigateur par défaut
+            const { exec } = require('child_process');
+            const openCommand = process.platform === 'win32' ? 'start' : 
+                              process.platform === 'darwin' ? 'open' : 'xdg-open';
+            
+            exec(`${openCommand} "${currentUrl}"`, (error, stdout, stderr) => {
+              if (error) {
+                logger.warning(`⚠️ Erreur lors de l'ouverture du navigateur: ${error.message}`);
+                logger.info('💡 Ouvrez manuellement cette URL dans votre navigateur:');
+                logger.info(`   ${currentUrl}`);
+              } else {
+                logger.success('✅ Nouvel onglet ouvert dans le navigateur');
+                logger.info('💡 Résolvez le captcha dans l\'onglet ouvert, puis relancez le scraper');
+              }
+            });
+            
+            // Créer aussi un fichier de notification pour l'admin
+            const notificationData = {
+              captchaDetected: true,
+              captchaType: captchaInfo.captchaType,
+              captchaUrl: currentUrl,
+              captchaDetails: {
+                captchaElement: captchaInfo.captchaElement,
+                hasCaptchaText: captchaInfo.hasCaptchaText,
+                bodyTextSnippet: captchaInfo.bodyTextSnippet,
+                captchaImage: captchaImageBase64
+              },
+              timestamp: new Date().toISOString(),
+              message: 'Captcha détecté - Résolution manuelle requise dans le navigateur'
+            };
+            
+            const fs = require('fs');
+            const path = require('path');
+            const notificationFile = path.join(__dirname, '../../../../logs/scraper/captcha-notification.json');
+            
+            fs.writeFileSync(notificationFile, JSON.stringify(notificationData, null, 2));
+            logger.success('✅ Fichier de notification créé');
+            
+          } catch (error) {
+            logger.warning(`⚠️ Erreur lors de l'ouverture du navigateur: ${error.message}`);
+            logger.info('💡 Ouvrez manuellement cette URL dans votre navigateur:');
+            logger.info(`   ${page.url()}`);
+          }
+          
+          // Mettre le statut du scraper en pause
+          try {
+            logger.info('⏸️ Mise en pause du scraper...');
+            
+            // Mettre à jour le statut du scraper en base de données
+            const latestRun = await prisma.scraperRun.findFirst({
+              where: { status: 'running' },
+              orderBy: { startTime: 'desc' }
+            });
+            
+            if (latestRun) {
+              await prisma.scraperRun.update({
+                where: { id: latestRun.id },
+                data: { 
+                  status: 'paused',
+                  endTime: new Date(),
+                  errorMessage: 'Captcha détecté - Résolution manuelle requise'
+                }
+              });
+              logger.success('✅ Statut du scraper mis en pause');
+            }
+          } catch (error) {
+            logger.warning(`⚠️ Erreur lors de la mise en pause: ${error.message}`);
+          }
+          
+          // Attendre que l'utilisateur résolve le captcha
+          logger.info('⏳ Scraper en pause - Attente de la résolution du captcha...');
+          logger.info('💡 Résolvez le captcha dans l\'onglet ouvert, puis relancez le scraper');
+          
+          // Fermer le navigateur mais garder le processus en vie
+          if (browser) {
+            await browser.close();
+          }
+          await prisma.$disconnect();
+          
+          // Sortir avec un code spécial pour indiquer qu'un captcha a été détecté
+          logger.info('🏁 Scraper en pause - Captcha détecté');
+          process.exit(2); // Code 2 pour captcha détecté
+        } else {
+          logger.success('Aucun captcha détecté, continuation...');
         }
         
         // Cliquer sur les cookies si présent
         try {
           await page.click('#didomi-notice-agree-button', { timeout: 3000 });
-          console.log('✅ Cookies acceptés');
+          logger.success('Cookies acceptés');
           await sleep(1000);
         } catch {}
         
         // Récupérer les annonces avec une approche plus robuste
-        console.log('🔍 Recherche des annonces...');
+        logger.info('Recherche des annonces...');
         
         let articles = [];
         try {
@@ -299,12 +537,12 @@ async function scrapeWithFixed() {
           }
         }
         
-        console.log(`\n📊 Résultats: ${articles.length} annonces trouvées`);
+        logger.info(`Résultats: ${articles.length} annonces trouvées`);
         
         if (articles.length > 0) {
-          console.log('\n📋 Échantillon des annonces:');
+          logger.info('Échantillon des annonces:');
           articles.slice(0, 5).forEach((article, index) => {
-            console.log(`${index + 1}. ${article.price || 'Prix N/A'} | ${article.location || 'Lieu N/A'} | ${article.title || 'Titre N/A'}`);
+            logger.info(`${index + 1}. ${article.price || 'Prix N/A'} | ${article.location || 'Lieu N/A'} | ${article.title || 'Titre N/A'}`);
           });
           
           // Récupérer le nouveau token Datadome
@@ -313,103 +551,190 @@ async function scrapeWithFixed() {
             const newDatadomeCookie = cookies.find(cookie => cookie.name === 'datadome');
             
             if (newDatadomeCookie && newDatadomeCookie.value !== datadomeToken) {
-              console.log('\n🔄 Nouveau token Datadome détecté, mise à jour...');
+              logger.info('Nouveau token Datadome détecté, mise à jour...');
               await prisma.scraperSetting.upsert({
                 where: { key: 'LBC_DATADOME' },
                 update: { value: newDatadomeCookie.value },
                 create: { key: 'LBC_DATADOME', value: newDatadomeCookie.value }
               });
-              console.log('✅ Token Datadome mis à jour dans la base de données');
+              logger.success('Token Datadome mis à jour dans la base de données');
             }
           } catch (error) {
-            console.log('⚠️ Erreur lors de la mise à jour du token Datadome');
+            logger.error('Erreur lors de la mise à jour du token Datadome');
+          }
+          
+          // Sauvegarder les annonces dans la base de données
+          logger.info('Sauvegarde des annonces dans la base de données...');
+          
+          let created = 0;
+          let updated = 0;
+          let skippedRecent = 0;
+          
+          // Récupérer l'utilisateur admin par défaut
+          const adminUser = await prisma.user.findFirst({
+            where: { role: 'admin' }
+          });
+          
+          if (!adminUser) {
+            logger.error('Aucun utilisateur admin trouvé pour sauvegarder les annonces');
+            return;
+          }
+          
+          for (const article of articles) {
+            try {
+              // Extraire l'ID de l'annonce depuis l'URL
+              const urlMatch = article.url?.match(/\/ad\/([^\/]+)/);
+              const lbcId = urlMatch ? urlMatch[1] : null;
+              
+              if (!lbcId) {
+                logger.warning(`Impossible d'extraire l'ID de l'annonce: ${article.url}`);
+                continue;
+              }
+              
+              // Vérifier si l'annonce existe déjà
+              const existingAnnonce = await prisma.annonce.findFirst({
+                where: { 
+                  id: lbcId
+                }
+              });
+              
+              // Extraire le prix
+              let prix = null;
+              if (article.price) {
+                const priceMatch = article.price.match(/(\d+)/);
+                if (priceMatch) {
+                  prix = parseInt(priceMatch[1], 10);
+                }
+              }
+              
+              // Extraire la ville
+              const ville = article.location || 'La Réunion';
+              
+              const annonceData = {
+                id: lbcId,
+                title: article.title || 'Annonce Leboncoin',
+                description: `Annonce collectée depuis Leboncoin\nURL: ${article.url}`,
+                ville: ville,
+                prix: prix,
+                source: 'lbc',
+                userId: adminUser.id,
+                createdAt: new Date(),
+                updatedAt: new Date()
+              };
+              
+              if (existingAnnonce) {
+                // Mettre à jour l'annonce existante
+                await prisma.annonce.update({
+                  where: { id: existingAnnonce.id },
+                  data: {
+                    ...annonceData,
+                    updatedAt: new Date()
+                  }
+                });
+                updated++;
+                logger.info(`Annonce mise à jour: ${article.title}`);
+              } else {
+                // Créer une nouvelle annonce
+                await prisma.annonce.create({
+                  data: annonceData
+                });
+                created++;
+                logger.success(`Nouvelle annonce créée: ${article.title}`);
+              }
+              
+            } catch (error) {
+              logger.error(`Erreur lors de la sauvegarde de l'annonce ${article.title}: ${error.message}`);
+            }
           }
           
           // Afficher les métriques
           const metrics = {
-            created: 0,
-            updated: 0,
-            skippedRecent: articles.length,
+            created: created,
+            updated: updated,
+            skippedRecent: skippedRecent,
             cooldownHours: 24
           };
           
+          logger.metrics(metrics);
           console.log('LBC_METRICS_JSON:' + JSON.stringify(metrics));
           console.log(`total annonces collectées avant coupe ${articles.length}`);
+          logger.info(`Résumé: ${created} créées, ${updated} mises à jour`);
           
-          console.log('\n✅ Le scraping fonctionne !');
+          logger.success('Le scraping et la sauvegarde fonctionnent !');
           scrapingSuccessful = true;
         } else {
-          console.log('\n❌ Aucune annonce trouvée. Nouvelle tentative...');
+          logger.warning('Aucune annonce trouvée. Nouvelle tentative...');
           await sleep(3000);
         }
         
       } catch (error) {
-        console.error('❌ Erreur lors de la tentative:', error.message);
+        logger.error(`Erreur lors de la tentative: ${error.message}`);
         await sleep(3000);
       }
     }
     
     if (!scrapingSuccessful) {
-      console.log('\n❌ Impossible de récupérer des annonces après plusieurs tentatives');
-      console.log('💡 Suggestions:');
-      console.log('1. Vérifiez votre connexion internet');
-      console.log('2. Essayez plus tard');
-      console.log('3. Vérifiez l\'URL de recherche');
-      console.log('4. Contactez le support');
+      logger.error('Impossible de récupérer des annonces après plusieurs tentatives');
+      logger.info('Suggestions:');
+      logger.info('1. Vérifiez votre connexion internet');
+      logger.info('2. Essayez plus tard');
+      logger.info('3. Vérifiez l\'URL de recherche');
+      logger.info('4. Contactez le support');
     }
     
     // Capture d'écran finale si pas en headless
     if (!headless) {
       try {
         await page.screenshot({ path: 'lbc-simple-result.png', fullPage: true });
-        console.log('📸 Capture d\'écran sauvegardée: lbc-simple-result.png');
+        logger.info('Capture d\'écran sauvegardée: lbc-simple-result.png');
       } catch (error) {
-        console.log('⚠️ Erreur lors de la capture d\'écran');
+        logger.error('Erreur lors de la capture d\'écran');
       }
     }
     
   } catch (error) {
-    console.error('❌ Erreur fatale:', error);
+    logger.error(`Erreur fatale: ${error.message}`);
   } finally {
     try {
       await prisma.$disconnect();
     } catch (error) {
-      console.log('⚠️ Erreur lors de la déconnexion de la base de données');
+      logger.error('Erreur lors de la déconnexion de la base de données');
     }
     
     if (browser) {
-      console.log('\n🔒 Fermeture du navigateur...');
+      logger.info('Fermeture du navigateur...');
       try {
         await browser.close();
       } catch (error) {
-        console.log('⚠️ Erreur lors de la fermeture du navigateur');
+        logger.error('Erreur lors de la fermeture du navigateur');
       }
     }
     
-    console.log('✅ Script terminé');
+    logger.end('Script terminé');
+    logger.showStats();
     process.exit(0);
   }
 }
 
 // Gestion de l'arrêt propre
 process.on('SIGINT', async () => {
-  console.log('\n🛑 Arrêt demandé...');
+  logger.warning('Arrêt demandé...');
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('\n🛑 Arrêt demandé...');
+  logger.warning('Arrêt demandé...');
   process.exit(0);
 });
 
 // Gestion des erreurs non capturées
 process.on('uncaughtException', (error) => {
-  console.error('❌ Erreur non capturée:', error);
+  logger.error(`Erreur non capturée: ${error.message}`);
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Promesse rejetée non gérée:', reason);
+  logger.error(`Promesse rejetée non gérée: ${reason}`);
   process.exit(1);
 });
 

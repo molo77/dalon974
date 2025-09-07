@@ -8,6 +8,7 @@ import AdminUsers from "@/features/admin/AdminUsers";
 import AdminAds from "@/features/admin/AdminAds";
 import ImageCleanup from "@/features/admin/ImageCleanup";
 import VersionInfo from "@/features/admin/VersionInfo";
+import CaptchaResolver from "@/features/admin/CaptchaResolver";
 import ExpandableImage from "@/shared/components/ExpandableImage"; // New import
 // import AdminAnnonces from "@/components/admin/AdminAnnonces"; // affichage remplacé par une liste intégrée
 import useAdminGate from "@/shared/hooks/useAdminGate";
@@ -45,6 +46,7 @@ export default function AdminPage() {
   const [showScraperConfig, setShowScraperConfig] = useState(false); // Caché par défaut
   const [showScraperLogs, setShowScraperLogs] = useState(false); // Caché par défaut
   const [scraperLogs, setScraperLogs] = useState<string>('');
+  const [showCaptchaResolver, setShowCaptchaResolver] = useState(false);
   const toggleSecret = (k:string)=> setShowSecret(s=>({ ...s, [k]: !s[k] }));
 
   // Fonction pour récupérer l'environnement via l'API
@@ -162,6 +164,52 @@ export default function AdminPage() {
     });
   };
   useEffect(()=>{ if(activeTab==='scraper') loadScraper(); },[activeTab]);
+  
+  // Détecter les notifications de captcha et ouvrir le modal automatiquement
+  useEffect(() => {
+    if (activeTab === 'scraper') {
+      // Vérifier le fichier de notification de captcha
+      const checkCaptchaNotification = async () => {
+        try {
+          const response = await fetch('/api/admin/scraper/captcha/check-notification');
+          if (response.ok) {
+            const data = await response.json();
+            if (data.hasNotification && !showCaptchaResolver) {
+              console.log('[Admin] Captcha détecté automatiquement, ouverture du modal...');
+              setShowCaptchaResolver(true);
+            }
+          }
+        } catch (error) {
+          console.log('[Admin] Erreur lors de la vérification de notification:', error);
+        }
+      };
+      
+      // Vérifier aussi les runs en pause
+      const checkPausedRuns = () => {
+        const pausedRun = scraperRuns.find(run => 
+          run.status === 'paused' && 
+          new Date(run.startTime).getTime() > Date.now() - 300000 // Dans les 5 dernières minutes
+        );
+        
+        if (pausedRun && !showCaptchaResolver) {
+          console.log('[Admin] Scraper en pause détecté, ouverture du modal...');
+          setShowCaptchaResolver(true);
+        }
+      };
+      
+      // Vérifier immédiatement
+      checkCaptchaNotification();
+      checkPausedRuns();
+      
+      // Vérifier toutes les 5 secondes
+      const interval = setInterval(() => {
+        checkCaptchaNotification();
+        checkPausedRuns();
+      }, 5000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, showCaptchaResolver]);
   // Polling contrôlé (évite recréation boucle sur chaque update)
   const pollingRef = useRef<NodeJS.Timeout|null>(null);
   useEffect(()=>{
@@ -1788,7 +1836,21 @@ export default function AdminPage() {
       return (
         <div className='space-y-8'>
           <div className='flex items-center justify-between'>
-            <h1 className='text-3xl font-bold text-blue-800'>Scraper Leboncoin</h1>
+            <div className='flex items-center gap-4'>
+              <h1 className='text-3xl font-bold text-blue-800'>Scraper Leboncoin</h1>
+              {scraperRuns.some(run => run.status === 'paused' && new Date(run.startTime).getTime() > Date.now() - 300000) && (
+                <div className='flex items-center gap-2 px-3 py-1 bg-orange-100 border border-orange-300 rounded-lg'>
+                  <span className='text-orange-600'>⏸️</span>
+                  <span className='text-sm font-medium text-orange-800'>Scraper en pause - Captcha détecté</span>
+                  <button
+                    onClick={() => setShowCaptchaResolver(true)}
+                    className='text-xs px-2 py-1 bg-orange-600 text-white rounded hover:bg-orange-700'
+                  >
+                    Voir détails
+                  </button>
+                </div>
+              )}
+            </div>
             <div className='flex gap-2'>
               <button 
                 onClick={() => setShowScraperConfig(!showScraperConfig)} 
@@ -1806,6 +1868,13 @@ export default function AdminPage() {
               <button type='button' onClick={applyDefaultsToEmpty} className='px-3 py-1.5 text-sm rounded bg-slate-500 text-white hover:bg-slate-600'>Défauts vides</button>
               <button disabled={scraperLaunching} onClick={forceRun} title='Interrompt le run en cours et démarre un nouveau' className='px-3 py-1.5 text-sm rounded bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50'>Force run</button>
               <button disabled={scraperFetchingDatadome} onClick={fetchDatadomeToken} title='Récupère un nouveau token Datadome depuis Leboncoin' className='px-3 py-1.5 text-sm rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50'>{scraperFetchingDatadome ? 'Récupération...' : 'Récupérer Datadome'}</button>
+              <button 
+                onClick={() => setShowCaptchaResolver(true)}
+                className='px-3 py-1.5 text-sm rounded bg-yellow-600 text-white hover:bg-yellow-700'
+                title='Résoudre un captcha Leboncoin'
+              >
+                🔒 Résoudre Captcha
+              </button>
               <button 
                 onClick={() => {
                   setShowScraperLogs(!showScraperLogs);
@@ -2316,6 +2385,23 @@ export default function AdminPage() {
             )}
           </div>
         </div>
+      )}
+      
+      {/* Composant de résolution de captcha */}
+      {showCaptchaResolver && (
+        <CaptchaResolver
+          onCaptchaSolved={(solution) => {
+            console.log('Captcha résolu:', solution);
+            // Optionnel: relancer le scraper automatiquement
+            // launchScraper();
+          }}
+          onClose={() => setShowCaptchaResolver(false)}
+          onCaptchaResolved={() => {
+            console.log('Captcha résolu avec succès');
+            // Recharger les données du scraper
+            loadScraper();
+          }}
+        />
       )}
     </main>
   );
