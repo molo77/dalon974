@@ -99,7 +99,7 @@ fi
 
 # Générer les types Prisma
 echo "🔧 Génération des types Prisma..."
-npx prisma generate
+npx prisma generate --no-hints
 
 # Précompiler les pages statiques
 echo "⚡ Précompilation des pages..."

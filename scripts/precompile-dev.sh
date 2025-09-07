@@ -58,7 +58,7 @@ fi
 
 # 4. Générer les types Prisma
 echo -e "${YELLOW}🔧 Génération des types Prisma...${NC}"
-npx prisma generate
+npx prisma generate --no-hints
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✅ Types Prisma générés${NC}"
 else
@@ -68,7 +68,7 @@ fi
 
 # 5. Vérifier la configuration de la base de données
 echo -e "${YELLOW}🗄️  Vérification de la base de données...${NC}"
-npx prisma db push --accept-data-loss
+npx prisma db push --accept-data-loss --no-hints
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✅ Base de données synchronisée${NC}"
 else
