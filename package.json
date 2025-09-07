@@ -1,6 +1,6 @@
 {
   "name": "rodcoloc",
-  "version": "2.4.18",
+  "version": "2.4.19",
   "description": "RodColoc - Plateforme de colocation à La Réunion",
   "private": true,
   "author": "dalon974",
@@ -60,6 +60,7 @@
     "commit:patch": "node scripts/smart-commit.js commit patch",
     "commit:minor": "node scripts/smart-commit.js commit minor",
     "commit:major": "node scripts/smart-commit.js commit major",
+    "summary": "node scripts/create-action-summary.js",
     "version:patch": "node scripts/smart-commit.js version patch",
     "version:minor": "node scripts/smart-commit.js version minor",
     "version:major": "node scripts/smart-commit.js version major"
