@@ -81,3 +81,55 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const conversationId = searchParams.get('conversationId');
+    const userId = session.user.id;
+
+    if (!conversationId) {
+      return NextResponse.json({ error: "ID de conversation requis" }, { status: 400 });
+    }
+
+    // Extraire les informations de la conversation depuis l'ID
+    const parts = conversationId.split('-');
+    if (parts.length < 3) {
+      return NextResponse.json({ error: "Format d'ID de conversation invalide" }, { status: 400 });
+    }
+
+    const annonceId = parts[0];
+    const participant1 = parts[1];
+    const participant2 = parts[2];
+
+    // Vérifier que l'utilisateur fait partie de cette conversation
+    if (userId !== participant1 && userId !== participant2) {
+      return NextResponse.json({ error: "Non autorisé" }, { status: 403 });
+    }
+
+    // Supprimer tous les messages de cette conversation
+    const deletedMessages = await prisma.message.deleteMany({
+      where: {
+        annonceId: annonceId,
+        OR: [
+          { senderId: participant1, annonceOwnerId: participant2 },
+          { senderId: participant2, annonceOwnerId: participant1 }
+        ]
+      }
+    });
+
+    return NextResponse.json({ 
+      success: true, 
+      deletedCount: deletedMessages.count,
+      message: "Conversation supprimée avec succès"
+    });
+  } catch (error) {
+    console.error("[Conversations API] Erreur DELETE:", error);
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+  }
+}

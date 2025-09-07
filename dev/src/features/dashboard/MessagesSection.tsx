@@ -24,6 +24,8 @@ export default function MessagesSection() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingConversation, setDeletingConversation] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -70,6 +72,38 @@ export default function MessagesSection() {
     }
   };
 
+  const handleDeleteConversation = async (conversationId: string) => {
+    setDeletingConversation(conversationId);
+    try {
+      const response = await fetch(`/api/conversations?conversationId=${conversationId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // Supprimer la conversation de la liste locale
+        setConversations(prev => prev.filter(conv => conv.id !== conversationId));
+        setShowDeleteConfirm(null);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Erreur lors de la suppression');
+      }
+    } catch {
+      setError('Erreur de connexion lors de la suppression');
+    } finally {
+      setDeletingConversation(null);
+    }
+  };
+
+  const handleDeleteClick = (conversationId: string, event: React.MouseEvent) => {
+    event.preventDefault(); // Empêcher la navigation vers la conversation
+    event.stopPropagation();
+    setShowDeleteConfirm(conversationId);
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(null);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -114,37 +148,87 @@ export default function MessagesSection() {
             const otherParticipant = isOwner ? conversation.senderEmail : conversation.annonceOwnerId;
             
             return (
-              <Link
+              <div
                 key={conversation.id}
-                href={`/messages/${conversation.id}`}
-                className="block p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                className="relative group p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium text-gray-900 truncate">
-                        {isOwner ? 'Demande pour votre annonce' : `Conversation avec ${otherParticipant}`}
-                      </h3>
-                      {conversation.unreadCount > 0 && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          {conversation.unreadCount}
-                        </span>
-                      )}
+                <Link
+                  href={`/messages/${conversation.id}`}
+                  className="block"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-medium text-gray-900 truncate">
+                          {isOwner ? 'Demande pour votre annonce' : `Conversation avec ${otherParticipant}`}
+                        </h3>
+                        {conversation.unreadCount > 0 && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            {conversation.unreadCount}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 truncate mb-1">
+                        {conversation.lastMessage}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {formatMessageTime(conversation.lastMessageAt)}
+                      </p>
                     </div>
-                    <p className="text-sm text-gray-600 truncate mb-1">
-                      {conversation.lastMessage}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {formatMessageTime(conversation.lastMessageAt)}
-                    </p>
+                    <div className="ml-4 flex-shrink-0 flex items-center gap-2">
+                      {conversation.unreadCount > 0 && (
+                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                      )}
+                      <button
+                        onClick={(e) => handleDeleteClick(conversation.id, e)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 transition-all duration-200"
+                        title="Supprimer la conversation"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
-                  <div className="ml-4 flex-shrink-0">
-                    {conversation.unreadCount > 0 && (
-                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                    )}
+                </Link>
+
+                {/* Modal de confirmation de suppression */}
+                {showDeleteConfirm === conversation.id && (
+                  <div className="absolute inset-0 bg-white bg-opacity-95 rounded-lg flex items-center justify-center z-10">
+                    <div className="text-center p-4">
+                      <div className="text-red-600 text-2xl mb-2">⚠️</div>
+                      <p className="text-sm font-medium text-gray-900 mb-3">
+                        Supprimer cette conversation ?
+                      </p>
+                      <p className="text-xs text-gray-500 mb-4">
+                        Cette action est irréversible
+                      </p>
+                      <div className="flex gap-2 justify-center">
+                        <button
+                          onClick={handleCancelDelete}
+                          className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+                        >
+                          Annuler
+                        </button>
+                        <button
+                          onClick={() => handleDeleteConversation(conversation.id)}
+                          disabled={deletingConversation === conversation.id}
+                          className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50"
+                        >
+                          {deletingConversation === conversation.id ? (
+                            <div className="flex items-center gap-1">
+                              <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
+                              Suppression...
+                            </div>
+                          ) : (
+                            'Supprimer'
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </Link>
+                )}
+              </div>
             );
           })}
           
