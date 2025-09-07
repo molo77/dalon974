@@ -217,3 +217,14 @@ model Message {
   @@index([conversationId])
   @@index([parentMessageId])
 }
+
+model ConversationDeletion {
+  id             String   @id @default(uuid())
+  conversationId String   // ID de la conversation supprimée
+  userId         String   // ID de l'utilisateur qui a supprimé
+  deletedAt      DateTime @default(now()) @db.Timestamp(6)
+  
+  @@unique([conversationId, userId]) // Un utilisateur ne peut supprimer qu'une fois la même conversation
+  @@index([conversationId])
+  @@index([userId])
+}

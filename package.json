@@ -1,6 +1,6 @@
 {
   "name": "rodcoloc",
-  "version": "2.4.14",
+  "version": "2.4.15",
   "description": "RodColoc - Plateforme de colocation à La Réunion",
   "private": true,
   "author": "dalon974",
@@ -15,6 +15,7 @@
     "dev": "./scripts/server-manager.sh dev",
     "dev:logs": "./scripts/dev-with-timestamps.sh",
     "dev:stop": "./scripts/stop-dev.sh",
+    "dev:precompile": "./scripts/precompile-dev.sh",
     "prod": "./scripts/server-manager.sh prod",
     "prod:logs": "./scripts/prod-with-logs.sh start",
     "both": "./scripts/server-manager.sh both",

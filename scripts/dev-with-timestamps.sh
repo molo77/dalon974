@@ -81,5 +81,33 @@ cd /data/dalon974/dev
 echo "🚀 Démarrage du nouveau serveur de développement..."
 echo ""
 
+# Précompiler les pages pour améliorer les performances
+echo "📦 Précompilation des pages..."
+echo ""
+
+# Nettoyer le cache Next.js
+if [ -d ".next" ]; then
+    echo "🧹 Nettoyage du cache Next.js..."
+    rm -rf .next
+fi
+
+# Installer les dépendances si nécessaire
+if [ ! -d "node_modules" ]; then
+    echo "📥 Installation des dépendances..."
+    npm install --legacy-peer-deps
+fi
+
+# Générer les types Prisma
+echo "🔧 Génération des types Prisma..."
+npx prisma generate
+
+# Précompiler les pages statiques
+echo "⚡ Précompilation des pages..."
+npm run build 2>&1 | timestamp_log
+
+echo ""
+echo "✅ Précompilation terminée, démarrage du serveur..."
+echo ""
+
 # Rediriger stdout et stderr vers le fichier de log avec timestamps
 npm run dev 2>&1 | timestamp_log | tee "$LOG_FILE"

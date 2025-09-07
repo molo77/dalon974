@@ -201,7 +201,7 @@ export default function MessagesSection() {
                         Supprimer cette conversation ?
                       </p>
                       <p className="text-xs text-gray-500 mb-4">
-                        Cette action est irréversible
+                        La conversation sera supprimée de votre vue uniquement
                       </p>
                       <div className="flex gap-2 justify-center">
                         <button

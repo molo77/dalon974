@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const { searchParams: _searchParams } = new URL(request.url);
     const userId = session.user.id;
 
-    // Récupérer toutes les conversations de l'utilisateur
+    // Récupérer toutes les conversations de l'utilisateur (sauf celles qu'il a supprimées)
     const conversations = await prisma.message.findMany({
       where: {
         OR: [
@@ -32,6 +32,18 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // Récupérer les conversations supprimées par l'utilisateur
+    const deletedConversations = await prisma.conversationDeletion.findMany({
+      where: {
+        userId: userId
+      },
+      select: {
+        conversationId: true
+      }
+    });
+
+    const deletedConversationIds = new Set(deletedConversations.map(d => d.conversationId));
+
     // Grouper les messages par conversation
     const conversationMap = new Map();
     
@@ -41,6 +53,11 @@ export async function GET(request: NextRequest) {
         message.senderId || '',
         message.annonceOwnerId || ''
       );
+      
+      // Ignorer les conversations supprimées par l'utilisateur
+      if (deletedConversationIds.has(conversationId)) {
+        continue;
+      }
       
       if (!conversationMap.has(conversationId)) {
         conversationMap.set(conversationId, {
@@ -112,21 +129,28 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 403 });
     }
 
-    // Supprimer tous les messages de cette conversation
-    const deletedMessages = await prisma.message.deleteMany({
+    // Créer un enregistrement de suppression côté utilisateur (soft delete)
+    const deletion = await prisma.conversationDeletion.upsert({
       where: {
-        annonceId: annonceId,
-        OR: [
-          { senderId: participant1, annonceOwnerId: participant2 },
-          { senderId: participant2, annonceOwnerId: participant1 }
-        ]
+        conversationId_userId: {
+          conversationId: conversationId,
+          userId: userId
+        }
+      },
+      update: {
+        deletedAt: new Date()
+      },
+      create: {
+        conversationId: conversationId,
+        userId: userId,
+        deletedAt: new Date()
       }
     });
 
     return NextResponse.json({ 
       success: true, 
-      deletedCount: deletedMessages.count,
-      message: "Conversation supprimée avec succès"
+      message: "Conversation supprimée de votre vue",
+      deletionId: deletion.id
     });
   } catch (error) {
     console.error("[Conversations API] Erreur DELETE:", error);
