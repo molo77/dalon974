@@ -15,6 +15,7 @@ const https = require('https');
 const PACKAGE_JSON_PATH = path.join(__dirname, '..', 'package.json');
 const DEV_PACKAGE_JSON_PATH = path.join(__dirname, '..', 'dev', 'package.json');
 const PROD_PACKAGE_JSON_PATH = path.join(__dirname, '..', 'prod', 'package.json');
+const ACTION_SUMMARY_PATH = path.join(__dirname, '..', 'action-summary.md');
 
 // Types de version supportés
 const VERSION_TYPES = {
@@ -37,6 +38,46 @@ const colors = {
 
 function log(message, color = 'reset') {
   console.log(`${colors[color]}${message}${colors.reset}`);
+}
+
+// Fonction pour lire le résumé des actions
+function getActionSummary() {
+  try {
+    if (fs.existsSync(ACTION_SUMMARY_PATH)) {
+      const content = fs.readFileSync(ACTION_SUMMARY_PATH, 'utf8');
+      
+      // Extraire le message de commit suggéré s'il existe
+      const commitMatch = content.match(/## 📝 Notes pour le Commit[\s\S]*?```([\s\S]*?)```/);
+      if (commitMatch) {
+        return {
+          hasSummary: true,
+          suggestedMessage: commitMatch[1].trim(),
+          fullContent: content
+        };
+      }
+      
+      // Sinon, extraire les sections principales
+      const sections = content.match(/## ✅ Actions Réalisées[\s\S]*?(?=##|$)/);
+      if (sections) {
+        return {
+          hasSummary: true,
+          suggestedMessage: null,
+          fullContent: content,
+          actionsSection: sections[0]
+        };
+      }
+      
+      return {
+        hasSummary: true,
+        suggestedMessage: null,
+        fullContent: content
+      };
+    }
+  } catch (error) {
+    log(`⚠️  Erreur lors de la lecture du résumé d'actions: ${error.message}`, 'yellow');
+  }
+  
+  return { hasSummary: false };
 }
 
 // Fonction pour analyser les changements Git
@@ -200,7 +241,7 @@ function analyzeFileChanges() {
 }
 
 // Fonction pour générer un résumé intelligent des changements
-function generateIntelligentSummary(changes, versionType) {
+function generateIntelligentSummary(changes, versionType, actionSummary = null) {
   const fileTypes = {
     'src/': 'Code source',
     'app/': 'Pages et routes',
@@ -237,6 +278,27 @@ function generateIntelligentSummary(changes, versionType) {
     ).join(', ');
   }
   
+  // Si un résumé d'actions est disponible, l'utiliser en priorité
+  if (actionSummary && actionSummary.hasSummary) {
+    if (actionSummary.suggestedMessage) {
+      // Utiliser le message de commit suggéré
+      return {
+        summary: actionSummary.suggestedMessage.split('\n')[0].replace(/^\[v[\d.]+\]\s*/, ''),
+        details: actionSummary.suggestedMessage,
+        stats: `${changes.added} lignes ajoutées, ${changes.deleted} lignes supprimées, ${changes.modified} fichiers modifiés`,
+        fromActionSummary: true
+      };
+    } else {
+      // Utiliser les informations du résumé d'actions
+      return {
+        summary: 'Actions documentées dans le résumé',
+        details: actionSummary.actionsSection ? actionSummary.actionsSection.substring(0, 200) + '...' : 'Résumé d\'actions disponible',
+        stats: `${changes.added} lignes ajoutées, ${changes.deleted} lignes supprimées, ${changes.modified} fichiers modifiés`,
+        fromActionSummary: true
+      };
+    }
+  }
+
   // Ajouter des détails basés sur l'analyse du contenu
   let details = [];
   if (contentAnalysis) {
@@ -342,9 +404,12 @@ function updateVersion(versionType) {
 function getCommitMessage(version, versionType, customMessage = '') {
   const timestamp = new Date().toLocaleString('fr-FR');
   
+  // Lire le résumé des actions
+  const actionSummary = getActionSummary();
+  
   // Analyser les changements Git
   const changes = getGitChanges();
-  const intelligentSummary = generateIntelligentSummary(changes, versionType);
+  const intelligentSummary = generateIntelligentSummary(changes, versionType, actionSummary);
   
   // Message par défaut basé sur l'analyse intelligente
   const defaultMessages = {
@@ -354,6 +419,11 @@ function getCommitMessage(version, versionType, customMessage = '') {
   };
   
   const title = customMessage || intelligentSummary.summary || defaultMessages[versionType] || 'Mise à jour';
+  
+  // Si le résumé d'actions contient un message suggéré, l'utiliser
+  if (actionSummary && actionSummary.hasSummary && actionSummary.suggestedMessage) {
+    return actionSummary.suggestedMessage;
+  }
   
   // Format du message selon les préférences utilisateur avec analyse IA
   return `[v${version}] ${title}
@@ -402,6 +472,16 @@ function commitChanges(version, versionType, customMessage = '') {
     execSync(`git commit -m "${commitMessage}"`, { stdio: 'inherit' });
     
     log('✅ Commit effectué avec succès', 'green');
+    
+    // Nettoyer le fichier de résumé d'actions après le commit
+    if (fs.existsSync(ACTION_SUMMARY_PATH)) {
+      try {
+        fs.unlinkSync(ACTION_SUMMARY_PATH);
+        log('🧹 Fichier de résumé d\'actions nettoyé', 'blue');
+      } catch (error) {
+        log(`⚠️  Impossible de nettoyer le fichier de résumé: ${error.message}`, 'yellow');
+      }
+    }
     
   } catch (error) {
     log(`❌ Erreur lors du commit: ${error.message}`, 'red');
