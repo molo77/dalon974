@@ -97,7 +97,8 @@ function analyzeFileChanges() {
       features: [],
       fixes: [],
       configs: [],
-      dependencies: []
+      dependencies: [],
+      specificDetails: []
     };
     
     // Analyser chaque fichier
@@ -134,6 +135,41 @@ function analyzeFileChanges() {
             }
             if (content.includes('prisma') || content.includes('database')) {
               if (!analysis.features.includes('Base de données')) analysis.features.push('Base de données');
+            }
+            
+            // Détecter les URLs et paramètres spécifiques
+            if (content.includes('localhost:3000') || content.includes('localhost:3001')) {
+              if (!analysis.features.includes('Configuration serveur')) analysis.features.push('Configuration serveur');
+            }
+            if (content.includes('/api/auth/callback/google') || content.includes('google')) {
+              if (!analysis.features.includes('OAuth Google')) analysis.features.push('OAuth Google');
+            }
+            if (content.includes('code=') || content.includes('scope=') || content.includes('authuser=')) {
+              if (!analysis.features.includes('Paramètres OAuth')) analysis.features.push('Paramètres OAuth');
+            }
+            if (content.includes('NEXTAUTH_URL') || content.includes('GOOGLE_CLIENT_ID')) {
+              if (!analysis.features.includes('Variables environnement')) analysis.features.push('Variables environnement');
+            }
+            
+            // Capturer les détails spécifiques
+            if (content.includes('localhost:3000') && content.includes('localhost:3001')) {
+              analysis.specificDetails.push('Correction URL: 3000 → 3001');
+            } else if (content.includes('localhost:3000')) {
+              analysis.specificDetails.push('URL production: localhost:3000');
+            } else if (content.includes('localhost:3001')) {
+              analysis.specificDetails.push('URL développement: localhost:3001');
+            }
+            
+            if (content.includes('/api/auth/callback/google')) {
+              analysis.specificDetails.push('Callback Google OAuth configuré');
+            }
+            
+            if (content.includes('senderId: { not: userId }')) {
+              analysis.specificDetails.push('Logique messages lus corrigée');
+            }
+            
+            if (content.includes('useSession') && content.includes('useEffect')) {
+              analysis.specificDetails.push('Redirection automatique login ajoutée');
             }
             
             // Détecter les corrections
@@ -221,6 +257,9 @@ function generateIntelligentSummary(changes, versionType) {
     }
     if (contentAnalysis.deletedFiles.length > 0) {
       details.push(`Fichiers supprimés: ${contentAnalysis.deletedFiles.length}`);
+    }
+    if (contentAnalysis.specificDetails.length > 0) {
+      details.push(`Détails: ${contentAnalysis.specificDetails.join(', ')}`);
     }
   }
   
