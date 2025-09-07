@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import ConversationModal from "@/features/messages/ConversationModal";
 
 interface Conversation {
   id: string;
@@ -31,6 +32,8 @@ export default function MessagesSection() {
   const [blockReason, setBlockReason] = useState("");
   const [reportReason, setReportReason] = useState("");
   const [reportDescription, setReportDescription] = useState("");
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -187,6 +190,31 @@ export default function MessagesSection() {
     setReportDescription("");
   };
 
+  const handleOpenConversation = (conversation: Conversation) => {
+    setSelectedConversation(conversation);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedConversation(null);
+  };
+
+  const handleMessageSent = async () => {
+    // Rafraîchir la liste des conversations après l'envoi d'un message
+    if (user?.id) {
+      try {
+        const response = await fetch('/api/conversations');
+        if (response.ok) {
+          const data = await response.json();
+          setConversations(data);
+        }
+      } catch (error) {
+        console.error('Erreur lors du rafraîchissement des conversations:', error);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -228,76 +256,83 @@ export default function MessagesSection() {
         <div className="space-y-3">
           {conversations.slice(0, 5).map((conversation) => {
             const isOwner = conversation.annonceOwnerId === user.id;
-            const otherParticipant = isOwner ? conversation.senderEmail : conversation.annonceOwnerId;
+            const otherParticipant = isOwner ? 
+              (conversation.senderName || conversation.senderEmail) : 
+              (conversation.annonceOwnerName || conversation.annonceOwnerEmail);
             
             return (
               <div
                 key={conversation.id}
                 className="relative group p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                <Link
-                  href={`/messages/${conversation.id}`}
-                  className="block"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-medium text-gray-900 truncate">
-                          {isOwner ? 'Demande pour votre annonce' : `Conversation avec ${otherParticipant}`}
-                        </h3>
-                        {conversation.unreadCount > 0 && (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            {conversation.unreadCount}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600 truncate mb-1">
-                        {conversation.lastMessage}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {formatMessageTime(conversation.lastMessageAt)}
-                      </p>
-                    </div>
-                    <div className="ml-4 flex-shrink-0 flex items-center gap-1">
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => handleOpenConversation(conversation)}
+                    className="flex-1 min-w-0 cursor-pointer text-left hover:bg-gray-50 p-2 -m-2 rounded transition-colors"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-medium text-gray-900 truncate">
+                        {isOwner ? 'Demande pour votre annonce' : `Conversation avec ${otherParticipant}`}
+                      </h3>
                       {conversation.unreadCount > 0 && (
-                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          {conversation.unreadCount}
+                        </span>
                       )}
-                      
-                      {/* Bouton de signalement */}
-                      <button
-                        onClick={(e) => handleReportClick(isOwner ? conversation.senderId : conversation.annonceOwnerId, e)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-orange-600 transition-all duration-200"
-                        title="Signaler cet utilisateur"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                        </svg>
-                      </button>
-
-                      {/* Bouton de blocage */}
-                      <button
-                        onClick={(e) => handleBlockClick(isOwner ? conversation.senderId : conversation.annonceOwnerId, e)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 transition-all duration-200"
-                        title="Bloquer cet utilisateur"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728" />
-                        </svg>
-                      </button>
-
-                      {/* Bouton de suppression */}
-                      <button
-                        onClick={(e) => handleDeleteClick(conversation.id, e)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 transition-all duration-200"
-                        title="Supprimer la conversation"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
                     </div>
+                    {conversation.annonce && (
+                      <div className="text-xs text-blue-600 mb-1">
+                        📋 {conversation.annonce.titre} - {conversation.annonce.prix}€/mois
+                        {conversation.annonce.ville && ` - ${conversation.annonce.ville}`}
+                      </div>
+                    )}
+                    <p className="text-sm text-gray-600 truncate mb-1">
+                      {conversation.lastMessage}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {formatMessageTime(conversation.lastMessageAt)}
+                    </p>
+                  </button>
+                  
+                  <div className="ml-4 flex-shrink-0 flex items-center gap-1">
+                    {conversation.unreadCount > 0 && (
+                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    )}
+                    
+                    {/* Bouton de signalement */}
+                    <button
+                      onClick={(e) => handleReportClick(isOwner ? conversation.senderId : conversation.annonceOwnerId, e)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-orange-600 transition-all duration-200"
+                      title="Signaler cet utilisateur"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                    </button>
+
+                    {/* Bouton de blocage */}
+                    <button
+                      onClick={(e) => handleBlockClick(isOwner ? conversation.senderId : conversation.annonceOwnerId, e)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 transition-all duration-200"
+                      title="Bloquer cet utilisateur"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728" />
+                      </svg>
+                    </button>
+
+                    {/* Bouton de suppression */}
+                    <button
+                      onClick={(e) => handleDeleteClick(conversation.id, e)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 transition-all duration-200"
+                      title="Supprimer la conversation"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
-                </Link>
+                </div>
 
                 {/* Modal de confirmation de suppression */}
                 {showDeleteConfirm === conversation.id && (
@@ -447,6 +482,14 @@ export default function MessagesSection() {
           </div>
         </div>
       )}
+
+      {/* Modal de conversation */}
+      <ConversationModal
+        conversation={selectedConversation}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onMessageSent={handleMessageSent}
+      />
     </div>
   );
 }
