@@ -84,6 +84,85 @@ function getGitChanges() {
   }
 }
 
+// Fonction pour analyser le contenu des modifications
+function analyzeFileChanges() {
+  try {
+    const diff = execSync('git diff --cached', { encoding: 'utf8' });
+    const files = execSync('git diff --cached --name-only', { encoding: 'utf8' }).trim().split('\n').filter(f => f.trim());
+    
+    const analysis = {
+      newFiles: [],
+      modifiedFiles: [],
+      deletedFiles: [],
+      features: [],
+      fixes: [],
+      configs: [],
+      dependencies: []
+    };
+    
+    // Analyser chaque fichier
+    files.forEach(file => {
+      const fileDiff = execSync(`git diff --cached -- "${file}"`, { encoding: 'utf8' });
+      
+      // Détecter les nouveaux fichiers
+      if (fileDiff.startsWith('diff --git a/dev/null')) {
+        analysis.newFiles.push(file);
+      }
+      // Détecter les fichiers supprimés
+      else if (fileDiff.includes('deleted file mode')) {
+        analysis.deletedFiles.push(file);
+      }
+      // Analyser les modifications
+      else {
+        analysis.modifiedFiles.push(file);
+        
+        // Analyser le contenu des modifications
+        const lines = fileDiff.split('\n');
+        lines.forEach(line => {
+          if (line.startsWith('+') && !line.startsWith('+++')) {
+            const content = line.substring(1);
+            
+            // Détecter les nouvelles fonctionnalités
+            if (content.includes('useEffect') || content.includes('useState') || content.includes('useSession')) {
+              if (!analysis.features.includes('Hooks React')) analysis.features.push('Hooks React');
+            }
+            if (content.includes('router.push') || content.includes('redirect')) {
+              if (!analysis.features.includes('Navigation')) analysis.features.push('Navigation');
+            }
+            if (content.includes('signIn') || content.includes('authentication')) {
+              if (!analysis.features.includes('Authentification')) analysis.features.push('Authentification');
+            }
+            if (content.includes('prisma') || content.includes('database')) {
+              if (!analysis.features.includes('Base de données')) analysis.features.push('Base de données');
+            }
+            
+            // Détecter les corrections
+            if (content.includes('fix') || content.includes('error') || content.includes('bug')) {
+              if (!analysis.fixes.includes('Corrections')) analysis.fixes.push('Corrections');
+            }
+            if (content.includes('eslint') || content.includes('warning')) {
+              if (!analysis.fixes.includes('Linting')) analysis.fixes.push('Linting');
+            }
+            
+            // Détecter les configurations
+            if (content.includes('version') || content.includes('package.json')) {
+              if (!analysis.configs.includes('Versions')) analysis.configs.push('Versions');
+            }
+            if (content.includes('import') || content.includes('require')) {
+              if (!analysis.dependencies.includes('Imports')) analysis.dependencies.push('Imports');
+            }
+          }
+        });
+      }
+    });
+    
+    return analysis;
+  } catch (error) {
+    log(`⚠️ Erreur lors de l'analyse des modifications: ${error.message}`, 'yellow');
+    return null;
+  }
+}
+
 // Fonction pour générer un résumé intelligent des changements
 function generateIntelligentSummary(changes, versionType) {
   const fileTypes = {
@@ -109,6 +188,9 @@ function generateIntelligentSummary(changes, versionType) {
     }
   });
   
+  // Analyser le contenu des modifications
+  const contentAnalysis = analyzeFileChanges();
+  
   // Générer le résumé basé sur les catégories
   let summary = '';
   const categoryEntries = Object.entries(categories);
@@ -119,6 +201,29 @@ function generateIntelligentSummary(changes, versionType) {
     ).join(', ');
   }
   
+  // Ajouter des détails basés sur l'analyse du contenu
+  let details = [];
+  if (contentAnalysis) {
+    if (contentAnalysis.features.length > 0) {
+      details.push(`Nouvelles fonctionnalités: ${contentAnalysis.features.join(', ')}`);
+    }
+    if (contentAnalysis.fixes.length > 0) {
+      details.push(`Corrections: ${contentAnalysis.fixes.join(', ')}`);
+    }
+    if (contentAnalysis.configs.length > 0) {
+      details.push(`Configurations: ${contentAnalysis.configs.join(', ')}`);
+    }
+    if (contentAnalysis.dependencies.length > 0) {
+      details.push(`Dépendances: ${contentAnalysis.dependencies.join(', ')}`);
+    }
+    if (contentAnalysis.newFiles.length > 0) {
+      details.push(`Nouveaux fichiers: ${contentAnalysis.newFiles.length}`);
+    }
+    if (contentAnalysis.deletedFiles.length > 0) {
+      details.push(`Fichiers supprimés: ${contentAnalysis.deletedFiles.length}`);
+    }
+  }
+  
   // Ajouter des détails basés sur le type de version
   const versionDetails = {
     major: 'Changements majeurs avec impact sur la compatibilité',
@@ -126,9 +231,13 @@ function generateIntelligentSummary(changes, versionType) {
     patch: 'Corrections de bugs et optimisations'
   };
   
+  if (details.length === 0) {
+    details.push(versionDetails[versionType] || 'Mise à jour générale');
+  }
+  
   return {
     summary: summary || 'Modifications diverses',
-    details: versionDetails[versionType] || 'Mise à jour générale',
+    details: details.join(' | '),
     stats: `${changes.added} lignes ajoutées, ${changes.deleted} lignes supprimées, ${changes.modified} fichiers modifiés`
   };
 }
@@ -243,6 +352,7 @@ function commitChanges(version, versionType, customMessage = '') {
       
       const intelligentSummary = generateIntelligentSummary(changes, versionType);
       log(`   🧠 Résumé IA: ${intelligentSummary.summary}`, 'magenta');
+      log(`   🔍 Détails: ${intelligentSummary.details}`, 'yellow');
       log('');
     }
     
