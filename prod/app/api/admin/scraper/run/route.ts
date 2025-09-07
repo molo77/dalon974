@@ -35,10 +35,10 @@ export async function POST(req: Request) {
     } 
   });
   
-      console.log('[API][scraper][run] Démarrage du scraper avec ProtonVPN manuel');
-    console.log('[API][scraper][run] Connexion manuelle à ProtonVPN au démarrage');
-    console.log('[API][scraper][run] Suivez les instructions pour vous connecter à ProtonVPN');
-    const scriptPath = path.join(process.cwd(), 'scripts', 'scraper', 'leboncoin', 'scrape-lbc-simple-fixed.js');
+      console.log('[API][scraper][run] Démarrage du scraper avec token Datadome');
+    console.log('[API][scraper][run] Utilisation du token Datadome pour contourner les protections');
+    console.log('[API][scraper][run] Scraper optimisé sans ProtonVPN');
+    const scriptPath = path.join(process.cwd(), 'src', 'scripts', 'scraper', 'leboncoin', 'scrape-lbc-simple-fixed.js');
   const child = spawn(process.execPath, [scriptPath], {
     env: childEnv,
     stdio: ['pipe','pipe','pipe'] // Permettre l'interaction avec stdin pour le CAPTCHA
