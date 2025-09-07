@@ -57,22 +57,83 @@ check_port() {
     fi
 }
 
+# Fonction pour arrêter un serveur spécifique par port
+stop_server_by_port() {
+    local port=$1
+    
+    if [ -z "$port" ]; then
+        log_error "Port non spécifié"
+        return 1
+    fi
+    
+    log_info "Arrêt du serveur sur le port $port..."
+    
+    if ! check_port $port; then
+        log_warning "Aucun serveur actif sur le port $port"
+        return 0
+    fi
+    
+    # Essayer d'abord sans sudo
+    local pid=$(lsof -ti :$port 2>/dev/null)
+    
+    # Si pas de résultat, essayer avec sudo
+    if [ -z "$pid" ]; then
+        pid=$(sudo lsof -ti :$port 2>/dev/null)
+    fi
+    
+    if [ -n "$pid" ]; then
+        log_info "Arrêt du processus $pid sur le port $port..."
+        kill -TERM $pid 2>/dev/null
+        sleep 3
+        
+        # Vérifier si le processus est toujours en vie
+        if kill -0 $pid 2>/dev/null; then
+            log_warning "Arrêt forcé du processus $pid..."
+            kill -KILL $pid 2>/dev/null
+            sleep 1
+        fi
+        
+        # Vérifier que le port est libéré
+        if check_port $port; then
+            log_warning "Le port $port est toujours utilisé, arrêt forcé..."
+            # Essayer d'abord sans sudo
+            fuser -k $port/tcp 2>/dev/null || sudo fuser -k $port/tcp 2>/dev/null || true
+            sleep 2
+        fi
+        
+        if ! check_port $port; then
+            log_success "Serveur arrêté avec succès sur le port $port"
+        else
+            log_error "Impossible d'arrêter le serveur sur le port $port"
+            return 1
+        fi
+    else
+        log_warning "Aucun processus trouvé sur le port $port"
+    fi
+}
+
 # Fonction pour arrêter les serveurs
 stop_servers() {
-    log_info "Arrêt des serveurs..."
+    local port=$1
+    
+    # Si un port est spécifié, arrêter seulement ce serveur
+    if [ -n "$port" ]; then
+        stop_server_by_port $port
+        return $?
+    fi
+    
+    log_info "Arrêt de tous les serveurs..."
     
     # Arrêt du serveur de développement (port 3001)
     if check_port 3001; then
         log_info "Arrêt du serveur de développement (port 3001)..."
-        pkill -f "next dev.*:3001" || true
-        sleep 2
+        stop_server_by_port 3001
     fi
     
     # Arrêt du serveur de production (port 3000)
     if check_port 3000; then
         log_info "Arrêt du serveur de production (port 3000)..."
-        pkill -f "next start.*:3000" || true
-        sleep 2
+        stop_server_by_port 3000
     fi
     
     # Arrêt de tous les processus Next.js restants
@@ -329,13 +390,13 @@ restart_servers() {
 show_help() {
     echo -e "${CYAN}🚀 Server Manager - Gestionnaire de serveurs dalon974${NC}"
     echo ""
-    echo "Usage: $0 [commande]"
+    echo "Usage: $0 [commande] [port]"
     echo ""
     echo "Commandes disponibles:"
     echo "  dev     - Démarrer le serveur de développement (port 3001)"
     echo "  prod    - Démarrer le serveur de production (port 3000)"
     echo "  both    - Démarrer les deux serveurs"
-    echo "  stop    - Arrêter tous les serveurs"
+    echo "  stop    - Arrêter tous les serveurs ou un serveur spécifique par port"
     echo "  status  - Afficher le statut des serveurs"
     echo "  clean   - Nettoyer les caches et fichiers temporaires"
     echo "  restart - Redémarrer les serveurs (avec nettoyage)"
@@ -346,6 +407,8 @@ show_help() {
     echo "  $0 prod         # Démarrer le serveur de production"
     echo "  $0 both         # Démarrer les deux serveurs"
     echo "  $0 stop         # Arrêter tous les serveurs"
+    echo "  $0 stop 3001    # Arrêter uniquement le serveur sur le port 3001"
+    echo "  $0 stop 3000    # Arrêter uniquement le serveur sur le port 3000"
     echo "  $0 status       # Vérifier le statut"
     echo "  $0 clean        # Nettoyer l'environnement"
     echo "  $0 restart dev  # Redémarrer le serveur de développement"
@@ -367,7 +430,7 @@ main() {
             start_both
             ;;
         "stop")
-            stop_servers
+            stop_servers "$2"
             ;;
         "status")
             check_status

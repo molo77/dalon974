@@ -12,6 +12,10 @@ export async function POST(request: NextRequest) {
     const { reportedId, reason, description } = await request.json();
     const reporterId = session.user.id;
 
+    if (!reporterId) {
+      return NextResponse.json({ error: "ID de l'utilisateur non trouvé" }, { status: 400 });
+    }
+
     if (!reportedId || !reason) {
       return NextResponse.json({ error: "ID de l'utilisateur et raison du signalement requis" }, { status: 400 });
     }
@@ -104,13 +108,6 @@ export async function GET(request: NextRequest) {
             email: true,
             name: true,
             image: true
-          }
-        },
-        reviewer: {
-          select: {
-            id: true,
-            email: true,
-            name: true
           }
         }
       },

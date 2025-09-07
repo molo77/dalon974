@@ -23,7 +23,7 @@ export default function ColocProfileModal({
   const [mainPhoto, setMainPhoto] = useState<string | undefined>(profile?.imageUrl);
 
   return open ? (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-blue-600/20 backdrop-blur-sm rounded-2xl">
       <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md relative">
         <button className="absolute top-2 right-2 text-gray-400 hover:text-black" onClick={onClose}>✕</button>
         <h2 className="text-lg font-bold mb-4">Modifier le profil colocataire</h2>

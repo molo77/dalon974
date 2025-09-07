@@ -12,6 +12,10 @@ export async function POST(request: NextRequest) {
     const { blockedId, reason } = await request.json();
     const blockerId = session.user.id;
 
+    if (!blockerId) {
+      return NextResponse.json({ error: "ID de l'utilisateur non trouvé" }, { status: 400 });
+    }
+
     if (!blockedId) {
       return NextResponse.json({ error: "ID de l'utilisateur à bloquer requis" }, { status: 400 });
     }
@@ -97,7 +101,7 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) {

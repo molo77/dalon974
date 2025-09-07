@@ -91,7 +91,7 @@ export default function AnnonceModal({
   return (
     <Fragment>
       <div
-        className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4"
+        className="fixed inset-0 bg-blue-600/20 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 rounded-2xl"
         onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto space-y-3">

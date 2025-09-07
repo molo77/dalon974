@@ -378,6 +378,109 @@ ask_ai_to_fix_build_errors() {
     fi
 }
 
+# Vérifier que le build de développement fonctionne avant de déployer
+check_dev_build() {
+    log_info "🔍 Vérification du build de développement avant déploiement..."
+    
+    # Changer vers le répertoire de développement
+    cd "$DEV_DIR" || {
+        log_error "❌ Impossible d'accéder au répertoire de développement: $DEV_DIR"
+        return 1
+    }
+    
+    # Vérifier que package.json existe
+    if [[ ! -f "package.json" ]]; then
+        log_error "❌ package.json manquant dans le répertoire de développement"
+        return 1
+    fi
+    
+    # Nettoyer le cache Next.js pour un build propre
+    log_info "🧹 Nettoyage du cache Next.js..."
+    if [[ -d ".next" ]]; then
+        rm -rf .next
+        log_success "✅ Cache Next.js supprimé"
+    fi
+    
+    # Installer les dépendances si nécessaire
+    if [[ ! -d "node_modules" ]]; then
+        log_info "📦 Installation des dépendances de développement..."
+        if ! npm install --legacy-peer-deps; then
+            log_error "❌ Échec de l'installation des dépendances"
+            return 1
+        fi
+        log_success "✅ Dépendances installées"
+    fi
+    
+    # Générer les types Prisma
+    log_info "🔧 Génération des types Prisma..."
+    if ! npx prisma generate --no-hints; then
+        log_error "❌ Échec de la génération des types Prisma"
+        return 1
+    fi
+    log_success "✅ Types Prisma générés"
+    
+    # Tenter le build de développement
+    log_info "🔨 Test du build de développement..."
+    local build_output
+    local build_exit_code
+    
+    # Capturer la sortie du build
+    if build_output=$(npm run build 2>&1); then
+        build_exit_code=0
+    else
+        build_exit_code=$?
+    fi
+    
+    # Vérifier le code de sortie
+    if [[ $build_exit_code -ne 0 ]]; then
+        log_error "❌ ÉCHEC DU BUILD DE DÉVELOPPEMENT"
+        log_error "Code de sortie: $build_exit_code"
+        
+        # Afficher les erreurs principales
+        log_error "📋 Erreurs détectées:"
+        echo "$build_output" | grep -E "(error|Error|ERROR)" | head -10 | while read -r error; do
+            log_error "   - $error"
+        done
+        
+        # Demander à l'IA de corriger les erreurs
+        log_info "🤖 Tentative de correction automatique..."
+        if ask_ai_to_fix_build_errors "$build_output" "dev_build"; then
+            log_info "🔄 Retry du build après corrections..."
+            if ! npm run build; then
+                log_error "❌ Le build échoue toujours après corrections automatiques"
+                log_error "🚫 DÉPLOIEMENT ANNULÉ - Corrigez les erreurs de build en dev d'abord"
+                return 1
+            fi
+        else
+            log_error "🚫 DÉPLOIEMENT ANNULÉ - Corrigez les erreurs de build en dev d'abord"
+            log_info "💡 Actions recommandées:"
+            log_info "   - Vérifiez les erreurs TypeScript ci-dessus"
+            log_info "   - Corrigez les erreurs de compilation"
+            log_info "   - Relancez 'npm run build' en dev"
+            return 1
+        fi
+    fi
+    
+    # Vérifier s'il y a des avertissements critiques
+    local warnings=$(echo "$build_output" | grep -E "(Warning|warning)" | wc -l)
+    if [[ $warnings -gt 0 ]]; then
+        log_warning "⚠️ $warnings avertissement(s) détecté(s) dans le build de dev"
+        log_info "📋 Avertissements (premiers 5):"
+        echo "$build_output" | grep -E "(Warning|warning)" | head -5 | while read -r warning; do
+            log_warning "   - $warning"
+        done
+        log_info "ℹ️ Les avertissements n'empêchent pas le déploiement"
+    fi
+    
+    log_success "✅ Build de développement réussi"
+    log_info "🎯 Le déploiement peut continuer en toute sécurité"
+    
+    # Retourner au répertoire racine
+    cd "$PROJECT_ROOT" || true
+    
+    return 0
+}
+
 log_debug() {
     if [[ "${DEBUG:-false}" == "true" ]]; then
         log "${PURPLE}[DEBUG]${NC}" "$1"
@@ -749,6 +852,33 @@ install_dependencies() {
     log_error "Échec de l'installation des dépendances après toutes les tentatives"
     log_info "Vérifiez les conflits de dépendances dans package.json"
     exit 1
+}
+
+# Gérer les migrations Prisma
+migrate_database() {
+    log_info "🗄️  Gestion des migrations Prisma..."
+    
+    cd "$PROD_DIR"
+    
+    # Générer les types Prisma
+    log_info "🔧 Génération des types Prisma..."
+    if npx prisma generate --no-hints; then
+        log_success "✅ Types Prisma générés"
+    else
+        log_error "❌ Échec de la génération des types Prisma"
+        return 1
+    fi
+    
+    # Pousser les changements de schéma vers la base de données
+    log_info "📤 Synchronisation du schéma avec la base de données..."
+    if npx prisma db push --accept-data-loss; then
+        log_success "✅ Schéma de base de données synchronisé"
+    else
+        log_error "❌ Échec de la synchronisation du schéma"
+        return 1
+    fi
+    
+    log_success "🎉 Migrations Prisma terminées avec succès"
 }
 
 # Build l'application
@@ -1143,6 +1273,14 @@ deploy() {
     log_info "Backups: $LOGS_DIR/backup/"
     log_info "📋 Mode: Mise à jour structure uniquement (données préservées)"
     
+    # Vérifier que le build de développement fonctionne AVANT de déployer
+    if ! check_dev_build; then
+        log_error "🚫 DÉPLOIEMENT ANNULÉ - Le build de développement échoue"
+        log_error "💡 Règle de sécurité: Ne pas déployer tant qu'il y a des erreurs de build en dev"
+        send_notification "Déploiement annulé - Erreurs de build en dev" "error"
+        exit 1
+    fi
+    
     # Envoyer notification de début
     send_notification "Mise à jour structure démarrée" "info"
     
@@ -1150,6 +1288,7 @@ deploy() {
     copy_files
     update_prod_dependencies
     install_dependencies
+    migrate_database
     build_application
     start_application
     
@@ -1183,6 +1322,14 @@ deploy_full() {
     log_info "Backups: $LOGS_DIR/backup/"
     log_info "📋 Mode: Déploiement complet (avec backup et nettoyage)"
     
+    # Vérifier que le build de développement fonctionne AVANT de déployer
+    if ! check_dev_build; then
+        log_error "🚫 DÉPLOIEMENT ANNULÉ - Le build de développement échoue"
+        log_error "💡 Règle de sécurité: Ne pas déployer tant qu'il y a des erreurs de build en dev"
+        send_notification "Déploiement annulé - Erreurs de build en dev" "error"
+        exit 1
+    fi
+    
     # Envoyer notification de début
     send_notification "Déploiement complet démarré" "info"
     
@@ -1193,6 +1340,7 @@ deploy_full() {
     update_env_vars
     update_prod_dependencies
     install_dependencies
+    migrate_database
     build_application
     start_application
     

@@ -639,10 +639,13 @@ function DashboardContent() {
   // Détecter le paramètre tab dans l'URL et définir l'onglet actif
   useEffect(() => {
     const tabParam = searchParams.get('tab');
+    console.log('[Dashboard] Paramètre tab détecté:', tabParam);
+    console.log('[Dashboard] ActiveTab actuel:', activeTab);
     if (tabParam && ['annonces', 'messages', 'coloc', 'match'].includes(tabParam)) {
+      console.log('[Dashboard] Changement d\'onglet vers:', tabParam);
       setActiveTab(tabParam as "annonces" | "messages" | "coloc" | "match");
     }
-  }, [searchParams]);
+  }, [searchParams, activeTab]);
 
   // Charger les matches quand l'onglet match est sélectionné
   useEffect(() => {

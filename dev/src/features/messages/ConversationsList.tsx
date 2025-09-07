@@ -9,12 +9,23 @@ interface Conversation {
   id: string;
   annonceId: string;
   annonceOwnerId: string;
+  annonceOwnerEmail: string;
+  annonceOwnerName: string;
   senderId: string;
   senderEmail: string;
+  senderName: string;
   messages: any[];
   unreadCount: number;
   lastMessageAt: string;
   lastMessage: string;
+  annonce?: {
+    id: string;
+    titre: string;
+    prix: number;
+    type: string;
+    surface: number;
+    ville: string;
+  };
 }
 
 export default function ConversationsList() {

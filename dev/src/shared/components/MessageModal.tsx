@@ -60,7 +60,7 @@ export default function MessageModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-blue-600/20 backdrop-blur-sm flex items-center justify-center z-[9999] rounded-2xl">
       <form onSubmit={handleSend} className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm flex flex-col gap-4">
         <h2 className="text-lg font-semibold">Envoyer un message</h2>
         <textarea

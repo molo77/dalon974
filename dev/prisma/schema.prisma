@@ -26,6 +26,14 @@ model User {
   // Relations NextAuth
   accounts Account[]
   sessions Session[]
+  
+  // Relations pour les signalements
+  reportsMade    UserReport[] @relation("UserReports")
+  reportsReceived UserReport[] @relation("UserReported")
+  
+  // Relations pour les blocages
+  blocksMade     UserBlock[] @relation("UserBlocks")
+  blocksReceived UserBlock[] @relation("UserBlocked")
 }
 
 model ColocProfile {
@@ -236,6 +244,10 @@ model UserBlock {
   blockedAt   DateTime @default(now()) @db.Timestamp(6)
   reason      String?  // Raison du blocage (optionnel)
   
+  // Relations
+  blocker     User     @relation("UserBlocks", fields: [blockerId], references: [id])
+  blocked     User     @relation("UserBlocked", fields: [blockedId], references: [id])
+  
   @@unique([blockerId, blockedId]) // Un utilisateur ne peut bloquer qu'une fois la même personne
   @@index([blockerId])
   @@index([blockedId])
@@ -252,6 +264,10 @@ model UserReport {
   reviewedAt  DateTime? @db.Timestamp(6)
   reviewedBy  String?  // ID de l'admin qui a traité le signalement
   reviewNotes String?  @db.Text // Notes de l'admin
+  
+  // Relations
+  reporter    User     @relation("UserReports", fields: [reporterId], references: [id])
+  reported    User     @relation("UserReported", fields: [reportedId], references: [id])
   
   @@index([reporterId])
   @@index([reportedId])

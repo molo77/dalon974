@@ -8,8 +8,8 @@ import { useRouter } from "next/navigation";
 import { useMessages } from "@/shared/MessagesContext";
 
 export default function Header() {
-  const { data } = useSession();
-  const user = data?.user as any;
+  const { data: session, status } = useSession();
+  const user = session?.user as any;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isDevEnvironment, setIsDevEnvironment] = useState<boolean | null>(null);
   const router = useRouter();
@@ -105,7 +105,15 @@ export default function Header() {
             </>
           )}
 
-          {user ? (
+          {status === "loading" ? (
+            <div className="flex items-center gap-3 px-3 py-2">
+              <div className="w-9 h-9 rounded-full bg-gray-200 animate-pulse"></div>
+              <div className="flex flex-col gap-1">
+                <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-3 w-16 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+            </div>
+          ) : user ? (
             <>
               {/* Avatar et nom du compte cliquables */}
               <Link
@@ -227,7 +235,12 @@ export default function Header() {
             </>
           )}
 
-          {user ? (
+          {status === "loading" ? (
+            <div className="flex flex-col items-center gap-1 mb-2" style={{ minWidth: "120px" }}>
+              <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse"></div>
+              <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          ) : user ? (
             <>
               {/* Avatar et nom du compte cliquables en mobile, texte personnalisé centré */}
               <Link

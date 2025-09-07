@@ -9,12 +9,23 @@ interface Conversation {
   id: string;
   annonceId: string;
   annonceOwnerId: string;
+  annonceOwnerEmail: string;
+  annonceOwnerName: string;
   senderId: string;
   senderEmail: string;
+  senderName: string;
   messages: any[];
   unreadCount: number;
   lastMessageAt: string;
   lastMessage: string;
+  annonce?: {
+    id: string;
+    titre: string;
+    prix: number;
+    type: string;
+    surface: number;
+    ville: string;
+  };
 }
 
 export default function ConversationsList() {
@@ -82,7 +93,9 @@ export default function ConversationsList() {
     <div className="space-y-2">
       {conversations.map((conversation) => {
         const isOwner = conversation.annonceOwnerId === user.id;
-        const otherParticipant = isOwner ? conversation.senderEmail : conversation.annonceOwnerId;
+        const otherParticipant = isOwner ? 
+          (conversation.senderName || conversation.senderEmail) : 
+          (conversation.annonceOwnerName || conversation.annonceOwnerEmail);
         
         return (
           <Link
@@ -102,6 +115,12 @@ export default function ConversationsList() {
                     </span>
                   )}
                 </div>
+                {conversation.annonce && (
+                  <div className="text-xs text-blue-600 mb-1">
+                    📋 {conversation.annonce.titre} - {conversation.annonce.prix}€/mois
+                    {conversation.annonce.ville && ` - ${conversation.annonce.ville}`}
+                  </div>
+                )}
                 <p className="text-sm text-gray-600 truncate">
                   {conversation.lastMessage}
                 </p>

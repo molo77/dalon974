@@ -15,9 +15,10 @@ interface AnnonceDetailModalProps {
   isAdmin?: boolean;
   onEdit?: (annonce: any) => void;
   onDelete?: (id: string) => void;
+  noMask?: boolean;
 }
 
-export default function AnnonceDetailModal({ open, onClose, annonce, isAdmin, onEdit, onDelete }: AnnonceDetailModalProps) {
+export default function AnnonceDetailModal({ open, onClose, annonce, isAdmin, onEdit, onDelete, noMask = false }: AnnonceDetailModalProps) {
   const [messageModalOpen, setMessageModalOpen] = useState(false);
   const { data: session } = useSession();
   const currentUser = session?.user as any;
@@ -37,7 +38,7 @@ export default function AnnonceDetailModal({ open, onClose, annonce, isAdmin, on
     return null;
   }
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className={`fixed inset-0 z-[99999] ${noMask ? '' : 'bg-blue-600/20 backdrop-blur-sm'} flex items-center justify-center p-4 rounded-2xl`} onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 relative">
         <button
           onClick={onClose}

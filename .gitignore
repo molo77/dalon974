@@ -303,3 +303,30 @@ prod/app/verify-request/page.tsx
 prod/prisma/schema.prisma
 logs/prod.pid
 dev/.env copy.local
+action-summary.md
+prod/.env copy.local
+prod/package.json
+prod/app/page.tsx
+prod/app/admin/reports/page.tsx
+prod/app/api/conversations/route.ts
+prod/app/api/conversations/\[conversationId]/route.ts
+prod/app/login/page.tsx
+prod/prisma/schema.prisma
+prod/src/config/auth.ts
+prod/src/features/dashboard/MessagesSection.tsx
+prod/src/features/messages/ConversationModal.tsx
+prod/src/features/messages/ConversationsList.tsx
+prod/src/shared/MessagesContext.tsx
+prod/src/shared/components/Header.tsx
+prod/package-lock.json
+prod/package.json
+prod/app/page.tsx
+prod/app/api/conversations/route.ts
+prod/app/api/conversations/\[conversationId]/route.ts
+prod/app/login/page.tsx
+prod/prisma/schema.prisma
+prod/src/config/auth.ts
+prod/src/features/dashboard/MessagesSection.tsx
+prod/src/features/messages/ConversationsList.tsx
+prod/src/shared/MessagesContext.tsx
+prod/src/shared/components/Header.tsx

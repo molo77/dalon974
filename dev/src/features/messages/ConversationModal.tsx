@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
+import AnnonceDetailModal from '@/shared/components/AnnonceDetailModal';
 
 interface Message {
   id: string;
@@ -21,14 +22,14 @@ interface Conversation {
   senderId: string;
   senderName: string;
   senderEmail: string;
-  annonce: {
+  annonce?: {
     id: string;
     titre: string;
     prix: number;
     type: string;
     surface: number;
     ville: string;
-  } | null;
+  };
   messages: Message[];
   unreadCount: number;
   lastMessageAt: string;
@@ -53,6 +54,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [isAnnonceModalOpen, setIsAnnonceModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Charger les messages quand la conversation change
@@ -108,6 +110,9 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
           content: newMessage,
           annonceId: conversation.annonceId,
           annonceOwnerId: conversation.annonceOwnerId,
+          otherParticipantId: session?.user?.id === conversation.annonceOwnerId 
+            ? conversation.senderId  // Si je suis le propriétaire, l'autre participant est l'expéditeur
+            : conversation.annonceOwnerId, // Si je ne suis pas le propriétaire, l'autre participant est le propriétaire
         }),
       });
 
@@ -116,7 +121,12 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
         await loadMessages(); // Recharger les messages
         onMessageSent(); // Notifier le parent pour rafraîchir la liste
       } else {
-        console.error('Erreur lors de l\'envoi du message');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Erreur lors de l\'envoi du message:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
       }
     } catch (error) {
       console.error('Erreur lors de l\'envoi du message:', error);
@@ -146,6 +156,12 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     }
   };
 
+  const handleAnnonceClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsAnnonceModalOpen(true);
+  };
+
   if (!isOpen || !conversation) return null;
 
   const isOwner = session?.user?.id === conversation.annonceOwnerId;
@@ -154,7 +170,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     (conversation.annonceOwnerName || conversation.annonceOwnerEmail);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-blue-600/20 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 rounded-2xl">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -164,8 +180,14 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
             </h2>
             {conversation.annonce && (
               <div className="text-sm text-blue-600 mt-1">
-                📋 {conversation.annonce.titre} - {conversation.annonce.prix}€/mois
-                {conversation.annonce.ville && ` - ${conversation.annonce.ville}`}
+                📋 <button
+                  onClick={handleAnnonceClick}
+                  className="hover:underline hover:text-blue-800 transition-colors"
+                  title="Voir les détails de l'annonce"
+                >
+                  {conversation.annonce.titre} - {conversation.annonce.prix}€/mois
+                  {conversation.annonce.ville && ` - ${conversation.annonce.ville}`}
+                </button>
               </div>
             )}
           </div>
@@ -247,6 +269,14 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Modal de détail d'annonce */}
+      <AnnonceDetailModal
+        open={isAnnonceModalOpen}
+        onClose={() => setIsAnnonceModalOpen(false)}
+        annonce={conversation.annonce}
+        noMask={true}
+      />
     </div>
   );
 };

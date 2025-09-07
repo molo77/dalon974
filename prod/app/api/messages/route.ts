@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { annonceId, annonceOwnerId, content } = body;
+    const { annonceId, annonceOwnerId, content, otherParticipantId } = body;
     
     console.log("[Messages API] POST: Données reçues:", { annonceId, annonceOwnerId, content, userId: session.user.id });
 
@@ -60,14 +60,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Le message ne peut pas être vide" }, { status: 400 });
     }
 
-    // Vérifier que l'utilisateur n'envoie pas un message à lui-même
-    if (session.user.id === annonceOwnerId) {
-      console.log("[Messages API] POST: Tentative d'envoi à soi-même");
-      return NextResponse.json({ error: "Vous ne pouvez pas vous envoyer un message à vous-même" }, { status: 400 });
-    }
+    // Note: Un propriétaire d'annonce peut répondre aux messages qu'il reçoit
+    // Cette vérification est supprimée car elle empêchait les réponses légitimes
 
     // Générer l'ID de conversation
-    const conversationId = `${annonceId}-${[session.user.id, annonceOwnerId].sort().join('-')}`;
+    // Utiliser l'ID de l'autre participant fourni par le frontend
+    const targetOtherParticipantId = otherParticipantId || annonceOwnerId;
+    const conversationId = `${annonceId}-${[session.user.id, targetOtherParticipantId].sort().join('-')}`;
 
     const newMessage = await prisma.message.create({
       data: {
@@ -81,7 +80,15 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    // Restaurer la conversation pour tous les participants (supprimer les enregistrements de suppression)
+    await prisma.conversationDeletion.deleteMany({
+      where: {
+        conversationId: conversationId
+      }
+    });
+
     console.log("[Messages API] Message sauvegardé en base:", newMessage);
+    console.log("[Messages API] Conversation restaurée pour tous les participants:", conversationId);
 
     return NextResponse.json({
       success: true,

@@ -41,7 +41,7 @@ export default function ImageLightbox({
 
   return (
     <Transition appear show as={Fragment}>
-      <Dialog as="div" className="fixed inset-0 z-50" onClose={onClose}>
+      <Dialog as="div" className="fixed inset-0 z-[9999]" onClose={onClose}>
         <div className="min-h-screen text-center">
           <Transition.Child
             as={Fragment}
@@ -71,7 +71,7 @@ export default function ImageLightbox({
             leaveFrom="opacity-100"
             leaveTo="opacity-0"
           >
-            <div className="inline-block w-full max-w-[90vw] max-h-[90vh] p-4 align-middle relative z-50 pointer-events-auto">
+            <div className="inline-block w-full max-w-[90vw] max-h-[90vh] p-4 align-middle relative z-[9999] pointer-events-auto">
               <button className="absolute top-4 right-4 text-white text-2xl z-60 pointer-events-auto" onClick={onClose} aria-label="Fermer">✖</button>
               <button className="absolute left-4 text-white text-3xl p-2 z-60 pointer-events-auto" onClick={prev} aria-label="Précédent">◀</button>
               <div className="flex items-center justify-center">

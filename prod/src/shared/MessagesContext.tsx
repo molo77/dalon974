@@ -82,10 +82,13 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
         if (!isFirstLoad.current && allMessages.length > previousMessageCount.current) {
           const newMessages = allMessages.slice(0, allMessages.length - previousMessageCount.current);
           
-          // Afficher une alerte pour chaque nouveau message
+          // Afficher une alerte pour chaque nouveau message (sauf ceux envoyés par l'utilisateur actuel)
           newMessages.forEach((message: any) => {
-            showToast("info", `💬 Nouveau message de ${message.senderEmail}`);
-            showNotification(message);
+            // Ne pas afficher de notification si c'est l'utilisateur actuel qui a envoyé le message
+            if (message.senderId !== user.id) {
+              showToast("info", `💬 Nouveau message de ${message.senderEmail}`);
+              showNotification(message);
+            }
           });
           
           setHasNewMessages(true);

@@ -114,7 +114,7 @@ export async function GET(
 
     console.log('[Conversation API] Messages marked as read for user:', userId);
 
-    return NextResponse.json(messages);
+    return NextResponse.json({ messages });
   } catch (error) {
     console.error("[Conversation API] Erreur GET:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

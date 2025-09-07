@@ -188,7 +188,7 @@ export default function AdminAnnonces({
         </div>
         {/* Modal création annonce */}
         {showCreateAnnonce && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-blue-600/20 backdrop-blur-sm flex items-center justify-center z-[9999] rounded-2xl">
             <form
               onSubmit={handleCreateAnnonce}
               className="bg-white rounded shadow p-6 w-full max-w-md flex flex-col gap-4"
@@ -439,7 +439,7 @@ export default function AdminAnnonces({
       </section>
       {/* Modal de confirmation suppression */}
       {confirmModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-blue-600/20 backdrop-blur-sm flex items-center justify-center z-[9999] rounded-2xl">
           <div className="bg-white rounded shadow p-6 w-full max-w-xs flex flex-col items-center">
             <p className="mb-4 text-center">
               Êtes-vous sûr de vouloir supprimer cette annonce&nbsp;

@@ -5,17 +5,29 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ConversationModal from "@/features/messages/ConversationModal";
+import AnnonceDetailModal from "@/shared/components/AnnonceDetailModal";
 
 interface Conversation {
   id: string;
   annonceId: string;
   annonceOwnerId: string;
+  annonceOwnerEmail: string;
+  annonceOwnerName: string;
   senderId: string;
   senderEmail: string;
+  senderName: string;
   messages: any[];
   unreadCount: number;
   lastMessageAt: string;
   lastMessage: string;
+  annonce?: {
+    id: string;
+    titre: string;
+    prix: number;
+    type: string;
+    surface: number;
+    ville: string;
+  };
 }
 
 export default function MessagesSection() {
@@ -34,6 +46,8 @@ export default function MessagesSection() {
   const [reportDescription, setReportDescription] = useState("");
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedAnnonce, setSelectedAnnonce] = useState<any | null>(null);
+  const [isAnnonceModalOpen, setIsAnnonceModalOpen] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -179,6 +193,14 @@ export default function MessagesSection() {
     setShowReportModal(userId);
   };
 
+  const handleAnnonceClick = (annonce: any, conversation: Conversation, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedAnnonce(annonce);
+    setSelectedConversation(conversation);
+    setIsAnnonceModalOpen(true);
+  };
+
   const handleCancelBlock = () => {
     setShowBlockModal(null);
     setBlockReason("");
@@ -282,8 +304,14 @@ export default function MessagesSection() {
                     </div>
                     {conversation.annonce && (
                       <div className="text-xs text-blue-600 mb-1">
-                        📋 {conversation.annonce.titre} - {conversation.annonce.prix}€/mois
-                        {conversation.annonce.ville && ` - ${conversation.annonce.ville}`}
+                        📋 <span
+                          onClick={(e) => handleAnnonceClick(conversation.annonce, conversation, e)}
+                          className="hover:underline hover:text-blue-800 transition-colors cursor-pointer"
+                          title="Voir les détails de l'annonce"
+                        >
+                          {conversation.annonce.titre} - {conversation.annonce.prix}€/mois
+                          {conversation.annonce.ville && ` - ${conversation.annonce.ville}`}
+                        </span>
                       </div>
                     )}
                     <p className="text-sm text-gray-600 truncate mb-1">
@@ -389,7 +417,7 @@ export default function MessagesSection() {
 
       {/* Modal de blocage */}
       {showBlockModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-blue-600/20 backdrop-blur-sm flex items-center justify-center z-[9999] rounded-2xl">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Bloquer cet utilisateur</h3>
             <p className="text-sm text-gray-600 mb-4">
@@ -427,7 +455,7 @@ export default function MessagesSection() {
 
       {/* Modal de signalement */}
       {showReportModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-blue-600/20 backdrop-blur-sm flex items-center justify-center z-[9999] rounded-2xl">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Signaler cet utilisateur</h3>
             <p className="text-sm text-gray-600 mb-4">
@@ -490,6 +518,116 @@ export default function MessagesSection() {
         onClose={handleCloseModal}
         onMessageSent={handleMessageSent}
       />
+
+      {/* Modal de détail d'annonce - côte à côte */}
+      {isAnnonceModalOpen && selectedAnnonce && (
+        <div className="fixed inset-0 z-[99999] bg-blue-600/20 backdrop-blur-sm flex items-center justify-center p-4 rounded-2xl">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex">
+            {/* Contenu de l'annonce */}
+            <div className="flex-1 p-6 overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold">Détail de l'annonce</h3>
+                <button
+                  onClick={() => {
+                    setIsAnnonceModalOpen(false);
+                    setSelectedAnnonce(null);
+                  }}
+                  className="text-slate-600 hover:text-slate-900"
+                  aria-label="Fermer"
+                >
+                  ✖
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-lg font-medium text-gray-900">{selectedAnnonce.titre}</h4>
+                  <p className="text-2xl font-bold text-blue-600">{selectedAnnonce.prix}€/mois</p>
+                </div>
+                
+                {selectedAnnonce.ville && (
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {selectedAnnonce.ville}
+                  </div>
+                )}
+                
+                {selectedAnnonce.type && (
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                    {selectedAnnonce.type}
+                  </div>
+                )}
+                
+                {selectedAnnonce.surface && (
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                    {selectedAnnonce.surface} m²
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Séparateur vertical */}
+            <div className="w-px bg-gray-200"></div>
+            
+            {/* Conversation côte à côte */}
+            <div className="flex-1 p-6 overflow-y-auto">
+              <h3 className="text-xl font-semibold mb-4">Conversation</h3>
+              {selectedConversation && (
+                <div className="space-y-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 mb-2">
+                      <strong>Conversation avec:</strong> {selectedConversation.senderName || selectedConversation.senderEmail}
+                    </div>
+                    <div className="text-sm text-gray-500 mb-2">
+                      <strong>Dernier message:</strong> {selectedConversation.lastMessage}
+                    </div>
+                    {selectedConversation.unreadCount > 0 && (
+                      <div className="text-sm text-red-600 mb-2">
+                        <strong>Messages non lus:</strong> {selectedConversation.unreadCount}
+                      </div>
+                    )}
+                    <div className="text-xs text-gray-400">
+                      {formatMessageTime(selectedConversation.lastMessageAt)}
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={() => {
+                      setIsAnnonceModalOpen(false);
+                      setSelectedAnnonce(null);
+                      // Ouvrir la conversation complète
+                      setSelectedConversation(selectedConversation);
+                      setIsModalOpen(true);
+                    }}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Ouvrir la conversation complète
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      setIsAnnonceModalOpen(false);
+                      setSelectedAnnonce(null);
+                    }}
+                    className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                  >
+                    Fermer
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

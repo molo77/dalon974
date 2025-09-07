@@ -2,6 +2,47 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/config/auth";
 import prisma from "@/infrastructure/database/prismaClient";
 
+export async function GET(_request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    }
+
+    const user = session.user as any;
+    
+    // Seuls les admins peuvent voir les signalements
+    if (user.role !== 'admin') {
+      return NextResponse.json({ error: "Accès non autorisé" }, { status: 403 });
+    }
+
+    const reports = await prisma.userReport.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        reporter: {
+          select: {
+            id: true,
+            email: true,
+            name: true
+          }
+        },
+        reported: {
+          select: {
+            id: true,
+            email: true,
+            name: true
+          }
+        }
+      }
+    });
+
+    return NextResponse.json(reports);
+  } catch (error) {
+    console.error("[Admin Reports API] Erreur GET:", error);
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+  }
+}
+
 export async function PUT(request: NextRequest) {
   try {
     const session = await auth();

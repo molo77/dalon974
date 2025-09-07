@@ -56,6 +56,48 @@ export async function GET(request: NextRequest) {
 
     const blockedUserIds = new Set(blockedUsers.map(b => b.blockedId));
 
+    // Récupérer les informations des utilisateurs impliqués
+    const userIds = new Set<string>();
+    const annonceIds = new Set<string>();
+    
+    conversations.forEach(message => {
+      if (message.senderId) userIds.add(message.senderId);
+      if (message.annonceOwnerId) userIds.add(message.annonceOwnerId);
+      if (message.annonceId) annonceIds.add(message.annonceId);
+    });
+
+    // Récupérer les informations des utilisateurs
+    const users = await prisma.user.findMany({
+      where: {
+        id: { in: Array.from(userIds) }
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true
+      }
+    });
+
+    // Récupérer les informations des annonces
+    const annonces = await prisma.annonce.findMany({
+      where: {
+        id: { in: Array.from(annonceIds) }
+      },
+      select: {
+        id: true,
+        title: true,
+        prix: true,
+        typeBien: true,
+        surface: true,
+        ville: true,
+        userId: true
+      }
+    });
+
+    // Créer des maps pour un accès rapide
+    const userMap = new Map(users.map(user => [user.id, user]));
+    const annonceMap = new Map(annonces.map(annonce => [annonce.id, annonce]));
+
     // Grouper les messages par conversation
     const conversationMap = new Map();
     
@@ -77,12 +119,27 @@ export async function GET(request: NextRequest) {
       }
       
       if (!conversationMap.has(conversationId)) {
+        const sender = message.senderId ? userMap.get(message.senderId) : null;
+        const annonceOwner = message.annonceOwnerId ? userMap.get(message.annonceOwnerId) : null;
+        const annonce = message.annonceId ? annonceMap.get(message.annonceId) : null;
+
         conversationMap.set(conversationId, {
           id: conversationId,
           annonceId: message.annonceId,
           annonceOwnerId: message.annonceOwnerId,
+          annonceOwnerEmail: annonceOwner?.email || message.annonceOwnerId,
+          annonceOwnerName: annonceOwner?.name || annonceOwner?.email || message.annonceOwnerId,
           senderId: message.senderId,
-          senderEmail: message.senderEmail,
+          senderEmail: sender?.email || message.senderEmail,
+          senderName: sender?.name || sender?.email || message.senderId,
+          annonce: annonce ? {
+            id: annonce.id,
+            titre: annonce.title,
+            prix: annonce.prix,
+            type: annonce.typeBien,
+            surface: annonce.surface,
+            ville: annonce.ville
+          } : null,
           messages: [],
           unreadCount: 0,
           lastMessageAt: message.createdAt,
@@ -132,17 +189,63 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Extraire les informations de la conversation depuis l'ID
+    // Format: annonceId-participant1-participant2
+    // Les UUIDs contiennent des tirets, donc on doit être plus intelligent
     const parts = conversationId.split('-');
     if (parts.length < 3) {
       return NextResponse.json({ error: "Format d'ID de conversation invalide" }, { status: 400 });
     }
 
-    const annonceId = parts[0];
-    const participant1 = parts[1];
-    const participant2 = parts[2];
+    // L'annonceId est le premier UUID (36 caractères avec tirets)
+    // On cherche le premier UUID complet
+    let annonceId = '';
+    let remaining = conversationId;
+    
+    // Extraire l'annonceId (premier UUID)
+    const firstUuidMatch = remaining.match(/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/);
+    if (!firstUuidMatch) {
+      return NextResponse.json({ error: "Format d'ID d'annonce invalide" }, { status: 400 });
+    }
+    
+    annonceId = firstUuidMatch[1];
+    remaining = remaining.substring(annonceId.length + 1); // +1 pour le tiret
+    
+    // Extraire les deux participants (UUIDs)
+    const participant1Match = remaining.match(/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/);
+    if (!participant1Match) {
+      return NextResponse.json({ error: "Format d'ID de participant 1 invalide" }, { status: 400 });
+    }
+    
+    const participant1 = participant1Match[1];
+    remaining = remaining.substring(participant1.length + 1); // +1 pour le tiret
+    
+    const participant2Match = remaining.match(/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/);
+    if (!participant2Match) {
+      return NextResponse.json({ error: "Format d'ID de participant 2 invalide" }, { status: 400 });
+    }
+    
+    const participant2 = participant2Match[1];
+
+    // Debug: Afficher les informations pour diagnostiquer le problème
+    console.log("[Conversations API] Debug DELETE:", {
+      conversationId,
+      userId,
+      participant1,
+      participant2,
+      isParticipant1: userId === participant1,
+      isParticipant2: userId === participant2,
+      allParts: parts
+    });
 
     // Vérifier que l'utilisateur fait partie de cette conversation
+    // Les participants sont triés par ordre alphabétique dans generateConversationId
     if (userId !== participant1 && userId !== participant2) {
+      console.log("[Conversations API] Erreur d'autorisation:", {
+        userId,
+        participant1,
+        participant2,
+        reason: "L'utilisateur ne fait pas partie de cette conversation"
+      });
       return NextResponse.json({ error: "Non autorisé" }, { status: 403 });
     }
 
