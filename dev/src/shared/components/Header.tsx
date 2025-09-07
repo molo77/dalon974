@@ -200,45 +200,122 @@ export default function Header() {
 
       {/* Mobile nav */}
       {mobileOpen && (
-        <nav className="lg:hidden mt-4 flex flex-col gap-2 border-t border-slate-200 pt-4">
-          <Link 
-            href="/" 
-            className="px-4 py-3 rounded-lg text-slate-700 hover:text-sky-600 hover:bg-sky-50 transition-all duration-200 font-medium" 
-            onClick={toggleMobile}
-          >
-            Accueil
-          </Link>
-          <Link 
-            href="/idees-pratiques" 
-            className="px-4 py-3 rounded-lg text-slate-700 hover:text-green-600 hover:bg-green-50 transition-all duration-200 font-medium flex items-center gap-3" 
-            onClick={toggleMobile}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-            Idées Pratiques
-          </Link>
-          
+        <nav className="lg:hidden mt-4 border-t border-slate-200 pt-4">
+          {/* Section utilisateur en haut */}
+          {status === "loading" ? (
+            <div className="flex flex-col items-center gap-2 mb-6">
+              <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse"></div>
+              <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          ) : user ? (
+            <div className="mb-6">
+              {/* Profil utilisateur */}
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-3 p-4 bg-gradient-to-r from-sky-50 to-blue-50 rounded-xl border border-sky-200 hover:from-sky-100 hover:to-blue-100 transition-all duration-200 relative"
+                onClick={toggleMobile}
+              >
+                <div className="relative">
+                  {user.photoURL ? (
+                    <Image
+                      src={user.photoURL}
+                      alt="Avatar"
+                      width={48}
+                      height={48}
+                      className="w-12 h-12 rounded-full border-2 border-white object-cover shadow-sm"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                      {user.displayName?.charAt(0) || user.email?.charAt(0) || "?"}
+                    </div>
+                  )}
+                  {hasNewMessages && (
+                    <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center font-bold animate-pulse">
+                      !
+                    </span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-slate-800">
+                    {user.displayName || user.email?.split("@")[0]}
+                  </p>
+                  <p className="text-sm text-slate-600">Mon compte</p>
+                </div>
+                <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </div>
+          ) : (
+            <div className="mb-6 flex gap-3">
+              <Link 
+                href="/signup" 
+                className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-3 rounded-xl hover:shadow-lg transition-all duration-200 font-semibold text-center" 
+                onClick={toggleMobile}
+              >
+                Inscription
+              </Link>
+              <Link 
+                href="/login" 
+                className="flex-1 border border-slate-300 text-slate-700 px-4 py-3 rounded-xl hover:bg-slate-50 transition-all duration-200 font-medium text-center" 
+                onClick={toggleMobile}
+              >
+                Connexion
+              </Link>
+            </div>
+          )}
+
+          {/* Navigation principale */}
+          <div className="space-y-2 mb-6">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 mb-3">Navigation</h3>
+            
+            <Link 
+              href="/" 
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-700 hover:text-sky-600 hover:bg-sky-50 transition-all duration-200 font-medium" 
+              onClick={toggleMobile}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Accueil
+            </Link>
+            
+            <Link 
+              href="/idees-pratiques" 
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-700 hover:text-green-600 hover:bg-green-50 transition-all duration-200 font-medium" 
+              onClick={toggleMobile}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              Idées Pratiques
+            </Link>
+          </div>
+
+          {/* Section utilisateur connecté */}
           {user && (
-            <>
+            <div className="space-y-2 mb-6">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 mb-3">Mon espace</h3>
+              
               <Link 
                 href="/dashboard?tab=messages" 
-                className="px-4 py-3 rounded-lg text-slate-700 hover:text-sky-600 hover:bg-sky-50 transition-all duration-200 font-medium flex items-center gap-3" 
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-700 hover:text-sky-600 hover:bg-sky-50 transition-all duration-200 font-medium relative" 
                 onClick={toggleMobile}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
-                Messages
+                <span className="flex-1">Messages</span>
                 {unreadCount > 0 && (
-                  <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold animate-pulse">
+                  <span className="bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold animate-pulse">
                     {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 )}
               </Link>
+              
               <Link 
                 href="/dashboard?tab=match" 
-                className="px-4 py-3 rounded-lg text-slate-700 hover:text-purple-600 hover:bg-purple-50 transition-all duration-200 font-medium flex items-center gap-3" 
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-700 hover:text-purple-600 hover:bg-purple-50 transition-all duration-200 font-medium" 
                 onClick={toggleMobile}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -246,76 +323,39 @@ export default function Header() {
                 </svg>
                 Match
               </Link>
-            </>
+            </div>
           )}
 
-          {status === "loading" ? (
-            <div className="flex flex-col items-center gap-1 mb-2" style={{ minWidth: "120px" }}>
-              <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse"></div>
-              <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
-            </div>
-          ) : user ? (
-            <>
-              {/* Avatar et nom du compte cliquables en mobile, texte personnalisé centré */}
-              <Link
-                href="/dashboard"
-                className="flex flex-col items-center gap-1 mb-2 hover:underline relative"
-                onClick={toggleMobile}
-                style={{ minWidth: "120px" }}
-              >
-                <div className="flex items-center justify-center gap-2 relative">
-                  {user.photoURL ? (
-                    <Image
-                      src={user.photoURL}
-                      alt="Avatar"
-                      width={32}
-                      height={32}
-                      className="w-8 h-8 rounded-full border object-cover"
-                    />
-                  ) : (
-                    <span className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
-                      {user.displayName?.charAt(0) || user.email?.charAt(0) || "?"}
-                    </span>
-                  )}
-                  
-                  {/* Indicateur de nouveaux messages mobile */}
-                  {hasNewMessages && (
-                    <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full h-3 w-3 animate-pulse"></span>
-                  )}
-                </div>
-                <span className="font-medium text-gray-700 text-center block">
-                  Bienvenue {user.displayName || user.email?.split("@")[0]}
-                </span>
-              </Link>
+          {/* Actions utilisateur */}
+          {user && (
+            <div className="space-y-2 border-t border-slate-200 pt-4">
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:shadow-lg transition-all duration-200 font-semibold"
+                  onClick={toggleMobile}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Administration
+                </Link>
+              )}
+              
               <button
                 onClick={() => {
                   handleLogout();
                   toggleMobile();
                 }}
-                className="text-red-600 hover:underline text-left"
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 transition-all duration-200 font-medium w-full text-left"
               >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
                 Déconnexion
               </button>
-              {/* Bouton accès admin après Déconnexion en mobile */}
-  {isAdmin && (
-                <Link
-                  href="/admin"
-                  className="bg-blue-700 text-white px-3 py-1.5 rounded hover:bg-blue-800 font-semibold text-sm text-center mt-1"
-                  onClick={toggleMobile}
-                >
-          Accéder à l&apos;administration
-                </Link>
-              )}
-            </>
-          ) : (
-            <>
-              <Link href="/signup" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium text-center" onClick={toggleMobile}>
-                Inscription
-              </Link>
-              <Link href="/login" className="text-blue-600 hover:underline" onClick={toggleMobile}>
-                Connexion
-              </Link>
-            </>
+            </div>
           )}
         </nav>
       )}
