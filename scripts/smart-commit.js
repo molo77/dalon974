@@ -353,7 +353,7 @@ function getCurrentVersion() {
   }
 }
 
-function updateVersion(versionType) {
+function updateVersion(versionType, environment = 'all') {
   try {
     log(`🔄 Mise à jour de la version (${versionType})...`, 'blue');
     
@@ -382,15 +382,26 @@ function updateVersion(versionType) {
     packageJson.version = newVersion;
     fs.writeFileSync(PACKAGE_JSON_PATH, JSON.stringify(packageJson, null, 2));
     
-    // Mise à jour des package.json dev et prod si ils existent
-    [DEV_PACKAGE_JSON_PATH, PROD_PACKAGE_JSON_PATH].forEach(packagePath => {
-      if (fs.existsSync(packagePath)) {
-        const subPackageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
-        subPackageJson.version = newVersion;
-        fs.writeFileSync(packagePath, JSON.stringify(subPackageJson, null, 2));
-        log(`✅ Version mise à jour dans ${path.basename(path.dirname(packagePath))}`, 'green');
+    // Mise à jour conditionnelle selon l'environnement
+    if (environment === 'dev' || environment === 'all') {
+      // Mise à jour du package.json dev
+      if (fs.existsSync(DEV_PACKAGE_JSON_PATH)) {
+        const devPackageJson = JSON.parse(fs.readFileSync(DEV_PACKAGE_JSON_PATH, 'utf8'));
+        devPackageJson.version = newVersion;
+        fs.writeFileSync(DEV_PACKAGE_JSON_PATH, JSON.stringify(devPackageJson, null, 2));
+        log(`✅ Version mise à jour dans dev`, 'green');
       }
-    });
+    }
+    
+    if (environment === 'prod' || environment === 'all') {
+      // Mise à jour du package.json prod
+      if (fs.existsSync(PROD_PACKAGE_JSON_PATH)) {
+        const prodPackageJson = JSON.parse(fs.readFileSync(PROD_PACKAGE_JSON_PATH, 'utf8'));
+        prodPackageJson.version = newVersion;
+        fs.writeFileSync(PROD_PACKAGE_JSON_PATH, JSON.stringify(prodPackageJson, null, 2));
+        log(`✅ Version mise à jour dans prod`, 'green');
+      }
+    }
     
     log(`✅ Version mise à jour: ${oldVersion} → ${newVersion}`, 'green');
     return newVersion;
@@ -543,10 +554,13 @@ function main() {
       case 'commit':
         log('🔄 Démarrage du processus de commit...', 'blue');
         
-        // 1. Mise à jour de la version
-        const newVersion = updateVersion(versionType);
+        // 1. Mise à jour de la version AVANT le commit (dev seulement)
+        const newVersion = updateVersion(versionType, 'dev');
         
-        // 2. Commit des changements
+        // 2. Ajouter les changements de version au staging (dev seulement)
+        execSync('git add package.json dev/package.json', { stdio: 'inherit' });
+        
+        // 3. Commit des changements
         commitChanges(newVersion, versionType, customMessage);
         
         log('🎉 Processus terminé avec succès !', 'green');
@@ -554,7 +568,7 @@ function main() {
         
       case 'version':
         log('🔄 Mise à jour de version uniquement...', 'blue');
-        const version = updateVersion(versionType);
+        const version = updateVersion(versionType, 'all');
         log(`🎉 Version mise à jour: ${version}`, 'green');
         break;
         
