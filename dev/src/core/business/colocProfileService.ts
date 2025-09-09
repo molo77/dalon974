@@ -146,9 +146,9 @@ export async function saveColocProfile(userId: string, data: ColocProfileData) {
   } catch (error) {
     console.error("Erreur lors de la sauvegarde du profil coloc:", error);
     console.error("Détails de l'erreur:", {
-      name: error.name,
-      message: error.message,
-      stack: error.stack
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
     });
     throw error;
   }
