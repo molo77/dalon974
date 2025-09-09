@@ -688,17 +688,8 @@ export default function HomePage() {
     });
   };
 
-  // Afficher un écran de chargement pendant que la session se charge
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-sky-50 via-emerald-50 to-teal-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement de votre session...</p>
-        </div>
-      </div>
-    );
-  }
+  // Référence pour la section des options
+  const optionsSectionRef = useRef<HTMLDivElement>(null);
 
   return (
     <>
@@ -740,12 +731,21 @@ export default function HomePage() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
                 <div className="absolute bottom-6 left-6 right-6">
                   <button
-                    onClick={() => {
-                      const optionsSection = document.querySelector('[data-options-section]');
-                      optionsSection?.scrollIntoView({ behavior: 'smooth' });
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('Bouton cliqué !');
+                      try {
+                        optionsSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+                      } catch (error) {
+                        console.error('Erreur de défilement:', error);
+                        // Fallback: redirection vers une ancre
+                        window.location.hash = '#options-section';
+                      }
                     }}
-                    className="w-full bg-white/90 backdrop-blur-sm hover:bg-white hover:scale-105 transition-all duration-300 rounded-2xl p-4 shadow-lg border border-white/20 group"
+                    className="w-full bg-white/90 backdrop-blur-sm hover:bg-white hover:scale-105 transition-all duration-300 rounded-2xl p-4 shadow-lg border border-white/20 group cursor-pointer"
                     aria-label="Découvrir les options de colocation"
+                    style={{ pointerEvents: 'auto', zIndex: 10 }}
                   >
                     <div className="flex items-center justify-center gap-3">
                       <p className="text-slate-800 font-medium">
@@ -754,7 +754,15 @@ export default function HomePage() {
                       <svg className="w-5 h-5 text-slate-600 group-hover:translate-y-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                       </svg>
-            </div>
+                    </div>
+                    {/* Lien de secours pour les cas où JavaScript ne fonctionne pas */}
+                    <a 
+                      href="#options-section" 
+                      className="absolute inset-0 w-full h-full"
+                      style={{ zIndex: -1 }}
+                      aria-hidden="true"
+                    >
+                    </a>
                   </button>
           </div>
               </div>
@@ -762,7 +770,7 @@ export default function HomePage() {
           </div>
           
           {/* Options de recherche */}
-          <div className="w-full max-w-5xl mx-auto" data-options-section>
+          <div className="w-full max-w-5xl mx-auto" ref={optionsSectionRef} id="options-section">
             <div className="text-center mb-12">
               <h2 className="text-3xl font-bold mb-4 text-slate-800">Que souhaitez-vous rechercher ?</h2>
               <p className="text-slate-600 text-lg">Choisissez votre type de recherche pour commencer votre aventure</p>

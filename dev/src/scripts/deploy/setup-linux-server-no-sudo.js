@@ -3,7 +3,7 @@ const fs = require('fs');
 
 // Configuration
 const SERVER_HOST = process.argv[2] || "molo@192.168.1.200";
-const PROJECT_DIR = process.argv[3] || "/data/dalon974";
+const PROJECT_DIR = process.argv[3] || "/data/rodcoloc";
 
 console.log('🔧 Configuration initiale du serveur Linux pour Dalon974 (sans sudo interactif)');
 
@@ -66,11 +66,11 @@ Environment=PORT=3000
 [Install]
 WantedBy=multi-user.target`;
 
-  execSync(`ssh ${SERVER_HOST} "echo '${systemdService}' | sudo tee /etc/systemd/system/dalon974.service > /dev/null"`, { stdio: 'inherit' });
+  execSync(`ssh ${SERVER_HOST} "echo '${systemdService}' | sudo tee /etc/systemd/system/rodcoloc.service > /dev/null"`, { stdio: 'inherit' });
 
   // 6. Activer le service
   console.log('🚀 Activation du service...');
-  execSync(`ssh ${SERVER_HOST} "sudo systemctl daemon-reload && sudo systemctl enable dalon974"`, { stdio: 'inherit' });
+  execSync(`ssh ${SERVER_HOST} "sudo systemctl daemon-reload && sudo systemctl enable rodcoloc"`, { stdio: 'inherit' });
 
   // 7. Configurer le firewall
   console.log('🔥 Configuration du firewall...');
@@ -87,19 +87,19 @@ WantedBy=multi-user.target`;
 
 case "$1" in
   "restart")
-    sudo systemctl restart dalon974
+    sudo systemctl restart rodcoloc
     ;;
   "stop")
-    sudo systemctl stop dalon974
+    sudo systemctl stop rodcoloc
     ;;
   "start")
-    sudo systemctl start dalon974
+    sudo systemctl start rodcoloc
     ;;
   "logs")
-    sudo journalctl -u dalon974 -f
+    sudo journalctl -u rodcoloc -f
     ;;
   "status")
-    sudo systemctl status dalon974
+    sudo systemctl status rodcoloc
     ;;
   *)
     echo "Usage: $0 {restart|stop|start|logs|status}"

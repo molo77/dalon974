@@ -3,7 +3,7 @@
 # Script pour démarrer le serveur de développement avec horodatages automatiques
 # Usage: ./scripts/dev-with-timestamps.sh
 
-LOG_DIR="/data/dalon974/logs"
+LOG_DIR="/data/rodcoloc/logs"
 LOG_FILE="$LOG_DIR/dev.log"
 
 echo "🚀 Démarrage du serveur de développement avec horodatages..."
@@ -76,7 +76,7 @@ timestamp_log() {
 stop_dev_server
 
 # Démarrer le serveur avec horodatages
-cd /data/dalon974/dev
+cd /data/rodcoloc/dev
 
 echo "🚀 Démarrage du nouveau serveur de développement..."
 echo ""

@@ -12,6 +12,7 @@ export default function Header() {
   const user = session?.user as any;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isDevEnvironment, setIsDevEnvironment] = useState<boolean | null>(null);
+  const [sessionTimeout, setSessionTimeout] = useState(false);
   const router = useRouter();
   const isAdmin = (user?.role || (user as any)?.role) === "admin";
   const { unreadCount, hasNewMessages } = useMessages();
@@ -21,6 +22,25 @@ export default function Header() {
     // En développement, on affiche toujours l'étiquette DEV
     setIsDevEnvironment(true);
   }, []);
+
+  // Timeout pour la session si elle reste en loading trop longtemps
+  useEffect(() => {
+    if (status === "loading") {
+      const timeout = setTimeout(() => {
+        console.warn("[Header] Session loading timeout - forcing unauthenticated state");
+        setSessionTimeout(true);
+      }, 10000); // 10 secondes
+
+      return () => clearTimeout(timeout);
+    } else {
+      setSessionTimeout(false);
+    }
+  }, [status]);
+
+  // Logs de débogage pour la session
+  useEffect(() => {
+    console.log("[Header] Session status:", status, "User:", user ? "authenticated" : "not authenticated");
+  }, [status, user]);
 
   const handleLogout = async () => {
   await signOut({ callbackUrl: "/" });
@@ -118,7 +138,7 @@ export default function Header() {
             </>
           )}
 
-          {status === "loading" ? (
+          {status === "loading" && !sessionTimeout ? (
             <div className="flex items-center gap-2 xl:gap-3 px-2 xl:px-3 py-2">
               <div className="w-8 h-8 xl:w-9 xl:h-9 rounded-full bg-gray-200 animate-pulse"></div>
               <div className="hidden xl:flex flex-col gap-1">
@@ -202,7 +222,7 @@ export default function Header() {
       {mobileOpen && (
         <nav className="lg:hidden mt-4 border-t border-slate-200 pt-4">
           {/* Section utilisateur en haut */}
-          {status === "loading" ? (
+          {status === "loading" && !sessionTimeout ? (
             <div className="flex flex-col items-center gap-2 mb-6">
               <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse"></div>
               <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>

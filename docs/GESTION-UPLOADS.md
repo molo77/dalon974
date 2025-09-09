@@ -172,9 +172,9 @@ npm run uploads:backup all
 ## 🔧 Configuration
 
 ### Dossiers gérés
-- **Développement** : `/data/dalon974/dev/public/uploads`
-- **Production** : `/data/dalon974/prod/public/uploads`
-- **Sauvegardes** : `/data/dalon974/backups/uploads`
+- **Développement** : `/data/rodcoloc/dev/public/uploads`
+- **Production** : `/data/rodcoloc/prod/public/uploads`
+- **Sauvegardes** : `/data/rodcoloc/backups/uploads`
 
 ### Permissions
 Le script vérifie et crée automatiquement les dossiers nécessaires avec les bonnes permissions.

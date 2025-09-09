@@ -3,7 +3,7 @@
   "version": "2.8.4",
   "description": "RodColoc - Plateforme de colocation à La Réunion",
   "private": true,
-  "author": "dalon974",
+  "author": "rodcoloc",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=18.0.0",

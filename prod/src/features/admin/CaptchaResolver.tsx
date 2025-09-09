@@ -10,7 +10,6 @@ interface CaptchaResolverProps {
 
 export default function CaptchaResolver({ onCaptchaSolved, onClose, onCaptchaResolved }: CaptchaResolverProps) {
   const [captchaImage, setCaptchaImage] = useState<string | null>(null);
-  const [solution, setSolution] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "detecting" | "solving" | "solved">("idle");
@@ -44,57 +43,6 @@ export default function CaptchaResolver({ onCaptchaSolved, onClose, onCaptchaRes
     }
   };
 
-  // Soumettre la solution
-  const submitSolution = async () => {
-    if (!solution.trim()) {
-      setError("Veuillez entrer la solution du captcha");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const response = await fetch("/api/admin/scraper/captcha/solve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ solution: solution.trim() })
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok) {
-        if (data.success) {
-          setStatus("solved");
-          onCaptchaSolved(solution.trim());
-          
-          // Supprimer la notification de captcha
-          try {
-            await fetch('/api/admin/scraper/captcha/check-notification', {
-              method: 'DELETE'
-            });
-          } catch (error) {
-            console.log('Erreur lors de la suppression de la notification:', error);
-          }
-          
-          if (onCaptchaResolved) {
-            onCaptchaResolved();
-          }
-          
-          setTimeout(() => onClose(), 2000);
-        } else {
-          setError(data.error || "Solution incorrecte");
-          setSolution("");
-        }
-      } else {
-        setError(data.error || "Erreur lors de la soumission");
-      }
-    } catch (err) {
-      setError("Erreur de connexion");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Auto-chargement de la notification au chargement
   useEffect(() => {
@@ -177,23 +125,6 @@ export default function CaptchaResolver({ onCaptchaSolved, onClose, onCaptchaRes
             </div>
           )}
 
-          {/* Champ de solution */}
-          {status === "solving" && (
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Solution du captcha :
-              </label>
-              <input
-                type="text"
-                value={solution}
-                onChange={(e) => setSolution(e.target.value)}
-                placeholder="Entrez la solution du captcha"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                autoFocus
-                onKeyPress={(e) => e.key === "Enter" && submitSolution()}
-              />
-            </div>
-          )}
 
           {/* Message d'erreur */}
           {error && (
@@ -220,22 +151,13 @@ export default function CaptchaResolver({ onCaptchaSolved, onClose, onCaptchaRes
             )}
             
             {status === "solving" && (
-              <>
-                <button
-                  onClick={submitSolution}
-                  disabled={loading || !solution.trim()}
-                  className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loading ? "Soumission..." : "Soumettre"}
-                </button>
-                <button
-                  onClick={loadCaptchaNotification}
-                  disabled={loading}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  Actualiser
-                </button>
-              </>
+              <button
+                onClick={loadCaptchaNotification}
+                disabled={loading}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Actualiser
+              </button>
             )}
             
             <button
@@ -253,8 +175,8 @@ export default function CaptchaResolver({ onCaptchaSolved, onClose, onCaptchaRes
               <li>• Le scraper est en pause car un captcha a été détecté</li>
               <li>• Un nouvel onglet s'est ouvert automatiquement avec la page Leboncoin</li>
               <li>• Résolvez le captcha dans l'onglet ouvert</li>
-              <li>• Une fois résolu, relancez le scraper depuis l'admin</li>
-              <li>• Vous pouvez aussi cliquer sur "Ouvrir dans un nouvel onglet" ci-dessus</li>
+              <li>• Revenez au terminal et appuyez sur Entrée pour continuer</li>
+              <li>• Le scraper reprendra automatiquement après résolution</li>
             </ul>
           </div>
         </div>

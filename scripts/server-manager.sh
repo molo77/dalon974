@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script de gestion des serveurs dalon974
+# Script de gestion des serveurs rodcoloc
 # Usage: ./scripts/server-manager.sh [dev|prod|both|stop|status|clean]
 
 set -e
@@ -177,7 +177,7 @@ clean_environment() {
 
 # Fonction pour vérifier le statut des serveurs
 check_status() {
-    log_header "Statut des serveurs dalon974"
+    log_header "Statut des serveurs rodcoloc"
     echo ""
     
     # Vérification du serveur de développement
@@ -388,7 +388,7 @@ restart_servers() {
 
 # Fonction d'aide
 show_help() {
-    echo -e "${CYAN}🚀 Server Manager - Gestionnaire de serveurs dalon974${NC}"
+    echo -e "${CYAN}🚀 Server Manager - Gestionnaire de serveurs rodcoloc${NC}"
     echo ""
     echo "Usage: $0 [commande] [port]"
     echo ""

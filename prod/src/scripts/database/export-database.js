@@ -65,7 +65,7 @@ async function exportDatabase() {
     
     // Sauvegarder l'export
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const exportPath = path.join(__dirname, '..', `dalon974_export_${timestamp}.json`);
+    const exportPath = path.join(__dirname, '..', `rodcoloc_export_${timestamp}.json`);
     
     fs.writeFileSync(exportPath, JSON.stringify(exportData, null, 2));
     
@@ -82,7 +82,7 @@ async function exportDatabase() {
     // Créer aussi un script SQL pour l'import
     console.log('\n📝 Génération du script SQL...');
     const sqlScript = generateSQLScript(exportData);
-    const sqlPath = path.join(__dirname, '..', `dalon974_import_${timestamp}.sql`);
+    const sqlPath = path.join(__dirname, '..', `rodcoloc_import_${timestamp}.sql`);
     fs.writeFileSync(sqlPath, sqlScript);
     console.log(`📁 Script SQL: ${sqlPath}`);
     
@@ -94,9 +94,9 @@ async function exportDatabase() {
 }
 
 function generateSQLScript(data) {
-  let sql = `-- Script d'import pour dalon974_dev
+  let sql = `-- Script d'import pour rodcoloc_dev
 -- Généré le: ${new Date().toISOString()}
--- Source: dalon974
+-- Source: rodcoloc
 
 SET FOREIGN_KEY_CHECKS = 0;
 

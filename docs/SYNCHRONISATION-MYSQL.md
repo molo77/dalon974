@@ -7,13 +7,13 @@ Ce document décrit le processus de synchronisation de la structure MySQL de l'e
 ## Configuration des bases de données
 
 ### Environnement de développement
-- **Base de données** : `dalon974_dev`
-- **URL de connexion** : `mysql://molo:Bulgroz%401977@192.168.1.200:3306/dalon974_dev`
+- **Base de données** : `rodcoloc_dev`
+- **URL de connexion** : `mysql://molo:Bulgroz%401977@192.168.1.200:3306/rodcoloc_dev`
 - **Fichier de configuration** : `dev/.env.local`
 
 ### Environnement de production
-- **Base de données** : `dalon974_prod`
-- **URL de connexion** : `mysql://molo:Bulgroz%401977@192.168.1.200:3306/dalon974_prod`
+- **Base de données** : `rodcoloc_prod`
+- **URL de connexion** : `mysql://molo:Bulgroz%401977@192.168.1.200:3306/rodcoloc_prod`
 - **Fichier de configuration** : `prod/.env.local`
 
 ## Script de synchronisation
@@ -36,27 +36,27 @@ Ce document décrit le processus de synchronisation de la structure MySQL de l'e
 ```bash
 # Création d'une sauvegarde complète de la base de production
 mysqldump --single-transaction --routines --triggers --events \
-    dalon974_prod > backups/prod_db_backup_TIMESTAMP.sql
+    rodcoloc_prod > backups/prod_db_backup_TIMESTAMP.sql
 ```
 
 #### 2. Export de la structure de développement
 ```bash
 # Export de la structure uniquement (pas les données)
 mysqldump --no-data --single-transaction --routines --triggers --events \
-    dalon974_dev > backups/dev_structure_TIMESTAMP.sql
+    rodcoloc_dev > backups/dev_structure_TIMESTAMP.sql
 ```
 
 #### 3. Application à la production
 ```bash
 # Application de la structure à la base de production
-mysql dalon974_prod < backups/dev_structure_TIMESTAMP.sql
+mysql rodcoloc_prod < backups/dev_structure_TIMESTAMP.sql
 ```
 
 #### 4. Vérification
 ```bash
 # Comparaison des tables entre dev et prod
-SHOW TABLES FROM dalon974_dev;
-SHOW TABLES FROM dalon974_prod;
+SHOW TABLES FROM rodcoloc_dev;
+SHOW TABLES FROM rodcoloc_prod;
 ```
 
 ## Intégration dans le déploiement

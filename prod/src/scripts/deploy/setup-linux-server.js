@@ -3,7 +3,7 @@ const fs = require('fs');
 
 // Configuration
 const SERVER_HOST = process.argv[2] || "molo:Bulgroz@1977@192.168.1.200";
-const PROJECT_DIR = process.argv[3] || "/data/dalon974";
+const PROJECT_DIR = process.argv[3] || "/data/rodcoloc";
 
 console.log('🔧 Configuration initiale du serveur Linux pour Dalon974');
 
@@ -29,7 +29,7 @@ try {
   console.log('📝 Création de la configuration PM2...');
   const ecosystemConfig = `module.exports = {
   apps: [{
-    name: 'dalon974',
+    name: 'rodcoloc',
     script: 'npm',
     args: 'start',
     cwd: '${PROJECT_DIR}',
@@ -60,22 +60,22 @@ Type=forking
 User=molo
 WorkingDirectory=${PROJECT_DIR}
 ExecStart=/usr/bin/env pm2 start ecosystem.config.js
-ExecReload=/usr/bin/env pm2 reload dalon974
-ExecStop=/usr/bin/env pm2 stop dalon974
+ExecReload=/usr/bin/env pm2 reload rodcoloc
+ExecStop=/usr/bin/env pm2 stop rodcoloc
 Restart=always
 Environment=PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games
 
 [Install]
 WantedBy=multi-user.target`;
 
-  execSync(`ssh ${SERVER_HOST} "sudo tee /etc/systemd/system/dalon974.service > /dev/null"`, { 
+  execSync(`ssh ${SERVER_HOST} "sudo tee /etc/systemd/system/rodcoloc.service > /dev/null"`, { 
     input: systemdService,
     stdio: ['pipe', 'inherit', 'inherit']
   });
 
   // 7. Activer et démarrer le service
   console.log('🚀 Activation du service...');
-  execSync(`ssh ${SERVER_HOST} "sudo systemctl daemon-reload && sudo systemctl enable dalon974"`, { stdio: 'inherit' });
+  execSync(`ssh ${SERVER_HOST} "sudo systemctl daemon-reload && sudo systemctl enable rodcoloc"`, { stdio: 'inherit' });
 
   // 8. Configurer le firewall (si nécessaire)
   console.log('🔥 Configuration du firewall...');
@@ -92,16 +92,16 @@ WantedBy=multi-user.target`;
 
 case "$1" in
   "restart")
-    pm2 restart dalon974
+    pm2 restart rodcoloc
     ;;
   "stop")
-    pm2 stop dalon974
+    pm2 stop rodcoloc
     ;;
   "start")
-    pm2 start dalon974
+    pm2 start rodcoloc
     ;;
   "logs")
-    pm2 logs dalon974
+    pm2 logs rodcoloc
     ;;
   "status")
     pm2 status

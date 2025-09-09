@@ -51,7 +51,7 @@ INSERT INTO `User` (`id`, `email`, `name`, `displayName`, `role`, `createdAt`, `
 ```bash
 # Sauvegarde de la table User de production
 mysqldump --single-transaction --no-create-info --inserts \
-    dalon974_prod User > backups/prod_users_backup_TIMESTAMP.sql
+    rodcoloc_prod User > backups/prod_users_backup_TIMESTAMP.sql
 ```
 
 #### 4. Export des utilisateurs
@@ -68,7 +68,7 @@ ON DUPLICATE KEY UPDATE
 #### 5. Application à la production
 ```bash
 # Application des utilisateurs à la base de production
-mysql dalon974_prod < backups/dev_users_TIMESTAMP.sql
+mysql rodcoloc_prod < backups/dev_users_TIMESTAMP.sql
 ```
 
 ## Sécurité
@@ -125,7 +125,7 @@ Les utilisateurs copiés sont compatibles avec NextAuth et peuvent se connecter 
 ### Vérification
 ```bash
 # Vérification des utilisateurs en production
-mysql -h 192.168.1.200 -P 3306 -u molo -p'Bulgroz@1977' dalon974_prod \
+mysql -h 192.168.1.200 -P 3306 -u molo -p'Bulgroz@1977' rodcoloc_prod \
     -e "SELECT email, name, displayName, role FROM User;"
 ```
 

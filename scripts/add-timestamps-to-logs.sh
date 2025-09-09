@@ -3,8 +3,8 @@
 # Script pour ajouter des horodatages aux logs existants
 # Usage: ./scripts/add-timestamps-to-logs.sh
 
-LOG_DIR="/data/dalon974/logs"
-BACKUP_DIR="/data/dalon974/logs/backup"
+LOG_DIR="/data/rodcoloc/logs"
+BACKUP_DIR="/data/rodcoloc/logs/backup"
 
 echo "🕒 Ajout d'horodatages aux logs..."
 

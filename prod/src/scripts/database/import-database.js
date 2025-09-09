@@ -1,4 +1,4 @@
-// Importer la base de données vers dalon974_dev
+// Importer la base de données vers rodcoloc_dev
 const mysql = require('mysql2/promise');
 const path = require('path');
 const fs = require('fs');
@@ -8,12 +8,12 @@ const DB_CONFIG = {
   host: '192.168.1.200',
   user: 'molo',
   password: 'Bulgroz@1977',
-  database: 'dalon974_dev',
+  database: 'rodcoloc_dev',
   port: 3306
 };
 
 async function importDatabase() {
-  console.log('📥 Import vers dalon974_dev...\n');
+  console.log('📥 Import vers rodcoloc_dev...\n');
   
   try {
     // Se connecter à la base de données de destination
@@ -23,7 +23,7 @@ async function importDatabase() {
     
     // Lire le script SQL généré
     const sqlFiles = fs.readdirSync(__dirname + '/..').filter(file => 
-      file.startsWith('dalon974_import_') && file.endsWith('.sql')
+      file.startsWith('rodcoloc_import_') && file.endsWith('.sql')
     );
     
     if (sqlFiles.length === 0) {
@@ -76,7 +76,7 @@ async function importDatabase() {
     console.log(`   • Erreurs: ${errorCount}`);
     
     if (errorCount === 0) {
-      console.log(`✅ Import réussi vers dalon974_dev`);
+      console.log(`✅ Import réussi vers rodcoloc_dev`);
     } else {
       console.log(`⚠️ Import terminé avec ${errorCount} erreurs`);
     }
@@ -89,8 +89,8 @@ async function importDatabase() {
     } else if (error.code === 'ER_ACCESS_DENIED_ERROR') {
       console.log('💡 Vérifiez les identifiants de connexion');
     } else if (error.code === 'ER_BAD_DB_ERROR') {
-      console.log('💡 La base de données dalon974_dev n\'existe pas');
-      console.log('💡 Créez-la d\'abord avec: CREATE DATABASE dalon974_dev;');
+      console.log('💡 La base de données rodcoloc_dev n\'existe pas');
+      console.log('💡 Créez-la d\'abord avec: CREATE DATABASE rodcoloc_dev;');
     }
   }
 }

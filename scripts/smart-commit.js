@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Script Smart Commit pour dalon974
+ * Script Smart Commit pour rodcoloc
  * Gère les commits automatiques avec gestion des versions
  * Respecte les préférences utilisateur pour les messages détaillés
  */

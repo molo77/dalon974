@@ -1,4 +1,4 @@
-// Vérifier l'import vers dalon974_dev
+// Vérifier l'import vers rodcoloc_dev
 const mysql = require('mysql2/promise');
 
 // Configuration de la base de données de destination
@@ -6,16 +6,16 @@ const DB_CONFIG = {
   host: '192.168.1.200',
   user: 'molo',
   password: 'Bulgroz@1977',
-  database: 'dalon974_dev',
+  database: 'rodcoloc_dev',
   port: 3306
 };
 
 async function verifyImport() {
-  console.log('🔍 Vérification de l\'import vers dalon974_dev...\n');
+  console.log('🔍 Vérification de l\'import vers rodcoloc_dev...\n');
   
   try {
     // Se connecter à la base de données de destination
-    console.log('🔌 Connexion à dalon974_dev...');
+    console.log('🔌 Connexion à rodcoloc_dev...');
     const connection = await mysql.createConnection(DB_CONFIG);
     console.log('✅ Connexion établie');
     
@@ -79,9 +79,9 @@ async function verifyImport() {
     await connection.end();
     
     console.log('\n🎉 Vérification terminée !');
-    console.log('✅ Base de données dalon974_dev prête à l\'emploi');
+    console.log('✅ Base de données rodcoloc_dev prête à l\'emploi');
     console.log('💡 Pour utiliser cette base, modifiez DATABASE_URL dans .env.local vers:');
-    console.log('   mysql://molo:Bulgroz%401977@192.168.1.200:3306/dalon974_dev');
+    console.log('   mysql://molo:Bulgroz%401977@192.168.1.200:3306/rodcoloc_dev');
     
   } catch (error) {
     console.error('❌ Erreur lors de la vérification:', error.message);

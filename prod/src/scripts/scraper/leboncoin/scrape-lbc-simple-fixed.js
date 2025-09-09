@@ -5,7 +5,7 @@ const puppeteer = require('puppeteer');
 const { PrismaClient } = require('@prisma/client');
 const { exec } = require('child_process');
 const { promisify } = require('util');
-const ScraperLogger = require('/data/dalon974/logs/scraper/logger');
+const ScraperLogger = require('/data/rodcoloc/logs/scraper/logger');
 
 const execAsync = promisify(exec);
 const prisma = new PrismaClient();
@@ -138,8 +138,15 @@ async function detectCaptcha(page) {
         }
       }
 
-      // Vérifier aussi dans le texte de la page
+      // Vérifier aussi dans le texte de la page (mais ignorer le code JavaScript)
       const bodyText = document.body.textContent?.toLowerCase() || '';
+      
+      // Ignorer les faux positifs dans le code JavaScript
+      const isJavaScriptCode = bodyText.includes('var dd=') || 
+                              bodyText.includes('function(') ||
+                              bodyText.includes('document.') ||
+                              bodyText.includes('window.');
+      
       const captchaKeywords = [
         'captcha',
         'verification',
@@ -150,7 +157,8 @@ async function detectCaptcha(page) {
         'anti-robot'
       ];
 
-      const hasCaptchaText = captchaKeywords.some(keyword => bodyText.includes(keyword));
+      // Ne détecter le captcha par texte que si ce n'est pas du code JavaScript
+      const hasCaptchaText = !isJavaScriptCode && captchaKeywords.some(keyword => bodyText.includes(keyword));
 
       return {
         hasCaptcha: !!(captchaElement || hasCaptchaText),
@@ -225,8 +233,8 @@ async function scrapeWithFixed() {
         '--start-maximized',
         '--disable-extensions',
         '--disable-plugins',
-        '--disable-images', // Désactiver les images pour accélérer
-        '--disable-javascript', // Désactiver JS pour éviter la détection
+        //'--disable-images', // Désactiver les images pour accélérer
+        // '--disable-javascript', // JavaScript nécessaire pour Leboncoin
         '--disable-background-timer-throttling',
         '--disable-backgrounding-occluded-windows',
         '--disable-renderer-backgrounding'
@@ -393,31 +401,11 @@ async function scrapeWithFixed() {
             logger.warning(`⚠️ Erreur lors de la capture du captcha: ${error.message}`);
           }
           
-          // Ouvrir un nouvel onglet du navigateur pour résoudre le captcha
+          // Créer d'abord le fichier de notification et mettre en pause
+          const currentUrl = page.url();
+          
+          // Créer le fichier de notification pour l'admin
           try {
-            logger.info('🌐 Ouverture d\'un nouvel onglet pour résoudre le captcha...');
-            
-            // Obtenir l'URL actuelle de la page
-            const currentUrl = page.url();
-            logger.info(`📍 URL du captcha: ${currentUrl}`);
-            
-            // Ouvrir un nouvel onglet dans le navigateur par défaut
-            const { exec } = require('child_process');
-            const openCommand = process.platform === 'win32' ? 'start' : 
-                              process.platform === 'darwin' ? 'open' : 'xdg-open';
-            
-            exec(`${openCommand} "${currentUrl}"`, (error, stdout, stderr) => {
-              if (error) {
-                logger.warning(`⚠️ Erreur lors de l'ouverture du navigateur: ${error.message}`);
-                logger.info('💡 Ouvrez manuellement cette URL dans votre navigateur:');
-                logger.info(`   ${currentUrl}`);
-              } else {
-                logger.success('✅ Nouvel onglet ouvert dans le navigateur');
-                logger.info('💡 Résolvez le captcha dans l\'onglet ouvert, puis relancez le scraper');
-              }
-            });
-            
-            // Créer aussi un fichier de notification pour l'admin
             const notificationData = {
               captchaDetected: true,
               captchaType: captchaInfo.captchaType,
@@ -434,15 +422,18 @@ async function scrapeWithFixed() {
             
             const fs = require('fs');
             const path = require('path');
-            const notificationFile = path.join(__dirname, '../../../../logs/scraper/captcha-notification.json');
+            const notificationDir = path.join(__dirname, '../../../../logs/scraper');
+            const notificationFile = path.join(notificationDir, 'captcha-notification.json');
+            
+            // Créer le répertoire s'il n'existe pas
+            if (!fs.existsSync(notificationDir)) {
+              fs.mkdirSync(notificationDir, { recursive: true });
+            }
             
             fs.writeFileSync(notificationFile, JSON.stringify(notificationData, null, 2));
             logger.success('✅ Fichier de notification créé');
-            
           } catch (error) {
-            logger.warning(`⚠️ Erreur lors de l'ouverture du navigateur: ${error.message}`);
-            logger.info('💡 Ouvrez manuellement cette URL dans votre navigateur:');
-            logger.info(`   ${page.url()}`);
+            logger.warning(`⚠️ Erreur lors de la création de la notification: ${error.message}`);
           }
           
           // Mettre le statut du scraper en pause
@@ -452,7 +443,7 @@ async function scrapeWithFixed() {
             // Mettre à jour le statut du scraper en base de données
             const latestRun = await prisma.scraperRun.findFirst({
               where: { status: 'running' },
-              orderBy: { startTime: 'desc' }
+              orderBy: { startedAt: 'desc' }
             });
             
             if (latestRun) {
@@ -460,7 +451,7 @@ async function scrapeWithFixed() {
                 where: { id: latestRun.id },
                 data: { 
                   status: 'paused',
-                  endTime: new Date(),
+                  finishedAt: new Date(),
                   errorMessage: 'Captcha détecté - Résolution manuelle requise'
                 }
               });
@@ -468,6 +459,76 @@ async function scrapeWithFixed() {
             }
           } catch (error) {
             logger.warning(`⚠️ Erreur lors de la mise en pause: ${error.message}`);
+          }
+          
+          // Maintenant ouvrir le navigateur et attendre
+          let captchaResolved = false;
+          
+          try {
+            logger.info('🌐 Ouverture de l\'URL dans le navigateur par défaut...');
+            logger.info(`📍 URL du captcha: ${currentUrl}`);
+            
+            // Ouvrir dans le navigateur par défaut
+            const { exec } = require('child_process');
+            const openCommand = process.platform === 'win32' ? 'start' : 
+                              process.platform === 'darwin' ? 'open' : 'xdg-open';
+            
+            exec(`${openCommand} "${currentUrl}"`, (error, stdout, stderr) => {
+              if (error) {
+                logger.warning(`⚠️ Erreur lors de l'ouverture du navigateur: ${error.message}`);
+                logger.info('💡 Ouvrez manuellement cette URL dans votre navigateur:');
+                logger.info(`   ${currentUrl}`);
+              } else {
+                logger.success('✅ Nouvel onglet ouvert dans le navigateur');
+                logger.info('💡 Résolvez le captcha dans l\'onglet ouvert');
+                logger.info('🔄 Une fois résolu, appuyez sur Entrée dans ce terminal pour continuer');
+              }
+            });
+            
+            // Attendre que le navigateur s'ouvre
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Attendre que l'utilisateur appuie sur Entrée
+            logger.info('⏳ Appuyez sur Entrée une fois que vous avez résolu le captcha...');
+            await new Promise((resolve) => {
+              const readline = require('readline');
+              const rl = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout
+              });
+              
+              rl.question('', () => {
+                rl.close();
+                resolve();
+              });
+            });
+            
+            logger.info('✅ Captcha résolu, continuation du scraper...');
+            
+            // Rafraîchir la page pour vérifier que le captcha est résolu
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            
+            // Vérifier à nouveau s'il y a un captcha
+            const captchaInfoAfter = await detectCaptcha(page);
+            if (captchaInfoAfter.hasCaptcha) {
+              logger.warning('⚠️ Captcha toujours présent, nouvelle tentative...');
+              throw new Error('Captcha non résolu');
+            } else {
+              logger.success('✅ Captcha résolu avec succès !');
+              logger.info('🔄 Continuation du scraping...');
+              captchaResolved = true;
+            }
+            
+          } catch (error) {
+            logger.warning(`⚠️ Erreur lors de la résolution du captcha: ${error.message}`);
+            logger.info('💡 Le scraper va s\'arrêter. Relancez-le après avoir résolu le captcha.');
+          }
+          
+          // Si le captcha a été résolu, continuer le scraping
+          if (captchaResolved) {
+            logger.info('🚀 Reprise du scraping après résolution du captcha...');
+            // Continuer avec la boucle principale du scraping
+            continue; // Continuer la boucle principale
           }
           
           // Attendre que l'utilisateur résolve le captcha

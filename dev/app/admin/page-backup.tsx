@@ -8,7 +8,6 @@ import AdminUsers from "@/features/admin/AdminUsers";
 import AdminAds from "@/features/admin/AdminAds";
 import ImageCleanup from "@/features/admin/ImageCleanup";
 import VersionInfo from "@/features/admin/VersionInfo";
-import CaptchaResolver from "@/features/admin/CaptchaResolver";
 import ExpandableImage from "@/shared/components/ExpandableImage"; // New import
 // import AdminAnnonces from "@/components/admin/AdminAnnonces"; // affichage remplacé par une liste intégrée
 import useAdminGate from "@/shared/hooks/useAdminGate";
@@ -30,23 +29,9 @@ export default function AdminPage() {
   const user = session?.user as any;
   const loading = status === "loading";
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"annonces" | "users" | "colocs" | "ads" | "scraper" | "maintenance">("annonces");
+  const [activeTab, setActiveTab] = useState<"annonces" | "users" | "colocs" | "ads" | "maintenance">("annonces");
   const [isDevEnvironment, setIsDevEnvironment] = useState<boolean | null>(null);
-  // État config scraper
-  const [scraperConfig, setScraperConfig] = useState<Record<string,string|undefined>>({});
-  const [scraperLoading, setScraperLoading] = useState(false);
-  const [scraperRuns, setScraperRuns] = useState<any[]>([]);
-  const [scraperSaving, setScraperSaving] = useState(false);
-  const [scraperLaunching, setScraperLaunching] = useState(false);
-  const [scraperCancelling, setScraperCancelling] = useState(false);
-  const [scraperPurging, setScraperPurging] = useState(false);
-  const [scraperFetchingDatadome, setScraperFetchingDatadome] = useState(false);
-  const [confirmPurgeOpen, setConfirmPurgeOpen] = useState<null | 'runs' | 'all'>(null);
   const [showSecret, setShowSecret] = useState<Record<string,boolean>>({});
-  const [showScraperConfig, setShowScraperConfig] = useState(false); // Caché par défaut
-  const [showScraperLogs, setShowScraperLogs] = useState(false); // Caché par défaut
-  const [scraperLogs, setScraperLogs] = useState<string>('');
-  const [showCaptchaResolver, setShowCaptchaResolver] = useState(false);
   const toggleSecret = (k:string)=> setShowSecret(s=>({ ...s, [k]: !s[k] }));
 
   // Fonction pour récupérer l'environnement via l'API
@@ -261,12 +246,12 @@ export default function AdminPage() {
   // } catch{ showToast('error','Erreur sauvegarde config'); }
   //   finally { setScraperSaving(false); }
   // };
-  const launchScraper = async () => {
+  const launchScraper = async (type: string = 'puppeteer') => {
     try {
       setScraperLaunching(true);
-      const res = await fetch('/api/admin/scraper/run',{ method:'POST' });
+      const res = await fetch(`/api/admin/scraper/run?type=${type}`,{ method:'POST' });
       if(!res.ok) throw new Error('launch fail');
-      showToast('success','Scraper lancé ✅');
+      showToast('success',`Scraper ${type} lancé ✅`);
   setTimeout(()=>loadScraperRuns(),1500);
   } catch{ showToast('error','Erreur lancement'); }
     finally { setScraperLaunching(false); }
@@ -1861,7 +1846,15 @@ export default function AdminPage() {
               </button>
               <button disabled={scraperLoading} onClick={loadScraper} className='px-3 py-1.5 text-sm rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-50'>Rafraîchir</button>
 
-              <button disabled={scraperLaunching} onClick={launchScraper} className='px-3 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50'>{scraperLaunching? 'Lancement...' : 'Lancer scraper'}</button>
+              <div className='flex gap-2 flex-wrap'>
+                <button disabled={scraperLaunching} onClick={() => launchScraper('puppeteer')} className='px-3 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50' title='Scraper Puppeteer standard'>{scraperLaunching? 'Lancement...' : 'Puppeteer'}</button>
+                <button disabled={scraperLaunching} onClick={() => launchScraper('puppeteer-network')} className='px-3 py-1.5 text-sm rounded bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50' title='Scraper Puppeteer avec réseau de navigateur'>{scraperLaunching? 'Lancement...' : 'Puppeteer Réseau'}</button>
+                <button disabled={scraperLaunching} onClick={() => launchScraper('playwright')} className='px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50' title='Scraper Playwright moderne'>{scraperLaunching? 'Lancement...' : 'Playwright'}</button>
+                <button disabled={scraperLaunching} onClick={() => launchScraper('advanced')} className='px-3 py-1.5 text-sm rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50' title='Scraper Playwright avancé'>{scraperLaunching? 'Lancement...' : 'Avancé'}</button>
+                <button disabled={scraperLaunching} onClick={() => launchScraper('browser-network')} className='px-3 py-1.5 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50' title='Scraper avec réseau de navigateur'>{scraperLaunching? 'Lancement...' : 'Réseau'}</button>
+                <button disabled={scraperLaunching} onClick={() => launchScraper('apify')} className='px-3 py-1.5 text-sm rounded bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50' title='Scraper Apify avec proxies'>{scraperLaunching? 'Lancement...' : 'Apify'}</button>
+                <button disabled={scraperLaunching} onClick={() => launchScraper('scrapfly')} className='px-3 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50' title='Scraper ScrapFly avec proxies résidentiels'>{scraperLaunching? 'Lancement...' : 'ScrapFly'}</button>
+              </div>
               <button disabled={scraperCancelling} onClick={cancelRun} className='px-3 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50'>{scraperCancelling? 'Annulation...' : 'Annuler'}</button>
               <button disabled={scraperPurging} onClick={()=>openPurge('runs')} className='px-3 py-1.5 text-sm rounded bg-slate-600 text-white hover:bg-slate-700 disabled:opacity-50'>{scraperPurging? 'Purging...' : 'Purge runs'}</button>
               <button disabled={scraperPurging} onClick={()=>openPurge('all')} className='px-3 py-1.5 text-sm rounded bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50' title='Supprime aussi les annonces source LBC'>Purge + annonces</button>

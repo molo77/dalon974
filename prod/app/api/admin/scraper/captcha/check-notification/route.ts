@@ -10,7 +10,7 @@ export async function GET() {
   }
 
   try {
-    const notificationFile = path.join(process.cwd(), 'logs', 'scraper', 'captcha-notification.json');
+    const notificationFile = path.join(process.cwd(), '..', 'logs', 'scraper', 'captcha-notification.json');
     
     // Vérifier si le fichier existe
     if (!fs.existsSync(notificationFile)) {
@@ -59,7 +59,7 @@ export async function DELETE() {
   }
 
   try {
-    const notificationFile = path.join(process.cwd(), 'logs', 'scraper', 'captcha-notification.json');
+    const notificationFile = path.join(process.cwd(), '..', 'logs', 'scraper', 'captcha-notification.json');
     
     if (fs.existsSync(notificationFile)) {
       fs.unlinkSync(notificationFile);

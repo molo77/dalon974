@@ -71,10 +71,15 @@ export async function getColocProfile(userId: string) {
 
 export async function saveColocProfile(userId: string, data: ColocProfileData) {
   try {
+    console.log("[saveColocProfile] Début de la sauvegarde pour userId:", userId);
+    console.log("[saveColocProfile] Données reçues:", JSON.stringify(data, null, 2));
+    
     // Chercher d'abord s'il existe déjà un profil pour cet utilisateur
     const existingProfile = await prisma.colocProfile.findFirst({
       where: { userId }
     });
+    
+    console.log("[saveColocProfile] Profil existant trouvé:", !!existingProfile);
 
     const profile = existingProfile 
       ? await prisma.colocProfile.update({
@@ -96,7 +101,7 @@ export async function saveColocProfile(userId: string, data: ColocProfileData) {
           communesSlugs: data.communesSlugs ? JSON.stringify(data.communesSlugs) : undefined,
           genre: data.genre,
           bioCourte: data.bioCourte,
-          langues: data.languesCsv ? JSON.parse(data.languesCsv) : undefined,
+          langues: data.languesCsv ? (typeof data.languesCsv === 'string' ? JSON.parse(data.languesCsv) : data.languesCsv) : undefined,
           instagram: data.instagram,
           prefGenre: data.prefGenre,
           prefAgeMin: data.prefAgeMin,
@@ -125,7 +130,7 @@ export async function saveColocProfile(userId: string, data: ColocProfileData) {
             communesSlugs: data.communesSlugs ? JSON.stringify(data.communesSlugs) : undefined,
             genre: data.genre,
             bioCourte: data.bioCourte,
-            langues: data.languesCsv ? JSON.parse(data.languesCsv) : undefined,
+            langues: data.languesCsv ? (typeof data.languesCsv === 'string' ? JSON.parse(data.languesCsv) : data.languesCsv) : undefined,
             instagram: data.instagram,
             prefGenre: data.prefGenre,
             prefAgeMin: data.prefAgeMin,
@@ -135,9 +140,16 @@ export async function saveColocProfile(userId: string, data: ColocProfileData) {
             updatedAt: new Date()
           }
         });
+    
+    console.log("[saveColocProfile] Profil sauvegardé avec succès:", profile.id);
     return profile;
   } catch (error) {
     console.error("Erreur lors de la sauvegarde du profil coloc:", error);
+    console.error("Détails de l'erreur:", {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
     throw error;
   }
 }

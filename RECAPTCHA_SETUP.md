@@ -11,7 +11,7 @@ Ce guide explique comment configurer Google reCAPTCHA v3 pour sécuriser la page
    - **Type de reCAPTCHA** : reCAPTCHA v3
    - **Domaines** : 
      - `localhost` (pour le développement)
-     - Votre domaine de production (ex: `dalon974.com`)
+     - Votre domaine de production (ex: `rodcoloc.com`)
    - **Acceptez les conditions d'utilisation**
 4. Cliquez sur "Soumettre"
 

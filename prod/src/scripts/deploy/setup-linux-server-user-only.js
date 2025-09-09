@@ -3,7 +3,7 @@ const fs = require('fs');
 
 // Configuration
 const SERVER_HOST = process.argv[2] || "molo@192.168.1.200";
-const PROJECT_DIR = process.argv[3] || "/data/dalon974";
+const PROJECT_DIR = process.argv[3] || "/data/rodcoloc";
 
 console.log('🔧 Configuration initiale du serveur Linux pour Dalon974 (utilisateur uniquement)');
 
@@ -63,14 +63,14 @@ Environment=PORT=3000
 [Install]
 WantedBy=default.target`;
 
-  execSync(`ssh ${SERVER_HOST} "cat > ${userServiceDir}/dalon974.service"`, { 
+  execSync(`ssh ${SERVER_HOST} "cat > ${userServiceDir}/rodcoloc.service"`, { 
     input: systemdService,
     stdio: ['pipe', 'inherit', 'inherit']
   });
 
   // 5. Activer le service utilisateur
   console.log('🚀 Activation du service utilisateur...');
-  execSync(`ssh ${SERVER_HOST} "systemctl --user daemon-reload && systemctl --user enable dalon974"`, { stdio: 'inherit' });
+  execSync(`ssh ${SERVER_HOST} "systemctl --user daemon-reload && systemctl --user enable rodcoloc"`, { stdio: 'inherit' });
 
   // 6. Créer un script de maintenance
   console.log('🛠️  Création du script de maintenance...');
@@ -79,19 +79,19 @@ WantedBy=default.target`;
 
 case "$1" in
   "restart")
-    systemctl --user restart dalon974
+    systemctl --user restart rodcoloc
     ;;
   "stop")
-    systemctl --user stop dalon974
+    systemctl --user stop rodcoloc
     ;;
   "start")
-    systemctl --user start dalon974
+    systemctl --user start rodcoloc
     ;;
   "logs")
-    journalctl --user -u dalon974 -f
+    journalctl --user -u rodcoloc -f
     ;;
   "status")
-    systemctl --user status dalon974
+    systemctl --user status rodcoloc
     ;;
   *)
     echo "Usage: $0 {restart|stop|start|logs|status}"

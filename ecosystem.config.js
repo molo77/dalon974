@@ -1,9 +1,9 @@
 module.exports = {
   apps: [{
-    name: 'dalon974',
+    name: 'rodcoloc',
     script: 'npm',
     args: 'start',
-    cwd: '/data/dalon974',
+    cwd: '/data/rodcoloc',
     instances: 1,
     autorestart: true,
     watch: false,

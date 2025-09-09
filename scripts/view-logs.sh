@@ -3,7 +3,7 @@
 # Script pour visualiser les logs avec des couleurs et des filtres
 # Usage: ./scripts/view-logs.sh [dev|prod|maintenance] [--tail N] [--grep pattern]
 
-LOG_DIR="/data/dalon974/logs"
+LOG_DIR="/data/rodcoloc/logs"
 LOG_TYPE="dev"
 TAIL_LINES=50
 GREP_PATTERN=""

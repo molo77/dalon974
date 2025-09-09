@@ -775,8 +775,8 @@ update_env_vars() {
     
     # Mettre à jour seulement les variables spécifiques à la production
     if [[ -f "$prod_env_file" ]]; then
-        log_info "📝 Mise à jour de la base de données vers dalon974_prod"
-        sed -i 's/DATABASE_URL=.*/DATABASE_URL="mysql:\/\/dalon974:dalon974@localhost:3306\/dalon974_prod"/' "$prod_env_file"
+        log_info "📝 Mise à jour de la base de données vers rodcoloc_prod"
+        sed -i 's/DATABASE_URL=.*/DATABASE_URL="mysql:\/\/rodcoloc:rodcoloc@localhost:3306\/rodcoloc_prod"/' "$prod_env_file"
         
         log_info "📝 Mise à jour de NODE_ENV vers production"
         sed -i 's/NODE_ENV=.*/NODE_ENV=production/' "$prod_env_file"
@@ -796,7 +796,7 @@ update_env_vars() {
         
         log_success "Variables d'environnement mises à jour"
         log_info "📋 Résumé des changements:"
-        log_info "   - Base de données: dalon974_prod"
+        log_info "   - Base de données: rodcoloc_prod"
         log_info "   - NODE_ENV: production"
         log_info "   - PORT: 3000"
         log_info "   - Variables LBC scraper préservées"
@@ -804,7 +804,7 @@ update_env_vars() {
         log_warning "Aucun fichier .env.local trouvé, création d'un nouveau fichier"
         cat > "$prod_env_file" << EOF
 # Configuration de production
-DATABASE_URL="mysql://dalon974:dalon974@localhost:3306/dalon974_prod"
+DATABASE_URL="mysql://rodcoloc:rodcoloc@localhost:3306/rodcoloc_prod"
 NODE_ENV=production
 PORT=3000
 EOF

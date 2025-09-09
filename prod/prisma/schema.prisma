@@ -1,5 +1,5 @@
 // Prisma schema for migrating Firestore data to MySQL
-// Run with: DATABASE_URL="mysql://user:pass@localhost:3306/dalon974" npx prisma migrate dev --name init
+// Run with: DATABASE_URL="mysql://user:pass@localhost:3306/rodcoloc" npx prisma migrate dev --name init
 
 datasource db {
   provider = "mysql"

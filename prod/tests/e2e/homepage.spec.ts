@@ -5,7 +5,7 @@ test.describe('Page d\'accueil', () => {
     await page.goto('/')
     
     // Vérifier que la page se charge
-    await expect(page).toHaveTitle(/dalon974/i)
+    await expect(page).toHaveTitle(/rodcoloc/i)
     
     // Vérifier la présence d'éléments clés
     await expect(page.locator('h1')).toBeVisible()

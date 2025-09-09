@@ -3,15 +3,15 @@
 # Script pour nettoyer et gérer la rotation des logs
 # Usage: ./scripts/cleanup-logs.sh [--keep-days N] [--compress] [--dry-run]
 
-LOG_DIR="/data/dalon974/logs"
-BACKUP_DIR="/data/dalon974/logs/backup"
+LOG_DIR="/data/rodcoloc/logs"
+BACKUP_DIR="/data/rodcoloc/logs/backup"
 KEEP_DAYS=30
 COMPRESS=false
 DRY_RUN=false
 
 # Fonction d'aide
 show_help() {
-    echo "🧹 Nettoyage des logs - dalon974"
+    echo "🧹 Nettoyage des logs - rodcoloc"
     echo ""
     echo "Usage: $0 [OPTIONS]"
     echo ""

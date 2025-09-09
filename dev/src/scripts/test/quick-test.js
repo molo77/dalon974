@@ -52,7 +52,7 @@ class QuickTester {
   }
 
   async runAllQuickTests() {
-    this.log('🚀 Tests rapides de l\'application dalon974', 'test');
+    this.log('🚀 Tests rapides de l\'application rodcoloc', 'test');
     
     // Vérifier que le serveur est démarré
     const serverOk = await this.checkServer();

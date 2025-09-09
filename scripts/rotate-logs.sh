@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script de rotation des logs pour dalon974
+# Script de rotation des logs pour rodcoloc
 # Usage: ./scripts/rotate-logs.sh [prod|dev|all]
 
 set -e

@@ -130,7 +130,7 @@ class TestSetup {
 
 test('exemple de test', async ({ page }) => {
   await page.goto('/')
-  await expect(page).toHaveTitle(/dalon974/i)
+  await expect(page).toHaveTitle(/rodcoloc/i)
 })`;
 
     const examplePath = path.join(this.projectRoot, 'tests/e2e/example.spec.ts');
@@ -170,7 +170,7 @@ test('exemple de test', async ({ page }) => {
   }
 
   async setup() {
-    this.log('🚀 Configuration du système de tests dalon974', 'start');
+    this.log('🚀 Configuration du système de tests rodcoloc', 'start');
     
     try {
       await this.createDirectories();

@@ -10,7 +10,7 @@ async function testDatabaseConnection() {
     port: 3306,
     user: 'molo',
     password: 'Bulgroz@1977',
-    database: 'molo_dalon974',
+    database: 'molo_rodcoloc',
     connectTimeout: 10000,
     acquireTimeout: 10000,
     timeout: 10000,

@@ -69,7 +69,7 @@ async function upsertListings(listings: RawListing[]) {
 
 // Exemple d'une source (adapter aux sites réels). On suppose une page liste avec liens.
 async function scrapeSourceList(baseUrl: string): Promise<string[]> {
-  const res = await fetch(baseUrl, { headers: { 'User-Agent': 'Mozilla/5.0 dalon974-bot' } });
+  const res = await fetch(baseUrl, { headers: { 'User-Agent': 'Mozilla/5.0 rodcoloc-bot' } });
   if (!res.ok) throw new Error('List fetch failed: ' + res.status);
   const html = await res.text();
     const $ = cheerio.load(html); // types fournis par cheerio
@@ -87,7 +87,7 @@ async function scrapeSourceList(baseUrl: string): Promise<string[]> {
 
 async function scrapeDetail(url: string): Promise<RawListing | null> {
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 dalon974-bot' } });
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 rodcoloc-bot' } });
     if (!res.ok) throw new Error('Detail fetch failed ' + res.status);
     const html = await res.text();
     const $ = cheerio.load(html);

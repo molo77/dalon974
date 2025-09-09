@@ -1,4 +1,4 @@
-// Créer la base de données dalon974_dev
+// Créer la base de données rodcoloc_dev
 const mysql = require('mysql2/promise');
 
 // Configuration de connexion (sans spécifier de base de données)
@@ -10,7 +10,7 @@ const DB_CONFIG = {
 };
 
 async function createDevDatabase() {
-  console.log('🏗️ Création de la base de données dalon974_dev...\n');
+  console.log('🏗️ Création de la base de données rodcoloc_dev...\n');
   
   try {
     // Se connecter au serveur MySQL
@@ -19,15 +19,15 @@ async function createDevDatabase() {
     console.log('✅ Connexion établie');
     
     // Vérifier si la base existe déjà
-    console.log('🔍 Vérification de l\'existence de dalon974_dev...');
-    const [rows] = await connection.execute('SHOW DATABASES LIKE "dalon974_dev"');
+    console.log('🔍 Vérification de l\'existence de rodcoloc_dev...');
+    const [rows] = await connection.execute('SHOW DATABASES LIKE "rodcoloc_dev"');
     
     if (rows.length > 0) {
-      console.log('✅ La base de données dalon974_dev existe déjà');
+      console.log('✅ La base de données rodcoloc_dev existe déjà');
     } else {
-      console.log('📝 Création de la base de données dalon974_dev...');
-      await connection.execute('CREATE DATABASE dalon974_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
-      console.log('✅ Base de données dalon974_dev créée');
+      console.log('📝 Création de la base de données rodcoloc_dev...');
+      await connection.execute('CREATE DATABASE rodcoloc_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+      console.log('✅ Base de données rodcoloc_dev créée');
     }
     
     // Vérifier les privilèges
@@ -37,7 +37,7 @@ async function createDevDatabase() {
     let hasPrivileges = false;
     for (const row of privileges) {
       const grant = Object.values(row)[0];
-      if (grant.includes('dalon974_dev') || grant.includes('*.*')) {
+      if (grant.includes('rodcoloc_dev') || grant.includes('*.*')) {
         hasPrivileges = true;
         break;
       }

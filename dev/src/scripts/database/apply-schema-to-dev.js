@@ -1,15 +1,15 @@
-// Appliquer le schéma Prisma à dalon974_dev
+// Appliquer le schéma Prisma à rodcoloc_dev
 const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
 async function applySchemaToDev() {
-  console.log('🏗️ Application du schéma Prisma à dalon974_dev...\n');
+  console.log('🏗️ Application du schéma Prisma à rodcoloc_dev...\n');
   
   try {
     // Créer un fichier .env temporaire pour la base de développement
     const tempEnvPath = path.join(__dirname, '..', '.env.dev');
-    const devDbUrl = 'mysql://molo:Bulgroz%401977@192.168.1.200:3306/dalon974_dev';
+    const devDbUrl = 'mysql://molo:Bulgroz%401977@192.168.1.200:3306/rodcoloc_dev';
     
     const envContent = `DATABASE_URL="${devDbUrl}"
 NEXTAUTH_URL="http://localhost:3000"
@@ -77,7 +77,7 @@ NEXTAUTH_SECRET="dev-secret-key"
       }
     }
     
-    console.log('\n🎉 Schéma appliqué avec succès à dalon974_dev !');
+    console.log('\n🎉 Schéma appliqué avec succès à rodcoloc_dev !');
     console.log('💡 Vous pouvez maintenant importer les données');
     
   } catch (error) {

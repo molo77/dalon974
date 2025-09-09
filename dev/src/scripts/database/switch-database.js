@@ -2,8 +2,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const PRODUCTION_DB = 'mysql://molo:password@mysql-molo.alwaysdata.com:3306/dalon974';
-const DEVELOPMENT_DB = 'mysql://molo:Bulgroz%401977@192.168.1.200:3306/dalon974_dev';
+const PRODUCTION_DB = 'mysql://molo:password@mysql-molo.alwaysdata.com:3306/rodcoloc';
+const DEVELOPMENT_DB = 'mysql://molo:Bulgroz%401977@192.168.1.200:3306/rodcoloc_dev';
 
 async function switchDatabase() {
   console.log('🔄 Basculement de base de données...\n');
@@ -32,12 +32,12 @@ async function switchDatabase() {
     if (currentDb.includes('alwaysdata.com')) {
       // Basculer vers la base de développement
       newDb = DEVELOPMENT_DB;
-      newDbName = 'développement (dalon974_dev)';
+      newDbName = 'développement (rodcoloc_dev)';
       console.log('🔄 Basculement vers la base de développement...');
     } else {
       // Basculer vers la base de production
       newDb = PRODUCTION_DB;
-      newDbName = 'production (dalon974)';
+      newDbName = 'production (rodcoloc)';
       console.log('🔄 Basculement vers la base de production...');
     }
     
@@ -57,12 +57,12 @@ async function switchDatabase() {
     if (newDb.includes('192.168.1.200')) {
       console.log('\n💡 Base de développement locale:');
       console.log('   • Serveur: 192.168.1.200:3306');
-      console.log('   • Base: dalon974_dev');
+      console.log('   • Base: rodcoloc_dev');
       console.log('   • Données: Importées depuis la production');
     } else {
       console.log('\n💡 Base de production:');
       console.log('   • Serveur: mysql-molo.alwaysdata.com:3306');
-      console.log('   • Base: dalon974');
+      console.log('   • Base: rodcoloc');
       console.log('   • Données: Production live');
     }
     

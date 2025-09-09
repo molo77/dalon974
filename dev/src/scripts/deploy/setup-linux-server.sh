@@ -7,7 +7,7 @@ set -e
 
 # Configuration
 SERVER_HOST=${1:-"molo:Bulgroz%401977@192.168.1.200"}
-PROJECT_DIR=${2:-"/data/dalon974"}
+PROJECT_DIR=${2:-"/data/rodcoloc"}
 
 echo "🔧 Configuration initiale du serveur Linux pour Dalon974"
 
@@ -31,7 +31,7 @@ echo "📝 Création de la configuration PM2..."
 cat > ecosystem.config.js << EOF
 module.exports = {
   apps: [{
-    name: 'dalon974',
+    name: 'rodcoloc',
     script: 'npm',
     args: 'start',
     cwd: '$PROJECT_DIR',
@@ -52,7 +52,7 @@ scp ecosystem.config.js $SERVER_HOST:$PROJECT_DIR/
 
 # 6. Créer un script de service systemd
 echo "🔧 Création du service systemd..."
-ssh $SERVER_HOST "sudo tee /etc/systemd/system/dalon974.service > /dev/null" << EOF
+ssh $SERVER_HOST "sudo tee /etc/systemd/system/rodcoloc.service > /dev/null" << EOF
 [Unit]
 Description=Dalon974 Application
 After=network.target
@@ -62,8 +62,8 @@ Type=forking
 User=molo
 WorkingDirectory=$PROJECT_DIR
 ExecStart=/usr/bin/pm2 start ecosystem.config.js
-ExecReload=/usr/bin/pm2 reload dalon974
-ExecStop=/usr/bin/pm2 stop dalon974
+ExecReload=/usr/bin/pm2 reload rodcoloc
+ExecStop=/usr/bin/pm2 stop rodcoloc
 Restart=always
 
 [Install]
@@ -72,7 +72,7 @@ EOF
 
 # 7. Activer et démarrer le service
 echo "🚀 Activation du service..."
-ssh $SERVER_HOST "sudo systemctl daemon-reload && sudo systemctl enable dalon974"
+ssh $SERVER_HOST "sudo systemctl daemon-reload && sudo systemctl enable rodcoloc"
 
 # 8. Configurer le firewall (si nécessaire)
 echo "🔥 Configuration du firewall..."
@@ -86,16 +86,16 @@ ssh $SERVER_HOST "cat > $PROJECT_DIR/maintenance.sh" << 'EOF'
 
 case "$1" in
   "restart")
-    pm2 restart dalon974
+    pm2 restart rodcoloc
     ;;
   "stop")
-    pm2 stop dalon974
+    pm2 stop rodcoloc
     ;;
   "start")
-    pm2 start dalon974
+    pm2 start rodcoloc
     ;;
   "logs")
-    pm2 logs dalon974
+    pm2 logs rodcoloc
     ;;
   "status")
     pm2 status

@@ -14,11 +14,11 @@ echo -e "${BLUE}🚀 Précompilation de l'environnement de développement RodCol
 echo -e "${BLUE}============================================================${NC}"
 
 # Aller dans le répertoire de développement
-cd /data/dalon974/dev
+cd /data/rodcoloc/dev
 
 # Vérifier que nous sommes dans le bon répertoire
 if [ ! -f "package.json" ]; then
-    echo -e "${RED}❌ Erreur: package.json non trouvé dans /data/dalon974/dev${NC}"
+    echo -e "${RED}❌ Erreur: package.json non trouvé dans /data/rodcoloc/dev${NC}"
     exit 1
 fi
 

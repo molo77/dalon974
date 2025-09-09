@@ -83,6 +83,8 @@ export async function getColocProfile(): Promise<any> {
 
 export async function saveColocProfile(data: ColocProfileData): Promise<any> {
   try {
+    console.log("[saveColocProfile] Envoi des données:", data);
+    
     const response = await fetch('/api/coloc-profile', {
       method: 'POST',
       headers: {
@@ -92,13 +94,24 @@ export async function saveColocProfile(data: ColocProfileData): Promise<any> {
     });
 
     if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error("[saveColocProfile] Erreur de réponse:", {
+        status: response.status,
+        statusText: response.statusText,
+        errorData
+      });
+      
       if (response.status === 401) {
         throw new Error('Non authentifié');
       }
-      throw new Error('Erreur lors de la sauvegarde du profil');
+      
+      const errorMessage = errorData.error || `Erreur ${response.status}: ${response.statusText}`;
+      throw new Error(`Erreur lors de la sauvegarde du profil: ${errorMessage}`);
     }
 
-    return await response.json();
+    const result = await response.json();
+    console.log("[saveColocProfile] Sauvegarde réussie:", result);
+    return result;
   } catch (error) {
     console.error("Erreur lors de la sauvegarde du profil coloc:", error);
     throw error;
