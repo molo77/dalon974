@@ -1,159 +1,144 @@
-import type { Metadata } from 'next'
+import { Metadata } from 'next'
+import { BreadcrumbJsonLd } from '@/shared/components/seo/JsonLd'
 
 export const metadata: Metadata = {
-  title: 'Politique de Confidentialité - RodColoc',
-  description: 'Politique de confidentialité et protection des données personnelles de RodColoc',
+  title: 'Politique de Confidentialité',
+  description: 'Politique de confidentialité de RodColoc - Protection des données personnelles et respect de la vie privée.',
+  robots: {
+    index: true,
+    follow: true,
+  },
+  alternates: {
+    canonical: '/politique-confidentialite',
+  },
 }
 
-export default function PolitiqueConfidentialite() {
+export default function PolitiqueConfidentialitePage() {
+  const breadcrumbData = [
+    { name: "Accueil", url: "https://rodcoloc.re" },
+    { name: "Politique de Confidentialité", url: "https://rodcoloc.re/politique-confidentialite" }
+  ]
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50 to-blue-50 py-8">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          <h1 className="text-3xl font-bold text-slate-800 mb-8">
-            Politique de Confidentialité
-          </h1>
-          
-          <div className="prose prose-slate max-w-none">
-            <p className="text-lg text-slate-600 mb-6">
-              <strong>Dernière mise à jour :</strong> {new Date().toLocaleDateString('fr-FR')}
-            </p>
+    <div className="min-h-screen bg-gray-50">
+      <BreadcrumbJsonLd items={breadcrumbData} />
+      
+      {/* Breadcrumb visuel */}
+      <nav className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center space-x-2 py-4">
+            <a href="/" className="text-blue-600 hover:text-blue-800">Accueil</a>
+            <span className="text-gray-400">/</span>
+            <span className="text-gray-600">Politique de Confidentialité</span>
+          </div>
+        </div>
+      </nav>
 
-            <section className="mb-8">
-              <h2 className="text-2xl font-semibold text-slate-800 mb-4">1. Collecte des données</h2>
-              <p className="text-slate-600 mb-4">
-                RodColoc collecte les données personnelles suivantes :
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          <div className="p-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-8">
+              Politique de Confidentialité
+            </h1>
+            
+            <div className="prose max-w-none">
+              <p className="text-gray-600 mb-6">
+                <strong>Dernière mise à jour :</strong> {new Date().toLocaleDateString('fr-FR')}
               </p>
-              <ul className="list-disc list-inside text-slate-600 mb-4 space-y-2">
-                <li><strong>Données d'identification :</strong> nom, prénom, email, téléphone</li>
-                <li><strong>Données de profil :</strong> âge, profession, préférences de colocation</li>
-                <li><strong>Données de localisation :</strong> zones géographiques recherchées</li>
-                <li><strong>Données de communication :</strong> messages échangés entre utilisateurs</li>
-                <li><strong>Données techniques :</strong> adresse IP, cookies, logs de connexion</li>
-              </ul>
-            </section>
 
-            <section className="mb-8">
-              <h2 className="text-2xl font-semibold text-slate-800 mb-4">2. Finalités du traitement</h2>
-              <p className="text-slate-600 mb-4">
-                Vos données sont utilisées pour :
+              <h2 className="text-2xl font-semibold text-gray-900 mt-8 mb-4">
+                1. Collecte des informations
+              </h2>
+              <p className="text-gray-700 mb-4">
+                RodColoc collecte des informations personnelles lorsque vous vous inscrivez sur notre site, 
+                créez un profil, publiez une annonce ou utilisez nos services. Les informations collectées 
+                incluent votre nom, adresse e-mail, numéro de téléphone, et autres informations que vous 
+                choisissez de partager.
               </p>
-              <ul className="list-disc list-inside text-slate-600 mb-4 space-y-2">
-                <li>Fournir le service de mise en relation pour la colocation</li>
+
+              <h2 className="text-2xl font-semibold text-gray-900 mt-8 mb-4">
+                2. Utilisation des informations
+              </h2>
+              <p className="text-gray-700 mb-4">
+                Nous utilisons vos informations personnelles pour :
+              </p>
+              <ul className="list-disc list-inside text-gray-700 mb-4 space-y-2">
+                <li>Fournir et améliorer nos services de colocation</li>
                 <li>Faciliter la communication entre utilisateurs</li>
                 <li>Personnaliser votre expérience utilisateur</li>
-                <li>Assurer la sécurité et prévenir les fraudes</li>
-                <li>Respecter nos obligations légales</li>
+                <li>Envoyer des notifications importantes</li>
+                <li>Assurer la sécurité de notre plateforme</li>
               </ul>
-            </section>
 
-            <section className="mb-8">
-              <h2 className="text-2xl font-semibold text-slate-800 mb-4">3. Base légale</h2>
-              <p className="text-slate-600 mb-4">
-                Le traitement de vos données repose sur :
+              <h2 className="text-2xl font-semibold text-gray-900 mt-8 mb-4">
+                3. Protection des données
+              </h2>
+              <p className="text-gray-700 mb-4">
+                Nous mettons en place des mesures de sécurité appropriées pour protéger vos informations 
+                personnelles contre l'accès non autorisé, la modification, la divulgation ou la destruction. 
+                Vos données sont stockées de manière sécurisée et ne sont partagées qu'avec votre consentement 
+                explicite.
               </p>
-              <ul className="list-disc list-inside text-slate-600 mb-4 space-y-2">
-                <li><strong>Votre consentement</strong> pour l'utilisation de cookies non essentiels</li>
-                <li><strong>L'exécution du contrat</strong> pour la fourniture du service</li>
-                <li><strong>L'intérêt légitime</strong> pour la sécurité et l'amélioration du service</li>
-                <li><strong>L'obligation légale</strong> pour la conservation des données</li>
+
+              <h2 className="text-2xl font-semibold text-gray-900 mt-8 mb-4">
+                4. Partage d'informations
+              </h2>
+              <p className="text-gray-700 mb-4">
+                Nous ne vendons, n'échangeons ni ne louons vos informations personnelles à des tiers. 
+                Nous pouvons partager vos informations uniquement dans les cas suivants :
+              </p>
+              <ul className="list-disc list-inside text-gray-700 mb-4 space-y-2">
+                <li>Avec votre consentement explicite</li>
+                <li>Pour se conformer à la loi ou à une procédure judiciaire</li>
+                <li>Pour protéger nos droits, notre propriété ou notre sécurité</li>
+                <li>Avec des prestataires de services de confiance qui nous aident à exploiter notre site</li>
               </ul>
-            </section>
 
-            <section className="mb-8">
-              <h2 className="text-2xl font-semibold text-slate-800 mb-4">4. Partage des données</h2>
-              <p className="text-slate-600 mb-4">
-                Vos données peuvent être partagées avec :
+              <h2 className="text-2xl font-semibold text-gray-900 mt-8 mb-4">
+                5. Vos droits
+              </h2>
+              <p className="text-gray-700 mb-4">
+                Conformément au RGPD, vous avez le droit de :
               </p>
-              <ul className="list-disc list-inside text-slate-600 mb-4 space-y-2">
-                <li><strong>Autres utilisateurs :</strong> informations de profil pour la mise en relation</li>
-                <li><strong>Prestataires techniques :</strong> hébergement, maintenance, analytics</li>
-                <li><strong>Autorités compétentes :</strong> en cas d'obligation légale</li>
+              <ul className="list-disc list-inside text-gray-700 mb-4 space-y-2">
+                <li>Accéder à vos données personnelles</li>
+                <li>Rectifier des informations inexactes</li>
+                <li>Supprimer vos données personnelles</li>
+                <li>Limiter le traitement de vos données</li>
+                <li>Vous opposer au traitement de vos données</li>
+                <li>Portabilité de vos données</li>
               </ul>
-              <p className="text-slate-600 mb-4">
-                <strong>Nous ne vendons jamais vos données personnelles à des tiers.</strong>
-              </p>
-            </section>
 
-            <section className="mb-8">
-              <h2 className="text-2xl font-semibold text-slate-800 mb-4">5. Conservation des données</h2>
-              <p className="text-slate-600 mb-4">
-                Vos données sont conservées :
+              <h2 className="text-2xl font-semibold text-gray-900 mt-8 mb-4">
+                6. Cookies
+              </h2>
+              <p className="text-gray-700 mb-4">
+                Notre site utilise des cookies pour améliorer votre expérience de navigation. 
+                Vous pouvez contrôler l'utilisation des cookies via les paramètres de votre navigateur.
               </p>
-              <ul className="list-disc list-inside text-slate-600 mb-4 space-y-2">
-                <li><strong>Données de compte :</strong> jusqu'à suppression du compte</li>
-                <li><strong>Messages :</strong> 3 ans après la dernière activité</li>
-                <li><strong>Logs techniques :</strong> 12 mois maximum</li>
-                <li><strong>Données de facturation :</strong> 10 ans (obligation légale)</li>
-              </ul>
-            </section>
 
-            <section className="mb-8">
-              <h2 className="text-2xl font-semibold text-slate-800 mb-4">6. Vos droits</h2>
-              <p className="text-slate-600 mb-4">
-                Conformément au RGPD, vous disposez des droits suivants :
+              <h2 className="text-2xl font-semibold text-gray-900 mt-8 mb-4">
+                7. Contact
+              </h2>
+              <p className="text-gray-700 mb-4">
+                Si vous avez des questions concernant cette politique de confidentialité, 
+                veuillez nous contacter à l'adresse suivante :
               </p>
-              <ul className="list-disc list-inside text-slate-600 mb-4 space-y-2">
-                <li><strong>Droit d'accès :</strong> consulter vos données personnelles</li>
-                <li><strong>Droit de rectification :</strong> corriger des données inexactes</li>
-                <li><strong>Droit à l'effacement :</strong> supprimer vos données</li>
-                <li><strong>Droit à la portabilité :</strong> récupérer vos données</li>
-                <li><strong>Droit d'opposition :</strong> vous opposer au traitement</li>
-                <li><strong>Droit de limitation :</strong> limiter le traitement</li>
-              </ul>
-              <p className="text-slate-600 mb-4">
-                Pour exercer ces droits, contactez-nous à : <a href="mailto:contact@rodcoloc.fr" className="text-blue-600 hover:underline">contact@rodcoloc.fr</a>
-              </p>
-            </section>
-
-            <section className="mb-8">
-              <h2 className="text-2xl font-semibold text-slate-800 mb-4">7. Cookies</h2>
-              <p className="text-slate-600 mb-4">
-                Nous utilisons des cookies pour :
-              </p>
-              <ul className="list-disc list-inside text-slate-600 mb-4 space-y-2">
-                <li><strong>Cookies essentiels :</strong> fonctionnement du site (obligatoires)</li>
-                <li><strong>Cookies de performance :</strong> analyse d'audience (avec consentement)</li>
-                <li><strong>Cookies de fonctionnalité :</strong> personnalisation (avec consentement)</li>
-              </ul>
-              <p className="text-slate-600 mb-4">
-                Vous pouvez gérer vos préférences de cookies via la bannière de consentement.
-              </p>
-            </section>
-
-            <section className="mb-8">
-              <h2 className="text-2xl font-semibold text-slate-800 mb-4">8. Sécurité</h2>
-              <p className="text-slate-600 mb-4">
-                Nous mettons en œuvre des mesures techniques et organisationnelles appropriées pour protéger vos données :
-              </p>
-              <ul className="list-disc list-inside text-slate-600 mb-4 space-y-2">
-                <li>Chiffrement des données sensibles</li>
-                <li>Accès restreint aux données personnelles</li>
-                <li>Surveillance et audit réguliers</li>
-                <li>Formation du personnel à la protection des données</li>
-              </ul>
-            </section>
-
-            <section className="mb-8">
-              <h2 className="text-2xl font-semibold text-slate-800 mb-4">9. Contact</h2>
-              <p className="text-slate-600 mb-4">
-                Pour toute question concernant cette politique de confidentialité :
-              </p>
-              <div className="bg-slate-50 p-4 rounded-lg">
-                <p className="text-slate-600">
-                  <strong>Email :</strong> <a href="mailto:contact@rodcoloc.fr" className="text-blue-600 hover:underline">contact@rodcoloc.fr</a><br/>
-                  <strong>Adresse :</strong> La Réunion, France<br/>
-                  <strong>Délégué à la Protection des Données :</strong> contact@rodcoloc.fr
+              <div className="bg-gray-100 p-4 rounded-lg">
+                <p className="text-gray-800">
+                  <strong>Email :</strong> contact@rodcoloc.re<br />
+                  <strong>Adresse :</strong> La Réunion, France
                 </p>
               </div>
-            </section>
 
-            <section className="mb-8">
-              <h2 className="text-2xl font-semibold text-slate-800 mb-4">10. Modifications</h2>
-              <p className="text-slate-600 mb-4">
-                Cette politique peut être modifiée. Les modifications importantes vous seront notifiées par email ou via le site.
+              <h2 className="text-2xl font-semibold text-gray-900 mt-8 mb-4">
+                8. Modifications
+              </h2>
+              <p className="text-gray-700 mb-4">
+                Nous nous réservons le droit de modifier cette politique de confidentialité à tout moment. 
+                Les modifications seront publiées sur cette page avec une date de mise à jour révisée.
               </p>
-            </section>
+            </div>
           </div>
         </div>
       </div>

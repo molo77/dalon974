@@ -2,16 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { getFavoritesWithDetails, removeFavorite, type FavoriteWithDetails } from '@/core/business/favoritesService';
+import { getFavoritesWithDetails, type FavoriteWithDetails } from '@/core/business/favoritesService';
 import AnnonceCard from './AnnonceCard';
 import ColocProfileCard from './ColocProfileCard';
 import { toast as appToast } from './feedback/Toast';
+// import { useFavorites } from '@/shared/hooks/useFavorites'; // Plus utilisé dans ce composant
 
 export default function FavoritesSection() {
   const { data: session } = useSession();
   const [favorites, setFavorites] = useState<FavoriteWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'annonces' | 'profils'>('all');
+  // Le composant FavoritesSection gère ses propres favoris
+  // Pas besoin d'utiliser le hook useFavorites ici
   
   // États pour le modal de détail du profil
   const [colocDetailOpen, setColocDetailOpen] = useState(false);
@@ -43,16 +46,9 @@ export default function FavoritesSection() {
     loadFavorites();
   }, [session?.user?.id, activeTab]);
 
-  const handleRemoveFavorite = async (itemId: string, itemType: 'annonce' | 'coloc_profile') => {
-    try {
-      await removeFavorite(itemId, itemType);
-      setFavorites(prev => prev.filter(fav => !(fav.id === itemId && fav.itemType === itemType)));
-      appToast.success('Supprimé des favoris');
-    } catch (error) {
-      console.error('Erreur lors de la suppression du favori:', error);
-      appToast.error('Erreur lors de la suppression');
-    }
-  };
+  // Pas besoin d'écouter les changements du hook useFavorites
+  // Le composant se recharge automatiquement quand on change d'onglet
+
 
   // Fonction pour ouvrir le détail d'un profil
   const handleViewProfile = async (profileId: string) => {
@@ -216,33 +212,22 @@ export default function FavoritesSection() {
                 </svg>
                 Annonces favorites ({annoncesFavorites.length})
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {annoncesFavorites.map((favorite) => (
-                  <div key={favorite.id} className="relative">
-                    <AnnonceCard
-                      id={favorite.id}
-                      titre={favorite.title || favorite.titre || 'Titre manquant'}
-                      ville={favorite.ville || 'Ville non renseignée'}
-                      prix={favorite.prix}
-                      surface={favorite.surface}
-                      description={favorite.description}
-                      createdAt={favorite.createdAt}
-                      imageUrl={favorite.imageUrl || '/images/annonce-holder.svg'}
-                      nbChambres={favorite.nbChambres}
-                      meuble={favorite.meuble}
-                      onClick={() => handleViewAnnonce(favorite.id)}
-                    />
-                    {/* Bouton supprimer des favoris */}
-                    <button
-                      onClick={() => handleRemoveFavorite(favorite.id, 'annonce')}
-                      className="absolute top-2 left-2 w-8 h-8 bg-red-500/90 hover:bg-red-600 text-white rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 z-10"
-                      title="Supprimer des favoris"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                      </svg>
-                    </button>
-                  </div>
+                  <AnnonceCard
+                    key={favorite.id}
+                    id={favorite.id}
+                    titre={favorite.title || favorite.titre || 'Titre manquant'}
+                    ville={favorite.ville || 'Ville non renseignée'}
+                    prix={favorite.prix}
+                    surface={favorite.surface}
+                    description={favorite.description}
+                    createdAt={favorite.createdAt}
+                    imageUrl={favorite.imageUrl || '/images/annonce-holder.svg'}
+                    nbChambres={favorite.nbChambres}
+                    meuble={favorite.meuble}
+                    onClick={() => handleViewAnnonce(favorite.id)}
+                  />
                 ))}
               </div>
             </div>
@@ -259,29 +244,18 @@ export default function FavoritesSection() {
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {profilsFavorites.map((favorite) => (
-                  <div key={favorite.id} className="relative">
-                    <ColocProfileCard
-                      id={favorite.id}
-                      nom={favorite.nom || favorite.title || 'Nom manquant'}
-                      ville={favorite.ville || 'Ville non renseignée'}
-                      age={favorite.age}
-                      description={favorite.description}
-                      createdAt={favorite.createdAt}
-                      imageUrl={favorite.imageUrl || '/images/coloc-holder.svg'}
-                      zonesLabel={favorite.zones ? JSON.stringify(favorite.zones) : undefined}
-                      onClick={() => handleViewProfile(favorite.id)}
-                    />
-                    {/* Bouton supprimer des favoris */}
-                    <button
-                      onClick={() => handleRemoveFavorite(favorite.id, 'coloc_profile')}
-                      className="absolute top-2 left-2 w-8 h-8 bg-red-500/90 hover:bg-red-600 text-white rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 z-10"
-                      title="Supprimer des favoris"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                      </svg>
-                    </button>
-                  </div>
+                  <ColocProfileCard
+                    key={favorite.id}
+                    id={favorite.id}
+                    nom={favorite.nom || favorite.title || 'Nom manquant'}
+                    ville={favorite.ville || 'Ville non renseignée'}
+                    age={favorite.age}
+                    description={favorite.description}
+                    createdAt={favorite.createdAt}
+                    imageUrl={favorite.imageUrl || '/images/coloc-holder.svg'}
+                    zonesLabel={favorite.zones ? JSON.stringify(favorite.zones) : undefined}
+                    onClick={() => handleViewProfile(favorite.id)}
+                  />
                 ))}
               </div>
             </div>

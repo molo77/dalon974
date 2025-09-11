@@ -22,6 +22,7 @@ import AdBlock from "@/shared/components/AdBlock";
 import { showToast } from "@/infrastructure/communication/toast";
 import CommuneZoneSelector from "@/shared/components/CommuneZoneSelector";
 import { preloadReunionFeatures } from "@/core/data/reunionGeo";
+import DashboardHome from "@/shared/components/DashboardHome";
 const ImageLightbox = dynamic(() => import("@/shared/components/ImageLightbox"), { ssr: false });
 
 
@@ -163,7 +164,7 @@ export default function HomePage() {
   }, [SUBS_BY_PARENT]);
 
   // Etats UI et filtres
-  const [activeHomeTab, setActiveHomeTab] = useState<null | "annonces" | "colocataires">(null);
+  const [activeHomeTab, setActiveHomeTab] = useState<null | "annonces" | "colocataires" | "tableau-de-bord">(null);
   const [filtering, setFiltering] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -391,6 +392,8 @@ export default function HomePage() {
   // Reset quand on change d'onglet
   useEffect(() => {
     if (activeHomeTab === null) return;
+    // Ne pas faire remonter en haut lors du changement d'onglet
+    // shouldScrollToResultsOnNextDataRef.current = true; // Commenté pour éviter le scroll automatique
     // Si les onglets sont masqués derrière le header, remonter juste jusqu'à l'ancre
     try {
       const anchor = tabsTopRef.current;
@@ -430,8 +433,8 @@ export default function HomePage() {
   // Rechargement quand les filtres changent (sans vider la liste immédiatement)
   useEffect(() => {
     if (activeHomeTab === null) return;
-    // Marque pour scroller après le premier snapshot reçu
-    shouldScrollToResultsOnNextDataRef.current = true;
+    // Ne pas faire remonter en haut lors des changements de filtres
+    // shouldScrollToResultsOnNextDataRef.current = true; // Commenté pour éviter le scroll automatique
     // Neutralise les anciennes compensations de scroll et d'ancrage carte
     scrollPosBeforeFilterRef.current = null;
     mapTopBeforeRef.current = null;
@@ -837,29 +840,22 @@ export default function HomePage() {
             <div className="text-center mb-8">
               <div className="inline-flex items-center gap-2 bg-gradient-to-r from-sky-100 to-cyan-100 text-sky-800 px-4 py-2 rounded-full text-sm font-medium mb-4 border border-sky-200 animate-bounce-slow">
                 <span className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse-slow"></span>
-                {activeHomeTab === "annonces" ? "Recherche de logements" : "Recherche de colocataires"}
+                {activeHomeTab === "annonces" ? "Recherche de logements" : activeHomeTab === "colocataires" ? "Recherche de colocataires" : "Tableau de bord"}
               </div>
               <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-sky-600 via-cyan-500 to-teal-500 bg-clip-text text-transparent animate-fade-in">
-                {activeHomeTab === "annonces" ? "Trouvez votre colocation" : "Rencontrez vos colocataires"}
+                {activeHomeTab === "annonces" ? "Trouvez votre colocation" : activeHomeTab === "colocataires" ? "Rencontrez vos colocataires" : "Tableau de bord"}
               </h1>
               <p className="text-xl text-slate-600 max-w-3xl mx-auto whitespace-nowrap">
                 {activeHomeTab === "annonces" 
                   ? "Découvrez les meilleures annonces de colocation à La Réunion" 
-                  : "Connectez-vous avec des personnes qui partagent vos valeurs et votre style de vie"
+                  : activeHomeTab === "colocataires"
+                  ? "Connectez-vous avec des personnes qui partagent vos valeurs et votre style de vie"
+                  : "Vue d'ensemble de la plateforme et statistiques"
                 }
                 <br />
               </p>
             </div>
             
-            {/* Publicité hero */}
-            <div className="mb-8">
-              <AdBlock 
-                placementKey="home.hero" 
-                title="Partenaires"
-                variant="featured"
-                className="max-w-4xl mx-auto"
-              />
-            </div>
           </div>
 
           {/* Onglets modernes */}
@@ -899,6 +895,21 @@ export default function HomePage() {
                 </svg>
                 Colocataires
               </button>
+              <button
+                role="tab"
+                aria-selected={activeHomeTab === "tableau-de-bord"}
+                className={`px-6 py-3 text-sm font-semibold transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded-xl flex items-center gap-2 ${
+                  activeHomeTab === "tableau-de-bord"
+                    ? "bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-lg transform scale-105"
+                    : "text-slate-700 hover:bg-slate-50 hover:text-purple-600"
+                }`}
+                onClick={() => setActiveHomeTab("tableau-de-bord")}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Tableau de bord
+              </button>
             </div>
           </div>
 
@@ -910,15 +921,22 @@ export default function HomePage() {
             </div>
           )}
 
-          <div className="text-center mb-8">
-            <h1 className="text-3xl md:text-4xl font-bold mb-4 bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-            {activeHomeTab === "annonces" ? "Annonces de colocation" : "Profils de colocataires"}
-          </h1>
-            <div className="w-24 h-1 bg-gradient-to-r from-orange-600 to-yellow-500 mx-auto rounded-full"></div>
-          </div>
+          {/* Contenu du tableau de bord */}
+          {activeHomeTab === "tableau-de-bord" ? (
+            <div className="w-full max-w-7xl mx-auto px-4">
+              <DashboardHome />
+            </div>
+          ) : (
+            <>
+              <div className="text-center mb-8">
+                <h1 className="text-3xl md:text-4xl font-bold mb-4 bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                {activeHomeTab === "annonces" ? "Annonces de colocation" : "Profils de colocataires"}
+              </h1>
+                <div className="w-24 h-1 bg-gradient-to-r from-orange-600 to-yellow-500 mx-auto rounded-full"></div>
+              </div>
 
-          {/* Layout 3 colonnes (desktop): filtres | annonces | publicité */}
-          <div className="w-full max-w-[1400px] flex flex-col md:flex-row md:items-start gap-6">
+              {/* Layout 3 colonnes (desktop): filtres | annonces | publicité */}
+              <div className="w-full max-w-[1400px] flex flex-col md:flex-row md:items-start gap-6">
             {/* Colonne annonces (centre en ≥md) */}
             <div className="flex-1 min-w-0 md:order-2 max-w-2xl">
               {/* Indicateur de filtrage en cours */}
@@ -1074,6 +1092,31 @@ export default function HomePage() {
 
                 {/* Message de fin de liste retiré à la demande */}
               </div>
+              
+              {/* Publicité après les annonces */}
+              {activeHomeTab === "annonces" && displayedAnnonces.length > 0 && (
+                <div className="mt-8 mb-6">
+                  <AdBlock 
+                    placementKey="home.annonces.after" 
+                    title="Découvrez nos partenaires"
+                    variant="featured"
+                    className="max-w-4xl mx-auto"
+                  />
+                </div>
+              )}
+              
+              {/* Publicité après les profils colocataires */}
+              {activeHomeTab === "colocataires" && displayedAnnonces.length > 0 && (
+                <div className="mt-8 mb-6">
+                  <AdBlock 
+                    placementKey="home.colocataires.after" 
+                    title="Nos partenaires"
+                    variant="featured"
+                    className="max-w-4xl mx-auto"
+                  />
+                </div>
+              )}
+              
               {/* Style local: empêche l'ancrage automatique qui peut déplacer la page quand du contenu est inséré */}
               <style>{`
                 .prevent-anchor { overflow-anchor: none; }
@@ -1841,16 +1884,9 @@ export default function HomePage() {
           )}
         </>
       )}
+            </>
+          )}
       
-      {/* Publicité footer */}
-      <div className="w-full max-w-7xl mx-auto mt-16 mb-8">
-        <AdBlock 
-          placementKey="home.footer" 
-          title="Découvrez nos partenaires"
-          variant="featured"
-          className="max-w-5xl mx-auto"
-        />
-      </div>
     </main>
     </>
   );

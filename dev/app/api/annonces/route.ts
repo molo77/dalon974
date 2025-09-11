@@ -5,6 +5,10 @@ import { auth } from "@/config/auth";
 
 export async function GET(req: Request) {
   try {
+    // Vérifier si l'utilisateur est admin
+    const session = await auth();
+    const isAdmin = session?.user && (session.user as any)?.role === 'admin';
+    
     // Pagination basique via limit/offset
     const { searchParams } = new URL(req.url);
     const limit = Math.min(parseInt(searchParams.get("limit") || "20", 10) || 20, 100);
@@ -19,6 +23,11 @@ export async function GET(req: Request) {
     
     // Construire les conditions de filtrage
     const whereConditions: any = {};
+    
+    // Logique de modération : seuls les admins voient toutes les annonces
+    if (!isAdmin) {
+      whereConditions.moderationStatus = 'approved';
+    }
     
     if (ville) {
       whereConditions.ville = ville;
@@ -165,6 +174,7 @@ export async function POST(req: Request) {
     const allowed = [
       'id', 'title', 'description', 'imageUrl', 'photos', 'mainPhotoIdx',
       'ville', 'prix', 'surface', 'nbChambres', 'equipements', 'typeBien', 'meuble', 'nbPieces',
+      'moderationStatus', 'moderationReason', 'moderatedBy', 'moderatedAt'
     ];
     const data: any = {};
     for (const k of allowed) {
@@ -208,6 +218,17 @@ export async function POST(req: Request) {
     data.userId = userId;
     console.log("[API][annonces][POST] Creating annonce with userId:", userId);
     console.log("[API][annonces][POST] Session user:", session?.user);
+    
+    // Logique de modération
+    if (user.role === 'admin') {
+      // Les admins peuvent créer des annonces directement approuvées
+      data.moderationStatus = 'approved';
+      data.moderatedBy = userId;
+      data.moderatedAt = new Date();
+    } else {
+      // Les utilisateurs normaux créent des annonces en attente de modération
+      data.moderationStatus = 'pending';
+    }
     
     // Timestamp de création si pas fourni
     if (!data.createdAt) data.createdAt = new Date();

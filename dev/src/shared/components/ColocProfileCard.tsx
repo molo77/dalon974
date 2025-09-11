@@ -115,9 +115,9 @@ export default function ColocProfileCard({
             </span>
           </div>
 
-          {/* Bouton favori */}
+          {/* Bouton favori en haut à droite */}
           {currentUser?.id && (
-            <div className="absolute top-4 right-2">
+            <div className="absolute top-4 right-4">
               <button
                 onClick={handleToggleFavorite}
                 disabled={favoriteLoading}

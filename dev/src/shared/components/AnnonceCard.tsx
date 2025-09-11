@@ -118,7 +118,7 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
           <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
           
           {/* Badge prix en overlay */}
-          <div className="absolute top-4 right-4">
+          <div className="absolute top-4 left-4">
             <div className="bg-white/95 backdrop-blur-sm rounded-full px-3 py-1 shadow-lg">
               <span className="text-lg font-bold text-blue-600">
                 {prix ? `${prix}€` : "N/A"}
@@ -128,7 +128,7 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
 
           {/* Badge meublé/non meublé */}
           {props.meuble != null && (
-            <div className="absolute top-4 left-4">
+            <div className="absolute top-4 left-20">
               <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                 props.meuble 
                   ? 'bg-green-100 text-green-800 border border-green-200' 
@@ -224,10 +224,9 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
           </div>
         </div>
 
-        {/* Boutons d'action en overlay sur l'image */}
-        <div className="absolute top-4 right-4 flex gap-2">
-          {/* Bouton favori */}
-          {currentUser?.id && (
+        {/* Bouton favori en haut à droite */}
+        {currentUser?.id && (
+          <div className="absolute top-4 right-4">
             <button
               onClick={handleToggleFavorite}
               disabled={favoriteLoading}
@@ -249,8 +248,11 @@ export default function AnnonceCard(props: AnnonceProps & { onClick?: (e: React.
                 </svg>
               )}
             </button>
-          )}
-          
+          </div>
+        )}
+
+        {/* Boutons d'action en overlay sur l'image */}
+        <div className="absolute top-14 right-4 flex gap-2">
           {onDelete && (
             <button
               onClick={(e) => {

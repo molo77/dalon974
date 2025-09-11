@@ -95,6 +95,11 @@ model Annonce {
   typeLocation       String?
   nombreColocataires Int?
   statutFumeur       String?
+  // Champs de modération
+  moderationStatus   String?   @default("pending") // pending, approved, rejected
+  moderationReason   String?   @db.Text // Raison du rejet si applicable
+  moderatedBy        String?   // ID de l'admin qui a modéré
+  moderatedAt        DateTime? @db.Timestamp(6) // Date de modération
   createdAt          DateTime? @db.Timestamp(6)
   updatedAt          DateTime? @db.Timestamp(6)
   source             String?

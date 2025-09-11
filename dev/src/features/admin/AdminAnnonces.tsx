@@ -38,18 +38,49 @@ export default function AdminAnnonces({
     description: "",
   });
   const [confirmModal, setConfirmModal] = useState<string | null>(null);
+  
+  // États pour la modération
+  const [moderationFilter, setModerationFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [moderationStats, setModerationStats] = useState({
+    pending: 0,
+    approved: 0,
+    rejected: 0
+  });
+  const [moderationModal, setModerationModal] = useState<{
+    isOpen: boolean;
+    annonceId: string | null;
+    action: 'approve' | 'reject' | null;
+    reason: string;
+  }>({
+    isOpen: false,
+    annonceId: null,
+    action: null,
+    reason: ''
+  });
 
   useEffect(() => {
     fetchAnnonces();
-  }, []);
+  }, [moderationFilter]);
 
   const fetchAnnonces = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/annonces", { cache: "no-store" });
+      const params = new URLSearchParams();
+      if (moderationFilter !== 'all') {
+        params.append('status', moderationFilter);
+      }
+      
+      const res = await fetch(`/api/admin/moderate-annonce?${params.toString()}`, { cache: "no-store" });
       const data = await res.json();
-      setAnnonces(Array.isArray(data) ? data : []);
-    } catch {
+      
+      if (data.annonces) {
+        setAnnonces(data.annonces);
+        setModerationStats(data.stats || { pending: 0, approved: 0, rejected: 0 });
+      } else {
+        setAnnonces([]);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des annonces:', error);
       setAnnonces([]);
     }
     setLoading(false);
@@ -171,12 +202,138 @@ export default function AdminAnnonces({
     await onBulkDelete(selectedIds);
   };
 
+  // Fonctions de modération
+  const handleModerationAction = (annonceId: string, action: 'approve' | 'reject') => {
+    setModerationModal({
+      isOpen: true,
+      annonceId,
+      action,
+      reason: ''
+    });
+  };
+
+  const confirmModeration = async () => {
+    if (!moderationModal.annonceId || !moderationModal.action) return;
+    
+    try {
+      const res = await fetch('/api/admin/moderate-annonce', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          annonceId: moderationModal.annonceId,
+          action: moderationModal.action,
+          reason: moderationModal.reason
+        })
+      });
+      
+      if (!res.ok) throw new Error('Erreur lors de la modération');
+      
+      const result = await res.json();
+      showToast("success", result.message);
+      
+      // Recharger les annonces
+      fetchAnnonces();
+      
+      // Fermer le modal
+      setModerationModal({
+        isOpen: false,
+        annonceId: null,
+        action: null,
+        reason: ''
+      });
+    } catch (error) {
+      showToast("error", "Erreur lors de la modération");
+    }
+  };
+
+  const getModerationStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'approved': return 'bg-green-100 text-green-800 border-green-200';
+      case 'rejected': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getModerationStatusText = (status: string) => {
+    switch (status) {
+      case 'pending': return 'En attente';
+      case 'approved': return 'Approuvée';
+      case 'rejected': return 'Rejetée';
+      default: return status;
+    }
+  };
+
   return (
     <>
       <section className="mb-12">
         <h2 className="text-2xl font-semibold mb-6 text-blue-700 flex items-center gap-2">
           📢 Annonces
         </h2>
+        
+        {/* Statistiques de modération */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+            <div className="text-2xl font-bold text-gray-900">{annonces.length}</div>
+            <div className="text-sm text-gray-600">Total</div>
+          </div>
+          <div className="bg-white rounded-xl border border-yellow-200 p-4 text-center">
+            <div className="text-2xl font-bold text-yellow-600">{moderationStats.pending}</div>
+            <div className="text-sm text-gray-600">En attente</div>
+          </div>
+          <div className="bg-white rounded-xl border border-green-200 p-4 text-center">
+            <div className="text-2xl font-bold text-green-600">{moderationStats.approved}</div>
+            <div className="text-sm text-gray-600">Approuvées</div>
+          </div>
+          <div className="bg-white rounded-xl border border-red-200 p-4 text-center">
+            <div className="text-2xl font-bold text-red-600">{moderationStats.rejected}</div>
+            <div className="text-sm text-gray-600">Rejetées</div>
+          </div>
+        </div>
+
+        {/* Filtres de modération */}
+        <div className="flex gap-2 bg-white rounded-xl border border-gray-200 p-2 mb-4">
+          <button
+            onClick={() => setModerationFilter('all')}
+            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+              moderationFilter === 'all'
+                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            Toutes ({annonces.length})
+          </button>
+          <button
+            onClick={() => setModerationFilter('pending')}
+            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+              moderationFilter === 'pending'
+                ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            En attente ({moderationStats.pending})
+          </button>
+          <button
+            onClick={() => setModerationFilter('approved')}
+            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+              moderationFilter === 'approved'
+                ? 'bg-gradient-to-r from-green-500 to-green-600 text-white'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            Approuvées ({moderationStats.approved})
+          </button>
+          <button
+            onClick={() => setModerationFilter('rejected')}
+            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+              moderationFilter === 'rejected'
+                ? 'bg-gradient-to-r from-red-500 to-red-600 text-white'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            Rejetées ({moderationStats.rejected})
+          </button>
+        </div>
         {/* Bouton création annonce */}
         <div className="mb-4 flex justify-end">
           <button
@@ -304,6 +461,7 @@ export default function AdminAnnonces({
                   <th className="py-2 px-3 align-middle">Surface</th>
                   <th className="py-2 px-3 align-middle">Chambres</th>
                   <th className="py-2 px-3 align-middle">Description</th>
+                  <th className="py-2 px-3 align-middle">Statut</th>
                   <th className="py-2 px-3 align-middle">Date création</th>
                   <th className="py-2 px-3 rounded-r-lg text-center align-middle">Actions</th>
                 </tr>
@@ -406,6 +564,11 @@ export default function AdminAnnonces({
                         <td className="py-2 px-3 align-middle">{a.nbChambres ?? a.chambres ?? "-"}</td>
                         <td className="py-2 px-3 align-middle">{a.description ?? "-"}</td>
                         <td className="py-2 px-3 align-middle">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getModerationStatusColor(a.moderationStatus || 'pending')}`}>
+                            {getModerationStatusText(a.moderationStatus || 'pending')}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 align-middle">
                           {a.createdAt
                             ? new Date(
                                 a.createdAt.seconds
@@ -421,6 +584,22 @@ export default function AdminAnnonces({
                           >
                             Modifier
                           </button>
+                          {(a.moderationStatus === 'pending' || !a.moderationStatus) && (
+                            <>
+                              <button
+                                className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                                onClick={() => handleModerationAction(a.id, 'approve')}
+                              >
+                                Approuver
+                              </button>
+                              <button
+                                className="bg-orange-600 text-white px-3 py-1 rounded hover:bg-orange-700"
+                                onClick={() => handleModerationAction(a.id, 'reject')}
+                              >
+                                Rejeter
+                              </button>
+                            </>
+                          )}
                           <button
                             className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
                             onClick={() => handleDeleteAnnonce(a.id)}
@@ -459,6 +638,56 @@ export default function AdminAnnonces({
               <button
                 className="bg-gray-300 text-gray-700 px-4 py-2 rounded"
                 onClick={() => setConfirmModal(null)}
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de modération */}
+      {moderationModal.isOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-xl font-semibold mb-4">
+              {moderationModal.action === 'approve' ? 'Approuver l\'annonce' : 'Rejeter l\'annonce'}
+            </h3>
+            
+            {moderationModal.action === 'reject' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Raison du rejet (optionnel)
+                </label>
+                <textarea
+                  value={moderationModal.reason}
+                  onChange={(e) => setModerationModal(prev => ({ ...prev, reason: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Expliquez pourquoi cette annonce est rejetée..."
+                  rows={3}
+                />
+              </div>
+            )}
+            
+            <div className="flex gap-3">
+              <button
+                onClick={confirmModeration}
+                className={`flex-1 px-4 py-2 rounded-lg font-medium text-white ${
+                  moderationModal.action === 'approve'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                {moderationModal.action === 'approve' ? 'Approuver' : 'Rejeter'}
+              </button>
+              <button
+                onClick={() => setModerationModal({
+                  isOpen: false,
+                  annonceId: null,
+                  action: null,
+                  reason: ''
+                })}
+                className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
               >
                 Annuler
               </button>

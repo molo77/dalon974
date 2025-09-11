@@ -1,0 +1,23 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://rodcoloc.re/sitemap.xml
+
+# Disallow admin and private areas
+Disallow: /admin/
+Disallow: /api/
+Disallow: /dashboard/
+Disallow: /messages/
+Disallow: /_next/
+Disallow: /auth/
+
+# Allow important pages
+Allow: /
+Allow: /annonces/
+Allow: /colocataires/
+Allow: /politique-confidentialite
+Allow: /mentions-legales
+
+# Crawl delay (optional)
+Crawl-delay: 1
