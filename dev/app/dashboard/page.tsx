@@ -1005,7 +1005,7 @@ function DashboardContent() {
               onClick={() => setActiveTab("match")}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               Match
             </button>
@@ -1339,70 +1339,130 @@ function DashboardContent() {
 
         {activeTab === "match" && (
           <>
-            <div className="mb-6">
-              <h2 className="text-2xl font-semibold mb-4">💕 Mes matches</h2>
-              <p className="text-gray-600 mb-4">
-                Découvrez les annonces et profils qui correspondent à vos critères.
-              </p>
-              
-              
-              {/* Sélecteur de type de match */}
-              <div className="flex gap-2 mb-6">
+            {/* Header moderne avec gradient */}
+            <div className="relative overflow-hidden bg-gradient-to-r from-pink-50 via-rose-50 to-red-50 rounded-2xl p-6 border border-pink-100 mb-6">
+              <div className="absolute inset-0 bg-gradient-to-r from-pink-600/5 to-red-600/5"></div>
+              <div className="relative flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-red-600 bg-clip-text text-transparent">
+                      Mes matches
+                    </h2>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Découvrez les annonces et profils qui correspondent à vos critères
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sélecteur de type de match moderne */}
+            <div className="flex gap-3 mb-8 bg-white rounded-2xl border border-gray-200 p-2 shadow-sm">
                 <button
-                  className={`px-4 py-2 rounded-lg font-medium transition ${
+                className={`flex-1 px-6 py-3 rounded-xl font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
                     matchType === "annonces"
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    ? "bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg transform scale-105"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-blue-600"
                   }`}
                   onClick={() => setMatchType("annonces")}
                 >
-                  🏠 Annonces pour moi
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+                Annonces pour moi
                 </button>
                 <button
-                  className={`px-4 py-2 rounded-lg font-medium transition ${
+                className={`flex-1 px-6 py-3 rounded-xl font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
                     matchType === "profils"
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg transform scale-105"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-purple-600"
                   }`}
                   onClick={() => setMatchType("profils")}
                 >
-                  👥 Profils pour mes annonces
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                Profils pour mes annonces
                 </button>
               </div>
 
               {matchLoading ? (
-                <div className="text-center py-8">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  <p className="mt-2 text-gray-600">Recherche de matches...</p>
+                <div className="relative overflow-hidden bg-gradient-to-br from-slate-50 to-gray-100 rounded-2xl p-12 text-center border border-gray-200">
+                  <div className="absolute inset-0 bg-gradient-to-br from-pink-500/5 to-red-500/5"></div>
+                  <div className="relative">
+                    <div className="w-20 h-20 bg-gradient-to-br from-pink-100 to-red-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                      <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-3">Recherche de matches</h3>
+                    <p className="text-gray-600 max-w-md mx-auto">
+                      Analyse de vos critères et recherche des meilleures correspondances...
+                    </p>
+                  </div>
                 </div>
               ) : matches.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="text-6xl mb-4">💔</div>
-                  <p className="text-gray-600 mb-2">
+                <div className="relative overflow-hidden bg-gradient-to-br from-slate-50 to-gray-100 rounded-2xl p-12 text-center border border-gray-200">
+                  <div className="absolute inset-0 bg-gradient-to-br from-pink-500/5 to-red-500/5"></div>
+                  <div className="relative">
+                    <div className="w-20 h-20 bg-gradient-to-br from-pink-100 to-red-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                      <svg className="w-10 h-10 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-3">Aucun match pour le moment</h3>
+                    <p className="text-gray-600 mb-6 max-w-md mx-auto">
                     {matchType === "annonces" 
                       ? "Aucune annonce ne correspond à votre profil colocataire pour le moment."
                       : "Aucun profil ne correspond à vos annonces pour le moment."
                     }
                   </p>
-                  <p className="text-sm text-gray-500">
+                    <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>
                     {matchType === "annonces" 
-                      ? "Créez ou mettez à jour votre profil colocataire pour améliorer les matches."
-                      : "Créez des annonces ou mettez à jour votre profil pour attirer plus de colocataires."
+                          ? "Créez ou mettez à jour votre profil colocataire pour améliorer les matches"
+                          : "Créez des annonces ou mettez à jour votre profil pour attirer plus de colocataires"
                     }
-                  </p>
+                      </span>
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-6">
+                  {/* Statistiques des matches */}
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-100">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-600">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center">
+                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">
                       {matches.length} {matchType === "annonces" ? "annonce(s)" : "profil(s)"} trouvé(s)
+                          </h3>
+                          <p className="text-sm text-gray-600">
+                            Correspondances basées sur vos critères et préférences
                     </p>
+                        </div>
+                      </div>
                     <button
                       onClick={loadMatches}
-                      className="text-sm text-blue-600 hover:text-blue-800"
+                        className="group flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-green-200 rounded-xl text-green-600 hover:bg-green-50 hover:border-green-300 transition-all duration-200 font-medium text-sm shadow-sm hover:shadow-md"
                     >
-                      🔄 Actualiser
+                        <svg className="w-4 h-4 group-hover:rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Actualiser
                     </button>
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1538,10 +1598,8 @@ function DashboardContent() {
                   </div>
                 </div>
               )}
-            </div>
           </>
         )}
-
         {activeTab === "favoris" && (
           <div className="space-y-6">
             <div className="mb-6">
@@ -1596,36 +1654,82 @@ function DashboardContent() {
 
         {activeTab === "coloc" && (
           <>
+            {/* Header moderne avec gradient */}
+            <div className="relative overflow-hidden bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 rounded-2xl p-6 border border-purple-100 mb-6">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-600/5 to-blue-600/5"></div>
+              <div className="relative flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">
+                      Mon profil colocataire
+                    </h2>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Gérez votre profil pour attirer les meilleurs colocataires
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Mon profil colocataire - Affichage complet (caché pendant l'édition/création) */}
             {!colocEditing && hasColocDoc && hasMeaningfulColocData && (
-              <section className="mt-8">
+              <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                {/* Header du profil avec actions */}
+                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold">🧑‍🤝‍🧑 Mon profil colocataire</h2>
-                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-full flex items-center justify-center">
+                        <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Profil colocataire</h3>
+                        <p className="text-sm text-gray-600">Votre profil est visible par les autres utilisateurs</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
                     <button
-                      className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
+                        className="group flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-purple-200 rounded-xl text-purple-600 hover:bg-purple-50 hover:border-purple-300 transition-all duration-200 font-medium text-sm shadow-sm hover:shadow-md"
                       onClick={() => {
                         setColocEditing(true);
                         setTimeout(scrollToColocForm, 50);
                       }}
                     >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
                       Modifier
                     </button>
                     <button
-                      className="px-4 py-2 rounded-md bg-rose-600 text-white font-semibold hover:bg-rose-700 transition"
+                        className="group flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-red-200 rounded-xl text-red-600 hover:bg-red-50 hover:border-red-300 transition-all duration-200 font-medium text-sm shadow-sm hover:shadow-md"
                       onClick={handleDeleteColocProfile}
                     >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
                       Supprimer
                     </button>
                   </div>
                 </div>
-                <div className="mt-4 rounded-lg border border-slate-200 p-4 flex flex-col sm:flex-row gap-4">
+                </div>
+                {/* Contenu du profil */}
+                <div className="p-6">
+                  <div className="flex flex-col lg:flex-row gap-6">
+                    {/* Photo de profil */}
+                    <div className="flex-shrink-0">
+                      <div className="relative group">
                   <Image
                     src={colocImageUrl || defaultColocImg}
                     alt="Photo de profil"
-                    width={128}
-                    height={128}
-                    className="w-32 h-32 object-cover rounded-lg border"
+                          width={160}
+                          height={160}
+                          className="w-40 h-40 object-cover rounded-2xl border-2 border-gray-200 shadow-lg group-hover:shadow-xl transition-all duration-300"
                     style={{ cursor: 'pointer' }}
                     onClick={() => {
                       // compute gallery image list and open lightbox at the main image position
@@ -1642,504 +1746,161 @@ function DashboardContent() {
                       setColocLightboxOpen(true);
                     }}
                   />
-                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <div className="text-sm text-slate-500">🧑 Nom</div>
-                      <div className="font-medium">{colocNom || "-"}</div>
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded-2xl transition-all duration-300 flex items-center justify-center">
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                            </svg>
                     </div>
-                    <div>
-                      <div className="text-sm text-slate-500">💶 Budget</div>
-                      <div className="font-medium">{typeof colocBudget === 'number' ? `${colocBudget} €` : '-'}</div>
                     </div>
-                    <div>
-                      <div className="text-sm text-slate-500">🎂 Âge</div>
-                      <div className="font-medium">{typeof colocAge === 'number' ? colocAge : '-'}</div>
                     </div>
-                    <div>
-                      <div className="text-sm text-slate-500">💼 Profession</div>
-                      <div className="font-medium">{colocProfession || '-'}</div>
                     </div>
-                    <div>
-                      <div className="text-sm text-slate-500">⚧️ Genre</div>
-                      <div className="font-medium">{colocGenre || '-'}</div>
-                    </div>
-                    <div>
-                      
-                    </div>
-                    <div className="sm:col-span-2">
-                      <div className="text-sm text-slate-500">📝 Bio courte</div>
-                      <div className="text-slate-700">{colocBioCourte || '-'}</div>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <div className="text-sm text-slate-500">📍 Zone recherchée(s)</div>
-                      {(Array.isArray(colocZones) && colocZones.length > 0) ? (
-                        <div className="mt-1 flex flex-wrap gap-2">
-                          {colocZones.map((z: string) => (
-                            <span key={z} className="px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">{z}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="font-medium">-</div>
-                      )}
-                    </div>
-                    {/* Secteur recherché (communes) */}
-                    <div className="sm:col-span-2">
-                      <div className="text-sm text-slate-500">🗺️ Secteur recherché</div>
-                      {(Array.isArray(colocCommunesSlugs) && colocCommunesSlugs.length > 0) ? (
-                        <div className="mt-1 flex flex-wrap gap-2">
-                          {colocCommunesSlugs.map((s: string) => (
-                            <span key={s} className="px-2 py-1 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">{SLUG_TO_NAME[s] || s}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="font-medium">-</div>
-                      )}
-                    </div>
-                    <div className="sm:col-span-2">
-                      <div className="text-sm text-slate-500">🧾 Description</div>
-                      <div className="text-slate-700 whitespace-pre-line">{colocDescription || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">📸 Instagram</div>
-                      <div className="font-medium">{colocInstagram || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">📞 Téléphone</div>
-                      <div className="font-medium">{colocTelephone || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">📅 Date de disponibilité</div>
-                      <div className="font-medium">{colocDateDispo || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">🏘️ Quartiers</div>
-                      <div className="font-medium">{colocQuartiers || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">🚬 Je fume</div>
-                      <div className="font-medium">{colocFumeur ? 'Oui' : 'Non'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">🐾 J&apos;ai des animaux</div>
-                      <div className="font-medium">{colocAnimaux ? 'Oui' : 'Non'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">🚭 Accepte fumeurs</div>
-                      <div className="font-medium">{accepteFumeurs ? 'Oui' : 'Non'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">🐶 Accepte animaux</div>
-                      <div className="font-medium">{accepteAnimaux ? 'Oui' : 'Non'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">⏰ Rythme</div>
-                      <div className="font-medium">{rythme || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">🧽 Propreté</div>
-                      <div className="font-medium">{proprete || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">🏃 Sportif</div>
-                      <div className="font-medium">{sportif ? 'Oui' : 'Non'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">🥗 Végétarien</div>
-                      <div className="font-medium">{vegetarien ? 'Oui' : 'Non'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">🎉 Aime les soirées</div>
-                      <div className="font-medium">{soirees ? 'Oui' : 'Non'}</div>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <div className="text-sm text-slate-500">🎵 Musique</div>
-                      <div className="font-medium">{musique || '-'}</div>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <div className="text-sm text-slate-500">🗣️ Langues</div>
-                      {languesSelected.length ? (
-                        <div className="mt-1 flex flex-wrap gap-2">
-                          {languesSelected.map((l) => (
-                            <span key={l} className="px-2 py-1 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">{l}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="font-medium">-</div>
-                      )}
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">👥 Préférence colloc (genre)</div>
-                      <div className="font-medium">{prefGenre || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-500">🔢 Tranche d&apos;âge souhaitée</div>
-                      <div className="font-medium">{(prefAgeMin !== '' || prefAgeMax !== '') ? `${prefAgeMin !== '' ? prefAgeMin : '—'} - ${prefAgeMax !== '' ? prefAgeMax : '—'}` : '-'}</div>
-                    </div>
-                  </div>
-                </div>
-                {/* Galerie de photos */}
-                <div className="mt-4">
-                  <div className="text-sm text-slate-500 mb-2">📷 Photos</div>
-                  {colocPhotos && colocPhotos.length ? (
-                    <div className="flex gap-2 flex-wrap">
-                      {colocPhotos.map((p, idx) => (
-                        <div key={p.url || idx} className="w-20 h-20 rounded overflow-hidden border cursor-pointer" onClick={() => { setColocGalleryIndex(idx); setColocLightboxOpen(true); }}>
-                          <Image src={p.url} alt={`photo-${idx}`} width={80} height={80} className="w-full h-full object-cover" sizes="80px" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-slate-600">-</div>
-                  )}
-                </div>
-                {colocLightboxOpen && (
-                  <ImageLightbox
-                    images={colocPhotos && colocPhotos.length ? colocPhotos.map(p => p.url) : (colocImageUrl ? [colocImageUrl] : [defaultColocImg])}
-                    initialIndex={colocGalleryIndex}
-                    onClose={() => setColocLightboxOpen(false)}
-                  />
-                )}
-              </section>
-            )}
 
-            {/* Invite à créer le profil quand vide ou inexistant (cachée si le formulaire est ouvert) */}
-            {(!colocEditing && (!hasColocDoc || (hasColocDoc && !hasMeaningfulColocData))) && (
-              <section className="mt-8">
-                <div className="rounded-md border border-dashed p-4 text-center">
-                  <p className="mb-3">Vous n’avez pas encore renseigné votre profil colocataire.</p>
-                  <button
-                    className="inline-flex items-center gap-2 px-5 py-3 rounded-full text-white bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg hover:from-blue-700 hover:to-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 transition-transform duration-200 will-change-transform hover:scale-[1.02] active:scale-[0.99]"
-                    onClick={() => {
-                      setColocEditing(true);
-                      setTimeout(scrollToColocForm, 50);
-                    }}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                      <path fillRule="evenodd" d="M12 4.5a.75.75 0 01.75.75v6h6a.75.75 0 010 1.5h-6v6a.75.75 0 01-1.5 0v-6h-6a.75.75 0 010-1.5h6v-6A.75.75 0 0112 4.5z" clipRule="evenodd" />
+                    {/* Informations du profil */}
+                    <div className="flex-1">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
+                            <div className="flex items-center gap-2 mb-2">
+                              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                              </svg>
+                              <span className="text-sm font-medium text-blue-700">Nom</span>
+                    </div>
+                            <div className="text-lg font-semibold text-gray-900">{colocNom || "-"}</div>
+                    </div>
+
+                          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
+                            <div className="flex items-center gap-2 mb-2">
+                              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                              </svg>
+                              <span className="text-sm font-medium text-green-700">Budget</span>
+                        </div>
+                            <div className="text-lg font-semibold text-gray-900">{typeof colocBudget === 'number' ? `${colocBudget} €/mois` : '-'}</div>
+                    </div>
+
+                          <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
+                            <div className="flex items-center gap-2 mb-2">
+                              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <span className="text-sm font-medium text-purple-700">Âge</span>
+                        </div>
+                            <div className="text-lg font-semibold text-gray-900">{typeof colocAge === 'number' ? `${colocAge} ans` : '-'}</div>
+                    </div>
+                    </div>
+
+                        <div className="space-y-4">
+                          <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-100">
+                            <div className="flex items-center gap-2 mb-2">
+                              <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2-2v2m8 0V6a2 2 0 012 2v6a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2V6" />
+                              </svg>
+                              <span className="text-sm font-medium text-orange-700">Profession</span>
+                    </div>
+                            <div className="text-lg font-semibold text-gray-900">{colocProfession || '-'}</div>
+                    </div>
+
+                          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl p-4 border border-indigo-100">
+                            <div className="flex items-center gap-2 mb-2">
+                              <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
-                    Créer mon profil
-                  </button>
+                              <span className="text-sm font-medium text-indigo-700">Genre</span>
                 </div>
+                            <div className="text-lg font-semibold text-gray-900">{colocGenre || '-'}</div>
+                </div>
+                </div>
+                </div>
+
+                      {/* Bio courte */}
+                      {colocBioCourte && (
+                        <div className="mt-6 bg-gradient-to-r from-gray-50 to-slate-50 rounded-xl p-6 border border-gray-200">
+                          <div className="flex items-center gap-2 mb-3">
+                            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span className="text-sm font-medium text-gray-700">À propos de moi</span>
+                </div>
+                          <p className="text-gray-700 leading-relaxed">{colocBioCourte}</p>
+                  </div>
+                      )}
+
+                      {/* Zones recherchées */}
+                      {(Array.isArray(colocZones) && colocZones.length > 0) && (
+                        <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+                          <div className="flex items-center gap-2 mb-4">
+                            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <span className="text-sm font-medium text-blue-700">Zones recherchées</span>
+                </div>
+                          <div className="flex flex-wrap gap-2">
+                            {colocZones.map((z: string) => (
+                              <span key={z} className="px-3 py-2 rounded-full text-sm bg-white text-blue-700 border border-blue-200 shadow-sm">
+                                {z}
+                              </span>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                        </div>
+                        </div>
+                      </div>
               </section>
-            )}
-
-            {loadingColoc ? (
-              <p className="text-gray-500">Chargement du profil…</p>
-            ) : (colocEditing ? (
-              <form ref={colocFormRef} onSubmit={(e)=>{e.preventDefault(); handleSaveColocProfile();}} className="flex flex-col gap-4">
-                {/* Actions en haut du formulaire */}
-                <div className="sticky top-16 z-20 -mx-6 px-6 py-3 bg-white flex justify-center gap-3 border-b border-slate-200 shadow-sm">
-                  {hasColocDoc && hasMeaningfulColocData && (
-                    <button
-                      type="button"
-                      onClick={handleDeleteColocProfile}
-                      className="px-4 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-700 transition"
-                    >
-                      Supprimer le profil
-                    </button>
                   )}
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
-                  >
-                    {savingColoc ? "Enregistrement..." : "Enregistrer le profil"}
-                  </button>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Nom</label>
-                  <input
-                    type="text"
-                    value={colocNom}
-                    onChange={(e) => setColocNom(e.target.value)}
-                    className="border rounded px-3 py-2 w-full"
-                    placeholder="Votre nom"
-                  />
-                </div>
-                {/* Champ Ville supprimé: on utilise désormais les Zones/Communes via la carte */}
-                <div>
-                  <label className="block text-sm font-medium mb-1">Budget (€)</label>
-                  <input
-                    type="number"
-                    value={colocBudget}
-                    onChange={(e) => setColocBudget(e.target.value ? Number(e.target.value) : "")}
-                    className="border rounded px-3 py-2 w-full"
-                    placeholder="Ex: 600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Photos</label>
-                  <PhotoUploader
-                    initial={colocPhotos.map(p => p.url)}
-                    initialMain={colocPhotos.find(p=>p.isMain)?.url}
-                    resourceType="coloc"
-                    resourceId={user?.uid}
-                    openOnClick={true}
-                    onChange={(photos) => {
-                      // photos: {url,isMain}[]
-                      setColocPhotos(photos.map(p=>({ url: p.url, isMain: !!p.isMain })));
-                      const main = photos.find(p => p.isMain)?.url || photos[0]?.url || "";
-                      if (main) setColocImageUrl(main);
-                    }}
-                  />
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-1">Description</label>
-                  <textarea
-                    value={colocDescription}
-                    onChange={(e) => setColocDescription(e.target.value)}
-                    className="border rounded px-3 py-2 w-full"
-                    rows={4}
-                    placeholder="Parlez de vous, vos critères, etc."
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Âge</label>
-                    <input
-                      type="number"
-                      value={colocAge}
-                      onChange={(e) => setColocAge(e.target.value ? Number(e.target.value) : "")}
-                      className="border rounded px-3 py-2 w-full"
-                      placeholder="Ex: 25"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Profession</label>
-                    <input
-                      type="text"
-                      value={colocProfession}
-                      onChange={(e) => setColocProfession(e.target.value)}
-                      className="border rounded px-3 py-2 w-full"
-                      placeholder="Votre profession"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <select className="border rounded px-3 py-2" value={colocGenre} onChange={e=>setColocGenre(e.target.value)}>
-                    <option value="">Genre</option><option value="femme">Femme</option><option value="homme">Homme</option><option value="non-binaire">Non-binaire</option><option value="autre">Autre</option>
-                  </select>
-                  
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Bio courte</label>
-                  <input type="text" value={colocBioCourte} onChange={e=>setColocBioCourte(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Une phrase pour vous décrire" />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Langues</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
-                      {LANG_OPTIONS.map((l) => {
-                        const id = `lang-${l}`;
-                        const checked = languesSelected.includes(l);
-                        return (
-                          <label key={l} htmlFor={id} className="inline-flex items-center gap-2 text-sm">
-                            <input
-                              id={id}
-                              type="checkbox"
-                              className="w-4 h-4 appearance-none rounded border border-slate-400 bg-white bg-center bg-no-repeat checked:bg-blue-600 checked:border-blue-600 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3.5 8.5 L6.5 11.5 L12.5 4.5%22/></svg>')] checked:bg-[length:0.85rem_0.85rem]"
-                              checked={checked}
-                              onChange={(e) => {
-                                const set = new Set(languesSelected);
-                                if (e.target.checked) set.add(l); else set.delete(l);
-                                const arr = Array.from(set);
-                                setColocLanguesCsv(arr.join(", "));
-                              }}
-                            />
-                            {l}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Instagram</label>
-                    <input type="text" value={colocInstagram} onChange={e=>setColocInstagram(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="@handle" />
-                  </div>
-                </div>
-                {/* legacy CSV input removed - photos managed by PhotoUploader above */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <select className="border rounded px-3 py-2" value={prefGenre} onChange={e=>setPrefGenre(e.target.value)}>
-                    <option value="">Préférence colloc (genre)</option><option value="femme">Femme</option><option value="homme">Homme</option><option value="mixte">Mixte</option><option value="peu-importe">Peu importe</option>
-                  </select>
-                  <div className="flex gap-2">
-                    <input type="number" className="border rounded px-3 py-2 w-full" placeholder="Âge min" value={prefAgeMin} onChange={e=>setPrefAgeMin(e.target.value ? Number(e.target.value) : "")} />
-                    <input type="number" className="border rounded px-3 py-2 w-full" placeholder="Âge max" value={prefAgeMax} onChange={e=>setPrefAgeMax(e.target.value ? Number(e.target.value) : "")} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <label className="inline-flex items-center gap-2">
-                    <input type="checkbox" checked={accepteFumeurs} onChange={e=>setAccepteFumeurs(e.target.checked)} className="w-5 h-5 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 checked:bg-blue-600 checked:border-blue-600 checked:ring-2 checked:ring-blue-300 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%223%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3 8.2 L6.2 11.4 L13 4.6%22/></svg>')] checked:bg-[length:1rem_1rem]"
-                  />
-                  Accepte fumeurs
-                </label>
-                <label className="inline-flex items-center gap-2">
-                  <input type="checkbox" checked={accepteAnimaux} onChange={e=>setAccepteAnimaux(e.target.checked)} className="w-5 h-5 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 checked:bg-blue-600 checked:border-blue-600 checked:ring-2 checked:ring-blue-300 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%223%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3 8.2 L6.2 11.4 L13 4.6%22/></svg>')] checked:bg-[length:1rem_1rem]"
-                  />
-                  Accepte animaux
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <select className="border rounded px-3 py-2" value={rythme} onChange={e=>setRythme(e.target.value)}>
-                    <option value="">Rythme</option><option value="matinal">Matinal</option><option value="noctambule">Noctambule</option><option value="flexible">Flexible</option>
-                  </select>
-                  <select className="border rounded px-3 py-2" value={proprete} onChange={e=>setProprete(e.target.value)}>
-                    <option value="">Propreté</option><option value="relaxe">Relaxe</option><option value="normal">Normal</option><option value="maniaque">Maniaque</option>
-                  </select>
-                  <input type="text" className="border rounded px-3 py-2" placeholder="Musique (artistes…)" value={musique} onChange={e=>setMusique(e.target.value)} />
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <label className="inline-flex items-center gap-2">
-                    <input type="checkbox" checked={sportif} onChange={e=>setSportif(e.target.checked)} className="w-5 h-5 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 checked:bg-blue-600 checked:border-blue-600 checked:ring-2 checked:ring-blue-300 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%223%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3 8.2 L6.2 11.4 L13 4.6%22/></svg>')] checked:bg-[length:1rem_1rem]" />
-                    Sportif
-                  </label>
-                  <label className="inline-flex items-center gap-2">
-                    <input type="checkbox" checked={vegetarien} onChange={e=>setVegetarien(e.target.checked)} className="w-5 h-5 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 checked:bg-blue-600 checked:border-blue-600 checked:ring-2 checked:ring-blue-300 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%223%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3 8.2 L6.2 11.4 L13 4.6%22/></svg>')] checked:bg-[length:1rem_1rem]" />
-                    Végétarien
-                  </label>
-                  <label className="inline-flex items-center gap-2">
-                    <input type="checkbox" checked={soirees} onChange={e=>setSoirees(e.target.checked)} className="w-5 h-5 appearance-none rounded-full border border-slate-400 bg-white bg-center bg-no-repeat transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 checked:bg-blue-600 checked:border-blue-600 checked:ring-2 checked:ring-blue-300 checked:bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22white%22 stroke-width=%223%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M3 8.2 L6.2 11.4 L13 4.6%22/></svg>')] checked:bg-[length:1rem_1rem]" />
-                    Aime les soirées
-                  </label>
-                </div>
-                {/* Ajout: fermeture du conteneur grid-cols-2 manquante */}
-                </div>
-                {/* Remplacement: zones/communes par la carte de sélection */}
-                <div className="mt-2">
-                  <label className="block text-sm font-medium mb-2">Zone recherchée(s)</label>
-                  <div className="rounded-2xl border border-slate-200 p-3">
-                    <CommuneZoneSelector
-                      value={colocCommunesSlugs}
-                      computeZonesFromSlugs={computeZonesFromSlugs}
-                      onChange={(slugs, zones = []) => {
-                        setColocCommunesSlugs((prev) => (sameIds(prev, slugs) ? prev : slugs));
-                        setColocZones((prev) => (sameIds(prev, zones) ? prev : zones));
-                      }}
-                      height={420}
-                      className="w-full"
-                      alwaysMultiSelect
-                      hideSelectionSummary
-                    />
-                  </div>
-                  {/* Tuto d'utilisation de la carte */}
-                  <div className="mt-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-3">
-                    <p className="font-medium text-slate-700 mb-1">Comment utiliser la carte</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                      <li>Cliquez sur une commune pour la sélectionner ou la retirer.</li>
-                      <li>Choisissez-en plusieurs si besoin; les zones sont calculées automatiquement.</li>
-                      <li>Utilisez la molette ou les boutons +/− pour zoomer/dézoomer; maintenez le clic pour déplacer la carte.</li>
-                      <li>Deux boutons en haut à droite: « Réinitialiser » (revient à la vue initiale) et « Zoom sélection » (cadre les communes choisies).</li>
-                      <li>La liste des communes sélectionnées s’affiche ci-dessous.</li>
-                    </ul>
-                  </div>
-                  {colocCommunesSlugs.length > 0 && (
-                    <div className="mt-3">
-                      <div className="bg-white rounded-xl border border-slate-200 p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="text-xs font-medium text-slate-600">Secteur recherché</div>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{colocCommunesSlugs.length}</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {colocCommunesSlugs.map((s: string) => (
-                            <span key={s} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-slate-50 text-slate-700 border border-slate-200">{SLUG_TO_NAME[s] || s}</span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {Array.isArray(colocZones) && colocZones.length > 0 && (
-                    <div className="mt-3">
-                      <div className="bg-white rounded-xl border border-slate-200 p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="text-xs font-medium text-slate-600">Zones sélectionnées</div>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">{colocZones.length}</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {colocZones.map((z: string) => (
-                            <span key={z} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">{z}</span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Boutons déplacés en haut du formulaire */}
-              </form>
-            ) : null)}
+            {/* Formulaire de création/édition du profil colocataire */}
           </>
         )}
 
-        {/* Modal de détail d'annonce */}
-        {selectedAnnonceForDetail && selectedAnnonceForDetail.id && (
-        <AnnonceDetailModal
-          annonce={selectedAnnonceForDetail}
-            open={true}
-          onClose={() => {
-            console.log("[Dashboard] Fermeture du modal, selectedAnnonceForDetail:", selectedAnnonceForDetail);
-            setSelectedAnnonceForDetail(null);
-          }}
-        />
-        )}
-
-        {/* Modal de détail du profil colocataire pour l'onglet Match */}
-        {colocDetailOpen && colocDetail && (
-          <div
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
-            onMouseDown={(e) => { if (e.target === e.currentTarget) setColocDetailOpen(false); }}
-          >
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 relative max-h-[90vh] overflow-y-auto">
-              <button
-                onClick={() => setColocDetailOpen(false)}
-                className="absolute top-3 right-3 text-slate-600 hover:text-slate-900"
-                aria-label="Fermer"
-              >
-                ✖
-              </button>
-              <h3 className="text-xl font-semibold mb-4">Profil colocataire</h3>
-              <div className="flex flex-col gap-4">
-                <div className="flex gap-4 items-start">
-                  <div className="flex-shrink-0 w-32 h-32">
-                    <Image
-                      src={colocDetail.imageUrl || defaultColocImg}
-                      alt="Photo de profil"
-                      width={128}
-                      height={128}
-                      className="w-32 h-32 object-cover rounded-lg border"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-2xl font-bold">
-                      {colocDetail.nom || "Profil colocataire"}
-                    </div>
-                    <div className="text-slate-700">
-                      {colocDetail.age ? `${colocDetail.age} ans` : ""} 
-                      {colocDetail.profession ? ` • ${colocDetail.profession}` : ""}
-                    </div>
-                    <div className="text-blue-600 font-semibold">
-                      {colocDetail.budget ? `Budget: ${colocDetail.budget} €/mois` : "Budget non renseigné"}
-                    </div>
-                  </div>
+        {activeTab === "favoris" && (
+          <div className="space-y-6">
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold mb-4">❤️ Mes favoris</h2>
+              <p className="text-gray-600 mb-4">
+                Retrouvez ici toutes vos annonces et profils favoris.
+              </p>
                 </div>
                 
-                {colocDetail.bioCourte && (
-                  <div className="text-slate-700">{colocDetail.bioCourte}</div>
-                )}
-                
-                {colocDetail.description && (
-                  <div>
-                    <div className="text-sm font-medium text-slate-700 mb-1">À propos</div>
-                    <p className="text-slate-800 whitespace-pre-line">{colocDetail.description}</p>
-                  </div>
-                )}
+            <FavoritesStats />
+            <FavoritesSection />
+                </div>
+        )}
 
-                <div className="flex justify-end gap-2">
+        {activeTab === "parametres" && (
+          <div className="space-y-6">
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold mb-4">⚙️ Paramètres</h2>
+              <p className="text-gray-600 mb-4">
+                Gérez vos préférences et paramètres de confidentialité.
+              </p>
+                  </div>
+
+            <CookiePreferences />
+            
+            {/* Section suppression de compte */}
+            <div className="mt-8 p-6 bg-red-50 border border-red-200 rounded-xl">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-red-800 mb-2">Suppression du compte</h3>
+                  <p className="text-red-700 mb-4">
+                    Supprimez définitivement votre compte et toutes les données associées. 
+                    Cette action est irréversible et supprimera toutes vos annonces, messages, 
+                    profils et préférences.
+                  </p>
                   <button
-                    onClick={() => setColocDetailOpen(false)}
-                    className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+                    onClick={() => setDeleteAccountModalOpen(true)}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
                   >
-                    Fermer
+                    Supprimer mon compte
                   </button>
                 </div>
               </div>
@@ -2147,8 +1908,7 @@ function DashboardContent() {
           </div>
         )}
 
-        {/* Modal de suppression de compte */}
-        <DeleteAccountModal
+        <DeleteAccountModal 
           isOpen={deleteAccountModalOpen}
           onClose={() => setDeleteAccountModalOpen(false)}
         />
@@ -2157,7 +1917,6 @@ function DashboardContent() {
   );
 }
 
-// Composant principal avec Suspense boundary
 export default function DashboardPage() {
   return (
     <Suspense fallback={
@@ -2172,4 +1931,3 @@ export default function DashboardPage() {
     </Suspense>
   );
 }
-
