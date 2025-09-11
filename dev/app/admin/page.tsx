@@ -17,6 +17,7 @@ import AdminStats from "@/shared/components/AdminStats";
 import AdminQuickActions from "@/shared/components/AdminQuickActions";
 import AdminToast, { useAdminToast } from "@/shared/components/AdminToast";
 import AdminCharts, { AdminPieChart } from "@/shared/components/AdminCharts";
+import AdminViewToggle from "@/shared/components/AdminViewToggle";
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
@@ -241,11 +242,12 @@ export default function AdminPage() {
         <div className="bg-white/90 backdrop-blur-sm rounded-3xl border border-white/20 shadow-2xl overflow-hidden">
           {/* Header du contenu */}
           <div className="bg-gradient-to-r from-slate-50 to-blue-50 border-b border-slate-200/50 px-8 py-6">
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 bg-gradient-to-r ${tabs.find(t => t.id === activeTab)?.color} rounded-xl flex items-center justify-center shadow-lg`}>
-                <span className="text-2xl">{tabs.find(t => t.id === activeTab)?.icon}</span>
-              </div>
-              <div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className={`w-12 h-12 bg-gradient-to-r ${tabs.find(t => t.id === activeTab)?.color} rounded-xl flex items-center justify-center shadow-lg`}>
+                  <span className="text-2xl">{tabs.find(t => t.id === activeTab)?.icon}</span>
+                </div>
+                <div>
                 <h2 className="text-2xl font-bold text-slate-800">
                   {tabs.find(t => t.id === activeTab)?.label}
                 </h2>
@@ -254,6 +256,10 @@ export default function AdminPage() {
                 </p>
               </div>
             </div>
+            
+            {/* Basculement de vue Admin/Utilisateur */}
+            <AdminViewToggle />
+          </div>
           </div>
 
           {/* Contenu principal */}

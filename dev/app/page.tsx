@@ -47,11 +47,14 @@ function toMsAny(x: any): number {
 }
 
 export default function HomePage() {
+  // Session et authentification
+  const { data: session } = useSession();
+  const user = session?.user as any;
+  const isAdmin = user?.role === 'admin';
+  const isConnected = !!user;
+
   // Image d'accueil configurable via env (placer l'image dans public/ et utiliser un chemin commençant par "/")
   const homepageImageSrc = process.env.NEXT_PUBLIC_HOMEPAGE_IMAGE || "/images/home-hero.jpg";
-  // Rôle admin depuis la session NextAuth
-  const { data: session, status } = useSession();
-  const isAdmin = (session as any)?.user?.role === 'admin';
   const [editAnnonce, setEditAnnonce] = useState<any|null>(null);
   const [annonceDetail, setAnnonceDetail] = useState<any|null>(null);
   const [_annonceDetailOpen, setAnnonceDetailOpen] = useState(false);
@@ -388,6 +391,13 @@ export default function HomePage() {
 
   // Préchargement silencieux des features de carte (si utilisé)
   useEffect(() => { try { preloadReunionFeatures(); } catch {} }, []);
+
+  // Vérifier si l'utilisateur a encore accès au tableau de bord
+  useEffect(() => {
+    if (activeHomeTab === "tableau-de-bord" && (!isConnected || !isAdmin)) {
+      setActiveHomeTab("annonces");
+    }
+  }, [activeHomeTab, isConnected, isAdmin]);
 
   // Reset quand on change d'onglet
   useEffect(() => {
@@ -895,21 +905,24 @@ export default function HomePage() {
                 </svg>
                 Colocataires
               </button>
-              <button
-                role="tab"
-                aria-selected={activeHomeTab === "tableau-de-bord"}
-                className={`px-6 py-3 text-sm font-semibold transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded-xl flex items-center gap-2 ${
-                  activeHomeTab === "tableau-de-bord"
-                    ? "bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-lg transform scale-105"
-                    : "text-slate-700 hover:bg-slate-50 hover:text-purple-600"
-                }`}
-                onClick={() => setActiveHomeTab("tableau-de-bord")}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                Tableau de bord
-              </button>
+              {/* Onglet Tableau de bord - visible seulement pour les admins connectés */}
+              {isConnected && isAdmin && (
+                <button
+                  role="tab"
+                  aria-selected={activeHomeTab === "tableau-de-bord"}
+                  className={`px-6 py-3 text-sm font-semibold transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded-xl flex items-center gap-2 ${
+                    activeHomeTab === "tableau-de-bord"
+                      ? "bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-lg transform scale-105"
+                      : "text-slate-700 hover:bg-slate-50 hover:text-purple-600"
+                  }`}
+                  onClick={() => setActiveHomeTab("tableau-de-bord")}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  Tableau de bord
+                </button>
+              )}
             </div>
           </div>
 

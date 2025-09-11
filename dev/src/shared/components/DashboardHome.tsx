@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { useIsUserView } from './AdminViewToggle';
 
 interface DashboardStats {
   totalAnnonces: number;
@@ -21,8 +22,10 @@ interface RecentActivity {
 }
 
 export default function DashboardHome() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const user = session?.user as any;
+  const loading = status === "loading";
+  const isUserView = useIsUserView();
   const [stats, setStats] = useState<DashboardStats>({
     totalAnnonces: 0,
     totalColocataires: 0,
@@ -32,24 +35,39 @@ export default function DashboardHome() {
     loading: true
   });
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  // Vérifier si l'utilisateur est admin
+  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
     const fetchDashboardData = async () => {
+      // Ne charger les données que si l'utilisateur est admin
+      if (!isAdmin) {
+        setDataLoading(false);
+        return;
+      }
+
       try {
-        setLoading(true);
+        setDataLoading(true);
         
-        // Récupérer les statistiques
-        const [annoncesRes, colocatairesRes, usersRes] = await Promise.all([
+        // Récupérer les statistiques selon la vue
+        const promises = [
           fetch('/api/annonces', { cache: 'no-store' }),
-          fetch('/api/coloc', { cache: 'no-store' }),
-          fetch('/api/admin/users', { cache: 'no-store' })
-        ]);
+          fetch('/api/coloc', { cache: 'no-store' })
+        ];
+        
+        // Ajouter l'API users seulement si on n'est pas en vue utilisateur
+        if (!isUserView) {
+          promises.push(fetch('/api/admin/users', { cache: 'no-store' }));
+        }
+        
+        const responses = await Promise.all(promises);
 
         const [annoncesData, colocatairesData, usersData] = await Promise.all([
-          annoncesRes.ok ? annoncesRes.json() : { total: 0, items: [] },
-          colocatairesRes.ok ? colocatairesRes.json() : { total: 0, items: [] },
-          usersRes.ok ? usersRes.json() : { total: 0, items: [] }
+          responses[0].ok ? responses[0].json() : { total: 0, items: [] },
+          responses[1].ok ? responses[1].json() : { total: 0, items: [] },
+          !isUserView && responses[2] ? (responses[2].ok ? responses[2].json() : { total: 0, items: [] }) : { total: 0, items: [] }
         ]);
 
         // Calculer les statistiques de la semaine
@@ -75,7 +93,7 @@ export default function DashboardHome() {
           loading: false
         });
 
-        // Simuler des activités récentes
+        // Simuler des activités récentes selon la vue
         const activities: RecentActivity[] = [
           {
             id: '1',
@@ -90,28 +108,81 @@ export default function DashboardHome() {
             title: 'Profil colocataire mis à jour',
             date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
             action: 'Modifié'
-          },
-          {
+          }
+        ];
+
+        // Ajouter l'activité utilisateur seulement si on n'est pas en vue utilisateur
+        if (!isUserView) {
+          activities.push({
             id: '3',
             type: 'user',
             title: 'Nouvel utilisateur inscrit',
             date: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
             action: 'Inscrit'
-          }
-        ];
+          });
+        }
 
         setRecentActivity(activities);
       } catch (error) {
         console.error('Erreur lors du chargement du tableau de bord:', error);
       } finally {
-        setLoading(false);
+        setDataLoading(false);
       }
     };
 
     fetchDashboardData();
-  }, []);
+  }, [isAdmin, isUserView]);
 
+  // Afficher un écran de chargement pendant la vérification de l'authentification
   if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="relative">
+            <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mx-auto mb-4"></div>
+            <div className="absolute inset-0 w-12 h-12 border-4 border-transparent border-t-pink-400 rounded-full animate-spin mx-auto mb-4" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+          </div>
+          <p className="text-slate-600 font-medium">Vérification de l'authentification...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Bloquer l'accès si l'utilisateur n'est pas connecté ou n'est pas admin
+  if (!user || !isAdmin) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center max-w-md mx-auto p-8">
+          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Accès non autorisé</h1>
+          <p className="text-gray-600 mb-6">
+            {!user 
+              ? "Vous devez être connecté pour accéder au tableau de bord." 
+              : "Seuls les administrateurs peuvent accéder au tableau de bord."
+            }
+          </p>
+          {!user && (
+            <button
+              onClick={() => window.location.href = '/login'}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+              </svg>
+              Se connecter
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Afficher un écran de chargement pendant le chargement des données
+  if (dataLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
@@ -225,13 +296,15 @@ export default function DashboardHome() {
           color="from-purple-500 to-pink-500"
           trend={{ value: 8, isPositive: true }}
         />
-        <StatCard
-          title="Utilisateurs"
-          value={stats.totalUsers}
-          icon="👤"
-          color="from-green-500 to-emerald-500"
-          trend={{ value: 15, isPositive: true }}
-        />
+        {!isUserView && (
+          <StatCard
+            title="Utilisateurs"
+            value={stats.totalUsers}
+            icon="👤"
+            color="from-green-500 to-emerald-500"
+            trend={{ value: 15, isPositive: true }}
+          />
+        )}
         <StatCard
           title="Nouveautés cette semaine"
           value={stats.annoncesThisWeek + stats.colocatairesThisWeek}
@@ -252,7 +325,7 @@ export default function DashboardHome() {
       </div>
 
       {/* Actions rapides */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 gap-6 ${isUserView ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
         <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-2xl p-6 text-center hover:shadow-lg transition-shadow">
           <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <span className="text-2xl">📊</span>
@@ -264,16 +337,18 @@ export default function DashboardHome() {
           </button>
         </div>
 
-        <div className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200 rounded-2xl p-6 text-center hover:shadow-lg transition-shadow">
-          <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl">⚙️</span>
+        {!isUserView && (
+          <div className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200 rounded-2xl p-6 text-center hover:shadow-lg transition-shadow">
+            <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl">⚙️</span>
+            </div>
+            <h3 className="font-semibold text-slate-800 mb-2">Paramètres</h3>
+            <p className="text-sm text-slate-600 mb-4">Configurez vos préférences</p>
+            <button className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium">
+              Configurer
+            </button>
           </div>
-          <h3 className="font-semibold text-slate-800 mb-2">Paramètres</h3>
-          <p className="text-sm text-slate-600 mb-4">Configurez vos préférences</p>
-          <button className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium">
-            Configurer
-          </button>
-        </div>
+        )}
 
         <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-6 text-center hover:shadow-lg transition-shadow">
           <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
