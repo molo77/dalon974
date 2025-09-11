@@ -1,128 +1,111 @@
-// Prisma schema for migrating Firestore data to MySQL
-// Run with: DATABASE_URL="mysql://user:pass@localhost:3306/rodcoloc" npx prisma migrate dev --name init
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  emailVerified DateTime?
-  password  String?
-  name      String?
-  role      String?  // e.g. 'admin', 'user', etc.
-  providerId String?
-  displayName String?
-  image     String?
-  createdAt DateTime @default(now()) @db.Timestamp(6)
-  updatedAt DateTime? @db.Timestamp(6)
-  
-  // Relations NextAuth
-  accounts Account[]
-  sessions Session[]
-  
-  // Relations pour les signalements
-  reportsMade    UserReport[] @relation("UserReports")
+  id              String       @id @default(uuid())
+  email           String       @unique
+  password        String?
+  name            String?
+  role            String?
+  providerId      String?
+  displayName     String?
+  createdAt       DateTime     @default(now()) @db.Timestamp(6)
+  updatedAt       DateTime?    @db.Timestamp(6)
+  emailVerified   DateTime?
+  image           String?
+  accounts        Account[]
+  sessions        Session[]
+  blocksReceived  UserBlock[]  @relation("UserBlocked")
+  blocksMade      UserBlock[]  @relation("UserBlocks")
   reportsReceived UserReport[] @relation("UserReported")
-  
-  // Relations pour les blocages
-  blocksMade     UserBlock[] @relation("UserBlocks")
-  blocksReceived UserBlock[] @relation("UserBlocked")
+  reportsMade     UserReport[] @relation("UserReports")
+  favorites       Favorite[]
 }
 
 model ColocProfile {
-  id           String        @id
-  userId       String?
-  title        String?       // titre générique (fallback)
-  nom          String?
-  ville        String?
-  budget       Int?
-  age          Int?
-  profession   String?
-  description  String?       @db.Text
-  imageUrl     String?       
-  photos       Json?         // keep photos array as JSON for compatibility
-  mainPhotoIdx Int?
-  communesSlugs Json?
-  zones        Json?
-  // Nouveaux champs pour les profils coloc
-  bioCourte    String?
-  genre        String?
-  langues      Json?
-  instagram    String?
-  telephone    String?
-  dateDispo    String?
-  // Préférences
-  prefGenre    String?
-  prefAgeMin   Int?
-  prefAgeMax   Int?
+  id             String    @id
+  userId         String?
+  title          String?
+  nom            String?
+  ville          String?
+  budget         Int?
+  age            Int?
+  profession     String?
+  description    String?   @db.Text
+  imageUrl       String?
+  photos         Json?
+  mainPhotoIdx   Int?
+  communesSlugs  Json?
+  zones          Json?
+  createdAt      DateTime? @db.Timestamp(6)
+  updatedAt      DateTime? @db.Timestamp(6)
+  bioCourte      String?
+  genre          String?
+  langues        Json?
+  instagram      String?
+  telephone      String?
+  dateDispo      String?
+  prefGenre      String?
+  prefAgeMin     Int?
+  prefAgeMax     Int?
   accepteFumeurs Boolean?
   accepteAnimaux Boolean?
-  rythme       String?
-  proprete     String?
-  sportif      Boolean?
-  vegetarien   Boolean?
-  soirees      Boolean?
-  musique      String?
-  // Champs legacy
-  fumeur       Boolean?
-  animaux      Boolean?
-  quartiers    String?
-  interets     Json?
-  codePostal   String?
-  createdAt    DateTime?     @db.Timestamp(6)
-  updatedAt    DateTime?     @db.Timestamp(6)
+  rythme         String?
+  proprete       String?
+  sportif        Boolean?
+  vegetarien     Boolean?
+  soirees        Boolean?
+  musique        String?
+  fumeur         Boolean?
+  animaux        Boolean?
+  quartiers      String?
+  interets       Json?
+  codePostal     String?
 }
 
 model Annonce {
-  id          String       @id
-  userId      String?
-  title       String?
-  description String?      @db.Text
-  imageUrl    String?
-  photos      Json?
-  mainPhotoIdx Int?
-  // Champs supplémentaires pour l'app
-  ville       String?
-  prix        Int?
-  surface     Int?
-  nbChambres  Int?
-  equipements String?
-  // Attributs détaillés normalisés
-  typeBien            String?
-  meuble              Boolean?
-  nbPieces            Int?
-  nbSdb               Int?
-  natureBien          String?
-  caracteristiques    String?
-  exposition          String?
-  exterieur           String?
-  placesParking       Int?
-  disponibleAPartir   String?
-  typeLocation        String?
-  nombreColocataires  Int?
-  statutFumeur        String?
-  // Source de l'annonce (ex: 'lbc' pour Leboncoin)
-  source              String?
-  createdAt   DateTime?    @db.Timestamp(6)
-  updatedAt   DateTime?    @db.Timestamp(6)
+  id                 String    @id
+  userId             String?
+  title              String?
+  description        String?   @db.Text
+  imageUrl           String?
+  photos             Json?
+  mainPhotoIdx       Int?
+  ville              String?
+  prix               Int?
+  surface            Int?
+  nbChambres         Int?
+  equipements        String?
+  typeBien           String?
+  meuble             Boolean?
+  nbPieces           Int?
+  nbSdb              Int?
+  natureBien         String?
+  caracteristiques   String?
+  exposition         String?
+  exterieur          String?
+  placesParking      Int?
+  disponibleAPartir  String?
+  typeLocation       String?
+  nombreColocataires Int?
+  statutFumeur       String?
+  createdAt          DateTime? @db.Timestamp(6)
+  updatedAt          DateTime? @db.Timestamp(6)
+  source             String?
 }
 
-// Configuration clé/valeur du scraper (variables LBC_ dynamiques)
 model ScraperSetting {
   key       String   @id
   value     String?
   updatedAt DateTime @updatedAt @db.Timestamp(6)
 }
 
-
-// NextAuth VerificationToken
 model VerificationToken {
   identifier String
   token      String   @unique
@@ -131,7 +114,6 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// NextAuth Account (pour les providers OAuth)
 model Account {
   id                String  @id @default(cuid())
   userId            String
@@ -145,53 +127,51 @@ model Account {
   scope             String?
   id_token          String? @db.Text
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@index([userId], map: "Account_userId_fkey")
 }
 
-// NextAuth Session (pour la stratégie database, optionnel avec JWT)
 model Session {
   id           String   @id @default(cuid())
   sessionToken String   @unique
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "Session_userId_fkey")
 }
 
-// Publicités Google AdSense administrables
 model AdUnit {
-  id                 String   @id @default(uuid())
-  name               String
-  placementKey       String   // ex: "home.initial.belowHero", "listing.inline.1"
-  slot               String   // data-ad-slot
-  format             String?  // ex: "auto"
-  fullWidthResponsive Boolean  @default(true)
-  height             Int?
-  isActive           Boolean  @default(true)
-  createdAt          DateTime @default(now()) @db.Timestamp(6)
-  updatedAt          DateTime? @db.Timestamp(6)
+  id                  String    @id @default(uuid())
+  name                String
+  placementKey        String
+  slot                String
+  format              String?
+  fullWidthResponsive Boolean   @default(true)
+  height              Int?
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt           DateTime? @db.Timestamp(6)
 
   @@index([placementKey])
   @@index([isActive])
 }
 
 model Message {
-  id             String   @id @default(uuid())
-  annonceId      String?
-  annonceOwnerId String?
-  senderId       String?
-  senderEmail    String?
-  content        String   @db.Text
-  createdAt      DateTime @default(now()) @db.Timestamp(6)
-  updatedAt      DateTime? @db.Timestamp(6)
-  
-  // Nouveaux champs pour le système de conversations
-  conversationId String?  // ID de la conversation (généré à partir de annonceId + participants)
-  parentMessageId String? // ID du message parent (pour les réponses)
-  isRead         Boolean  @default(false) // Statut lu/non lu
-  readAt         DateTime? @db.Timestamp(6) // Date de lecture
+  id              String    @id @default(uuid())
+  annonceId       String?
+  annonceOwnerId  String?
+  senderId        String?
+  senderEmail     String?
+  content         String    @db.Text
+  createdAt       DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt       DateTime? @db.Timestamp(6)
+  conversationId  String?
+  isRead          Boolean   @default(false)
+  parentMessageId String?
+  readAt          DateTime? @db.Timestamp(6)
 
   @@index([annonceId])
   @@index([annonceOwnerId])
@@ -202,49 +182,88 @@ model Message {
 
 model ConversationDeletion {
   id             String   @id @default(uuid())
-  conversationId String   // ID de la conversation supprimée
-  userId         String   // ID de l'utilisateur qui a supprimé
+  conversationId String
+  userId         String
   deletedAt      DateTime @default(now()) @db.Timestamp(6)
-  
-  @@unique([conversationId, userId]) // Un utilisateur ne peut supprimer qu'une fois la même conversation
+
+  @@unique([conversationId, userId])
   @@index([conversationId])
   @@index([userId])
 }
 
 model UserBlock {
-  id          String   @id @default(uuid())
-  blockerId   String   // ID de l'utilisateur qui bloque
-  blockedId   String   // ID de l'utilisateur bloqué
-  blockedAt   DateTime @default(now()) @db.Timestamp(6)
-  reason      String?  // Raison du blocage (optionnel)
-  
-  // Relations
-  blocker     User     @relation("UserBlocks", fields: [blockerId], references: [id])
-  blocked     User     @relation("UserBlocked", fields: [blockedId], references: [id])
-  
-  @@unique([blockerId, blockedId]) // Un utilisateur ne peut bloquer qu'une fois la même personne
+  id        String   @id @default(uuid())
+  blockerId String
+  blockedId String
+  blockedAt DateTime @default(now()) @db.Timestamp(6)
+  reason    String?
+  blocked   User     @relation("UserBlocked", fields: [blockedId], references: [id])
+  blocker   User     @relation("UserBlocks", fields: [blockerId], references: [id])
+
+  @@unique([blockerId, blockedId])
   @@index([blockerId])
   @@index([blockedId])
 }
 
 model UserReport {
-  id          String   @id @default(uuid())
-  reporterId  String   // ID de l'utilisateur qui signale
-  reportedId  String   // ID de l'utilisateur signalé
-  reason      String   // Raison du signalement
-  description String?  @db.Text // Description détaillée (optionnel)
-  status      String   @default("pending") // pending, reviewed, resolved, dismissed
-  createdAt   DateTime @default(now()) @db.Timestamp(6)
+  id          String    @id @default(uuid())
+  reporterId  String
+  reportedId  String
+  reason      String
+  description String?   @db.Text
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
   reviewedAt  DateTime? @db.Timestamp(6)
-  reviewedBy  String?  // ID de l'admin qui a traité le signalement
-  reviewNotes String?  @db.Text // Notes de l'admin
-  
-  // Relations
-  reporter    User     @relation("UserReports", fields: [reporterId], references: [id])
-  reported    User     @relation("UserReported", fields: [reportedId], references: [id])
-  
+  reviewedBy  String?
+  reviewNotes String?   @db.Text
+  reported    User      @relation("UserReported", fields: [reportedId], references: [id])
+  reporter    User      @relation("UserReports", fields: [reporterId], references: [id])
+
   @@index([reporterId])
   @@index([reportedId])
   @@index([status])
   @@index([createdAt])
+}
+
+model ScraperRun {
+  id                 String    @id
+  startedAt          DateTime  @default(now()) @db.Timestamp(6)
+  finishedAt         DateTime? @db.Timestamp(6)
+  status             String?
+  totalCollected     Int?
+  totalUpserts       Int?
+  detailLimit        Int?
+  rawLog             String?   @db.LongText
+  errorMessage       String?   @db.Text
+  createdCount       Int?
+  updatedCount       Int?
+  skippedRecentCount Int?
+  cooldownHours      Float?
+  progress           Float?
+  currentStep        String?
+  currentMessage     String?
+  childPid           Int?
+  config             Json?
+  createdAt          DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt          DateTime? @db.Timestamp(6)
+
+  @@index([startedAt])
+  @@index([status])
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  itemId    String
+  itemType  String
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId, itemType])
+  @@index([createdAt])
+  @@index([itemId])
+  @@index([itemType])
+  @@index([userId])
 }

@@ -4,113 +4,147 @@ import { useState } from "react";
 // import Image from "next/image";
 import Link from "next/link";
 import AdBlock from "@/shared/components/AdBlock";
+import SocialShare from "@/shared/components/SocialShare";
+import { useActualites } from "@/shared/hooks/useActualites";
 
 export default function IdeesPratiquesPage() {
   const [activeTab, setActiveTab] = useState<'conseils' | 'actualites' | 'astuces'>('conseils');
+  const { actualites, loading: actualitesLoading, error: actualitesError, refreshActualites } = useActualites();
 
   const conseils = [
     {
       id: 1,
-      title: "Comment bien choisir ses colocataires",
-      excerpt: "Les critères essentiels pour trouver des colocataires compatibles à La Réunion.",
-      content: "Choisir ses colocataires est crucial pour une colocation réussie. Voici nos conseils :\n\n• Définissez vos priorités : budget, style de vie, horaires\n• Organisez des rencontres avant de vous engager\n• Discutez des règles de vie commune\n• Vérifiez la compatibilité des personnalités\n• Établissez un contrat de colocation clair",
-      category: "Vie en colocation",
-      readTime: "5 min",
-      image: "/images/conseils-colocataires.jpg"
+      title: "Pourquoi la colocation explose à La Réunion",
+      excerpt: "Découvrez les raisons de l'engouement pour la colocation sur l'île intense.",
+      content: "La colocation connaît un essor remarquable à La Réunion avec +20% de croissance en 5 ans. Plus de 10 000 personnes sont engagées dans des contrats de colocation sur l'île :\n\n• Économies significatives sur le loyer et les charges\n• Intégration sociale facilitée pour les nouveaux arrivants\n• Partage des responsabilités du quotidien\n• Enrichissement culturel dans une île métissée\n• Solution flexible pour étudiants et jeunes professionnels\n• Opportunité d'investissement pour les propriétaires\n• Réduction du risque de vacance locative",
+      category: "Contexte réunionnais",
+      readTime: "6 min",
+      image: "/images/colocation-reunion.jpg"
     },
     {
       id: 2,
-      title: "Gérer les charges et le budget",
-      excerpt: "Tout savoir sur la répartition des charges dans une colocation réunionnaise.",
-      content: "La gestion financière est un aspect important de la colocation :\n\n• Répartissez équitablement les charges communes\n• Utilisez des applications de partage de frais\n• Tenez un registre des dépenses partagées\n• Prévoyez un fonds commun pour les imprévus\n• Communiquez ouvertement sur les questions d'argent",
-      category: "Budget",
-      readTime: "4 min",
-      image: "/images/budget-colocation.jpg"
+      title: "Les meilleurs quartiers pour la colocation",
+      excerpt: "Guide des zones les plus propices à la colocation à La Réunion.",
+      content: "Choisir le bon quartier est essentiel pour une colocation réussie :\n\n• Saint-Denis : dynamisme économique, universités, transports\n• Saint-Pierre : ambiance étudiante, proximité plages\n• Saint-Gilles : tourisme, activités nautiques, vie nocturne\n• Le Tampon : calme, nature, budget accessible\n• Saint-Paul : équilibre ville/campagne, marché local\n\nConsidérez : proximité travail/études, transports, commerces, sécurité",
+      category: "Géographie",
+      readTime: "8 min",
+      image: "/images/quartiers-reunion.jpg"
     },
     {
       id: 3,
-      title: "Organiser l'espace de vie commune",
-      excerpt: "Optimisez votre espace de vie partagé pour plus de confort.",
-      content: "Un espace bien organisé améliore la vie en colocation :\n\n• Définissez des zones personnelles et communes\n• Investissez dans du rangement intelligent\n• Créez des espaces de détente partagés\n• Organisez un planning de ménage\n• Respectez l'intimité de chacun",
-      category: "Organisation",
-      readTime: "6 min",
-      image: "/images/organisation-espace.jpg"
+      title: "Aspects juridiques et financiers spécifiques",
+      excerpt: "Tout savoir sur la réglementation colocation à La Réunion.",
+      content: "La colocation à La Réunion suit le droit français avec quelques spécificités :\n\n• Contrat de colocation obligatoire (solidarité ou indivision)\n• Aides CAF : APL calculées selon la situation de chacun\n• Charges : électricité, eau, internet, taxe d'habitation\n• Assurance : responsabilité civile et habitation\n• Déclaration fiscale : partage des revenus locatifs\n• Dépôt de garantie : réparti entre colocataires",
+      category: "Légal",
+      readTime: "10 min",
+      image: "/images/legal-colocation.jpg"
     },
     {
       id: 4,
-      title: "Résoudre les conflits de colocation",
-      excerpt: "Nos conseils pour gérer les tensions et maintenir une bonne ambiance.",
-      content: "Les conflits sont inévitables, voici comment les gérer :\n\n• Communiquez rapidement et directement\n• Organisez des réunions de colocation régulières\n• Écoutez les besoins de chacun\n• Trouvez des compromis équitables\n• N'hésitez pas à faire appel à un médiateur si nécessaire",
-      category: "Relations",
+      title: "Gérer les différences culturelles en colocation",
+      excerpt: "Comment vivre harmonieusement avec des colocataires d'horizons différents.",
+      content: "La Réunion, île métissée, offre une richesse culturelle unique :\n\n• Respect des traditions : créole, tamoul, chinois, malgache\n• Cuisine partagée : échange de recettes traditionnelles\n• Fêtes et célébrations : participation aux événements culturels\n• Langues : créole, français, langues d'origine\n• Religion : respect des pratiques spirituelles\n• Communication : ouverture d'esprit et tolérance",
+      category: "Culture",
       readTime: "7 min",
-      image: "/images/conflits-colocation.jpg"
+      image: "/images/culture-reunion.jpg"
+    },
+    {
+      id: 5,
+      title: "Colocation vs Coliving : quelle différence ?",
+      excerpt: "Comprendre les nouvelles tendances d'habitat partagé à La Réunion.",
+      content: "Deux approches complémentaires de l'habitat partagé :\n\n**Colocation traditionnelle :**\n• Partage d'un logement privé\n• Gestion autonome des colocataires\n• Budget maîtrisé, liberté d'organisation\n\n**Coliving moderne :**\n• Espaces conçus pour la communauté\n• Services inclus (ménage, coworking, événements)\n• Flexibilité, réseau social intégré\n• Idéal pour digital nomads et expatriés\n\nChoisissez selon vos priorités : économie vs services",
+      category: "Tendances",
+      readTime: "9 min",
+      image: "/images/coliving-reunion.jpg"
+    },
+    {
+      id: 6,
+      title: "Résoudre les conflits avec bienveillance",
+      excerpt: "Techniques de médiation adaptées à la culture réunionnaise.",
+      content: "La résolution de conflits à La Réunion privilégie l'harmonie :\n\n• Approche créole : dialogue direct mais respectueux\n• Médiation communautaire : faire appel aux aînés\n• Temps de pause : laisser le temps aux émotions\n• Solutions collectives : impliquer toute la colocation\n• Respect de l'harmonie : éviter les tensions durables\n• Célébrations communes : renforcer les liens",
+      category: "Relations",
+      readTime: "6 min",
+      image: "/images/mediation-reunion.jpg"
+    },
+    {
+      id: 7,
+      title: "Services innovants : Keylodge Living et La Kaz",
+      excerpt: "Découvrez les nouvelles plateformes qui révolutionnent la colocation à La Réunion.",
+      content: "De nouveaux services transforment l'expérience de la colocation à La Réunion :\n\n**Keylodge Living :**\n• Service de colocation sécurisée\n• Garantie de loyers pour les propriétaires\n• Entretien régulier des biens\n• Solutions pour étudiants et professionnels\n\n**La Kaz :**\n• Plateforme locale spécialisée\n• Services adaptés aux spécificités de l'île\n• Mise en relation facilitée\n• Accompagnement personnalisé\n\nCes innovations répondent aux besoins croissants du marché réunionnais.",
+      category: "Services",
+      readTime: "8 min",
+      image: "/images/services-innovants.jpg"
     }
   ];
 
-  const actualites = [
-    {
-      id: 1,
-      title: "Nouvelle réglementation sur les colocations à La Réunion",
-      excerpt: "Les nouvelles règles qui impactent les colocataires en 2024.",
-      date: "15 Janvier 2024",
-      category: "Légal",
-      readTime: "8 min",
-      image: "/images/reglementation-colocation.jpg"
-    },
-    {
-      id: 2,
-      title: "Aide au logement : ce qui change pour les colocations",
-      excerpt: "Les modifications des aides CAF pour les colocataires réunionnais.",
-      date: "10 Janvier 2024",
-      category: "Aides",
-      readTime: "6 min",
-      image: "/images/aides-logement.jpg"
-    },
-    {
-      id: 3,
-      title: "Tendances colocation 2024 : ce qui plaît aux Réunionnais",
-      excerpt: "Les nouvelles préférences des colocataires à La Réunion.",
-      date: "5 Janvier 2024",
-      category: "Tendances",
-      readTime: "5 min",
-      image: "/images/tendances-colocation.jpg"
-    }
-  ];
 
   const astuces = [
     {
       id: 1,
-      title: "Économiser sur les courses alimentaires",
-      excerpt: "Comment réduire ses dépenses alimentaires en colocation.",
-      tip: "Organisez des achats groupés et cuisinez ensemble pour réduire les coûts.",
-      category: "Économies",
+      title: "Cuisiner créole à plusieurs",
+      excerpt: "Partager les recettes traditionnelles réunionnaises en colocation.",
+      tip: "Organisez des soirées cuisine où chacun enseigne une spécialité de son origine : rougail saucisse, cari poulet, samoussas...",
+      category: "Culture",
       difficulty: "Facile"
     },
     {
       id: 2,
-      title: "Optimiser sa facture d'électricité",
-      excerpt: "Réduire sa consommation énergétique en colocation.",
-      tip: "Installez des multiprises avec interrupteur et sensibilisez vos colocataires aux économies d'énergie.",
+      title: "Économiser sur les produits locaux",
+      excerpt: "Profiter des marchés réunionnais pour réduire les coûts alimentaires.",
+      tip: "Faites vos courses ensemble aux marchés forains (Saint-Pierre, Saint-Denis) et négociez les prix en achetant en gros.",
+      category: "Économies",
+      difficulty: "Facile"
+    },
+    {
+      id: 3,
+      title: "Gérer la climatisation en colocation",
+      excerpt: "Optimiser l'usage de la clim pour réduire la facture d'électricité.",
+      tip: "Établissez des règles : 24°C minimum, fermeture des volets la journée, utilisation par zones selon les besoins.",
       category: "Écologie",
       difficulty: "Moyen"
     },
     {
-      id: 3,
-      title: "Créer un planning de ménage efficace",
-      excerpt: "Organiser le nettoyage pour éviter les tensions.",
-      tip: "Utilisez une application de planning partagé et alternez les tâches selon les préférences de chacun.",
-      category: "Organisation",
+      id: 4,
+      title: "Organiser des sorties nature ensemble",
+      excerpt: "Profiter des richesses naturelles de l'île en groupe.",
+      tip: "Planifiez des randonnées, sorties plage ou visites de sites naturels en covoiturage pour partager les frais de transport.",
+      category: "Loisirs",
       difficulty: "Facile"
     },
     {
-      id: 4,
-      title: "Décorer sans se ruiner",
-      excerpt: "Personnaliser son espace avec un budget limité.",
-      tip: "Organisez des ateliers DIY entre colocataires et récupérez des objets pour les customiser.",
-      category: "Décoration",
+      id: 5,
+      title: "Créer un potager partagé",
+      excerpt: "Cultiver ensemble des légumes tropicaux sur votre balcon ou jardin.",
+      tip: "Plantez des brèdes, tomates, piments et herbes aromatiques. Chacun s'occupe d'une plante et vous partagez la récolte.",
+      category: "Écologie",
+      difficulty: "Moyen"
+    },
+    {
+      id: 6,
+      title: "Gérer les fêtes et célébrations",
+      excerpt: "Organiser les événements culturels et religieux en colocation.",
+      tip: "Respectez les fêtes de chacun (Divali, Nouvel An chinois, Noël créole) et participez aux célébrations pour renforcer les liens.",
+      category: "Culture",
+      difficulty: "Facile"
+    },
+    {
+      id: 7,
+      title: "Optimiser le transport en commun",
+      excerpt: "Utiliser efficacement les transports publics réunionnais en groupe.",
+      tip: "Achetez des cartes de transport groupées, organisez des covoiturages pour les trajets quotidiens et partagez les frais d'essence.",
+      category: "Transport",
+      difficulty: "Facile"
+    },
+    {
+      id: 8,
+      title: "Créer un système d'entraide",
+      excerpt: "Mettre en place une solidarité entre colocataires pour les imprévus.",
+      tip: "Établissez un fonds commun pour les urgences, organisez un système de garde d'animaux et d'aide mutuelle en cas de besoin.",
+      category: "Solidarité",
       difficulty: "Facile"
     }
   ];
+
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-sky-50 via-emerald-50 to-teal-50">
@@ -136,6 +170,18 @@ export default function IdeesPratiquesPage() {
           <p className="text-xl md:text-2xl text-sky-100 max-w-3xl mx-auto leading-relaxed">
             Découvrez nos conseils d'experts, actualités et astuces pour réussir votre colocation à La Réunion
           </p>
+          
+          {/* Partage social */}
+          <div className="mt-8 flex justify-center">
+            <SocialShare
+              title="Idées Pratiques - Colocation à La Réunion"
+              description="Découvrez nos conseils d'experts, actualités et astuces pour réussir votre colocation à La Réunion"
+              hashtags={["RodColoc", "Colocation", "LaReunion", "974", "Conseils", "Astuces"]}
+              variant="compact"
+              showLabels={false}
+              className="bg-white/20 backdrop-blur-sm rounded-full px-6 py-3 border border-white/30"
+            />
+          </div>
         </div>
       </section>
 
@@ -204,12 +250,15 @@ export default function IdeesPratiquesPage() {
                     {conseil.title}
                   </h3>
                   <p className="text-slate-600 mb-5 leading-relaxed">{conseil.excerpt}</p>
-                  <button className="inline-flex items-center gap-2 text-sky-600 hover:text-sky-700 font-semibold group-hover:gap-3 transition-all duration-300">
+                  <Link 
+                    href={`/conseils/${conseil.slug}`}
+                    className="inline-flex items-center gap-2 text-sky-600 hover:text-sky-700 font-semibold group-hover:gap-3 transition-all duration-300"
+                  >
                     Lire la suite
                     <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
-                  </button>
+                  </Link>
                 </div>
               </article>
             ))}
@@ -217,6 +266,65 @@ export default function IdeesPratiquesPage() {
         )}
 
         {activeTab === 'actualites' && (
+          <div className="space-y-6">
+            {/* Bouton de rafraîchissement */}
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-slate-800">Actualités Colocation La Réunion</h2>
+              <button
+                onClick={refreshActualites}
+                disabled={actualitesLoading}
+                className="inline-flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-purple-700 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {actualitesLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Chargement...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Actualiser
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Message d'erreur */}
+            {actualitesError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-red-700 font-medium">Erreur lors du chargement des actualités</p>
+                </div>
+                <p className="text-red-600 text-sm mt-1">{actualitesError}</p>
+              </div>
+            )}
+
+            {/* Loading state */}
+            {actualitesLoading && actualites.length === 0 && (
+              <div className="space-y-8">
+                {[1, 2, 3].map((index) => (
+                  <div key={index} className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg overflow-hidden border border-white/20">
+                    <div className="md:flex">
+                      <div className="md:w-1/3 h-48 bg-gradient-to-br from-purple-100 via-pink-100 to-rose-100 animate-pulse"></div>
+                      <div className="md:w-2/3 p-8">
+                        <div className="h-4 bg-slate-200 rounded mb-4 animate-pulse"></div>
+                        <div className="h-8 bg-slate-200 rounded mb-4 animate-pulse"></div>
+                        <div className="h-4 bg-slate-200 rounded mb-2 animate-pulse"></div>
+                        <div className="h-4 bg-slate-200 rounded w-3/4 animate-pulse"></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Actualités dynamiques */}
+            {!actualitesLoading && actualites.length > 0 && (
           <div className="space-y-8">
             {actualites.map((actualite, index) => (
               <article 
@@ -241,17 +349,61 @@ export default function IdeesPratiquesPage() {
                     <h3 className="text-2xl font-bold mb-4 text-slate-800 group-hover:text-purple-600 transition-colors duration-300">
                       {actualite.title}
                     </h3>
-                    <p className="text-slate-600 mb-6 leading-relaxed text-lg">{actualite.excerpt}</p>
-                    <button className="inline-flex items-center gap-2 text-purple-600 hover:text-purple-700 font-semibold group-hover:gap-3 transition-all duration-300">
-                      Lire l'article
-                      <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        <p className="text-slate-600 mb-4 leading-relaxed text-lg">{actualite.excerpt}</p>
+                        
+                        {/* Source et lien */}
+                        {actualite.source && (
+                          <div className="mb-4">
+                            <p className="text-xs text-slate-500">
+                              Source: <span className="font-medium">{actualite.source}</span>
+                            </p>
+                          </div>
+                        )}
+                        
+                        {actualite.url ? (
+                          <a
+                            href={actualite.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-purple-600 hover:text-purple-700 font-semibold group-hover:gap-3 transition-all duration-300"
+                          >
+                            Lire l'article complet
+                            <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
+                        ) : (
+                    <span className="inline-flex items-center gap-2 text-purple-400 font-semibold cursor-not-allowed">
+                      Article complet bientôt disponible
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                    </button>
+                    </span>
+                        )}
                   </div>
                 </div>
               </article>
             ))}
+              </div>
+            )}
+
+            {/* Message si aucune actualité */}
+            {!actualitesLoading && actualites.length === 0 && !actualitesError && (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">📰</div>
+                <h3 className="text-xl font-bold text-slate-800 mb-2">Aucune actualité disponible</h3>
+                <p className="text-slate-600 mb-4">Les actualités seront bientôt disponibles.</p>
+                <button
+                  onClick={refreshActualites}
+                  className="inline-flex items-center gap-2 bg-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-purple-700 transition-colors duration-300"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Réessayer
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -296,6 +448,7 @@ export default function IdeesPratiquesPage() {
             ))}
           </div>
         )}
+
       </section>
 
       {/* Call to Action */}
@@ -330,11 +483,11 @@ export default function IdeesPratiquesPage() {
               </span>
             </Link>
             <Link
-              href="/"
+              href="/conseils"
               className="group border-2 border-white text-white px-8 py-4 rounded-2xl font-semibold hover:bg-white hover:text-sky-600 transition-all duration-300 transform hover:scale-105 backdrop-blur-sm"
             >
               <span className="flex items-center gap-2">
-                Voir les profils
+                Guide complet des conseils
                 <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>

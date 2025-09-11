@@ -22,6 +22,10 @@ import AdBlock from "@/shared/components/AdBlock";
 import useCommuneSelection from "@/shared/hooks/useCommuneSelection";
 import CommuneZoneSelector from "@/shared/components/map/CommuneZoneSelector";
 import MessagesSection from "@/features/dashboard/MessagesSection";
+import CookiePreferences from "@/shared/components/CookiePreferences";
+import DeleteAccountModal from "@/shared/components/DeleteAccountModal";
+import FavoritesSection from "@/shared/components/FavoritesSection";
+import FavoritesStats from "@/shared/components/FavoritesStats";
 
 // Liste complète des communes de La Réunion
 const COMMUNES = [
@@ -283,7 +287,7 @@ function DashboardContent() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [_userRole, setUserRole] = useState<string | null>(null);
   const [userDocLoaded, setUserDocLoaded] = useState(false);
-  const [activeTab, setActiveTab] = useState<"annonces" | "messages" | "coloc" | "match">("annonces");
+  const [activeTab, setActiveTab] = useState<"annonces" | "messages" | "coloc" | "match" | "favoris" | "parametres">("annonces");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
 
@@ -293,6 +297,7 @@ function DashboardContent() {
   const [matchType, setMatchType] = useState<"annonces" | "profils">("annonces");
   const [colocDetailOpen, setColocDetailOpen] = useState(false);
   const [colocDetail, setColocDetail] = useState<any | null>(null);
+  const [deleteAccountModalOpen, setDeleteAccountModalOpen] = useState(false);
 
   // --- Profil colocataire: états (déplacé plus haut pour éviter l'usage avant déclaration) ---
   const [loadingColoc, setLoadingColoc] = useState(true);
@@ -641,9 +646,9 @@ function DashboardContent() {
     const tabParam = searchParams.get('tab');
     console.log('[Dashboard] Paramètre tab détecté:', tabParam);
     console.log('[Dashboard] ActiveTab actuel:', activeTab);
-    if (tabParam && ['annonces', 'messages', 'coloc', 'match'].includes(tabParam)) {
+    if (tabParam && ['annonces', 'messages', 'coloc', 'match', 'favoris', 'parametres'].includes(tabParam)) {
       console.log('[Dashboard] Changement d\'onglet vers:', tabParam);
-      setActiveTab(tabParam as "annonces" | "messages" | "coloc" | "match");
+      setActiveTab(tabParam as "annonces" | "messages" | "coloc" | "match" | "favoris" | "parametres");
     }
   }, [searchParams, activeTab]);
 
@@ -1003,6 +1008,34 @@ function DashboardContent() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
               </svg>
               Match
+            </button>
+            <button
+              className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-300 text-sm flex items-center justify-center gap-2 ${
+                activeTab === "favoris"
+                  ? "bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg transform scale-105 animate-pulse-slow"
+                  : "text-slate-700 hover:bg-slate-50 hover:text-red-600"
+              }`}
+              onClick={() => setActiveTab("favoris")}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+              Favoris
+            </button>
+            
+            <button
+              className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-300 text-sm flex items-center justify-center gap-2 ${
+                activeTab === "parametres"
+                  ? "bg-gradient-to-r from-sky-600 to-cyan-500 text-white shadow-lg transform scale-105 animate-pulse-slow"
+                  : "text-slate-700 hover:bg-slate-50 hover:text-sky-600"
+              }`}
+              onClick={() => setActiveTab("parametres")}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Paramètres
             </button>
           </div>
         </div>
@@ -1507,6 +1540,58 @@ function DashboardContent() {
               )}
             </div>
           </>
+        )}
+
+        {activeTab === "favoris" && (
+          <div className="space-y-6">
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold mb-4">❤️ Mes favoris</h2>
+              <p className="text-gray-600 mb-4">
+                Retrouvez ici toutes vos annonces et profils favoris.
+              </p>
+            </div>
+            
+            <FavoritesStats />
+            <FavoritesSection />
+          </div>
+        )}
+
+        {activeTab === "parametres" && (
+          <div className="space-y-6">
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold mb-4">⚙️ Paramètres</h2>
+              <p className="text-gray-600 mb-4">
+                Gérez vos préférences et paramètres de confidentialité.
+              </p>
+            </div>
+            
+            <CookiePreferences />
+            
+            {/* Section suppression de compte */}
+            <div className="mt-8 p-6 bg-red-50 border border-red-200 rounded-xl">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-red-800 mb-2">Suppression du compte</h3>
+                  <p className="text-red-700 mb-4">
+                    Supprimez définitivement votre compte et toutes les données associées. 
+                    Cette action est irréversible et supprimera toutes vos annonces, messages, 
+                    profils et préférences.
+                  </p>
+                  <button
+                    onClick={() => setDeleteAccountModalOpen(true)}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                  >
+                    Supprimer mon compte
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {activeTab === "coloc" && (
@@ -2061,6 +2146,12 @@ function DashboardContent() {
             </div>
           </div>
         )}
+
+        {/* Modal de suppression de compte */}
+        <DeleteAccountModal
+          isOpen={deleteAccountModalOpen}
+          onClose={() => setDeleteAccountModalOpen(false)}
+        />
       </div>
     </div>
   );

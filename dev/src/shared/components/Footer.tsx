@@ -153,6 +153,15 @@ export default function Footer() {
                 <span>🌺 Développé à La Réunion</span>
                 <span className="hidden sm:block">•</span>
                 <span>Version 1.0.0</span>
+                <span className="hidden sm:block">•</span>
+                <div className="flex gap-4">
+                  <Link href="/politique-confidentialite" className="hover:text-white transition-colors">
+                    Confidentialité
+                  </Link>
+                  <Link href="/mentions-legales" className="hover:text-white transition-colors">
+                    Mentions légales
+                  </Link>
+                </div>
               </div>
 
               {/* Badge de statut */}

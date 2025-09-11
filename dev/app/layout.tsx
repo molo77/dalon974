@@ -7,6 +7,7 @@ import { MatchesProvider } from '@/shared/MatchesContext'
 import MaintenanceAlert from '@/shared/components/maintenance/MaintenanceAlert'
 import Header from '@/shared/components/Header'
 import Footer from '@/shared/components/Footer'
+import CookieBanner from '@/shared/components/CookieBanner'
 import LeafletStyles from '@/shared/components/map/LeafletStyles'
 import { ErrorBoundary } from '@/shared/components'
 
@@ -47,6 +48,8 @@ export default function RootLayout({
                   <LeafletStyles />
                   {/* Toast global */}
                   <GlobalToast />
+                  {/* Bannière de cookies RGPD */}
+                  <CookieBanner />
                 </MatchesProvider>
               </MessagesProvider>
             </AuthProvider>

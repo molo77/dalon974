@@ -18,6 +18,14 @@ export default function useAdminGate(params: {
     if (authLoading) return; // attend fin du chargement auth
     if (checkedRef.current && !refreshOnUserChange) return; // ne refait pas si déjà vérifié
     checkedRef.current = true;
+    
+    // En mode développement, permettre l'accès admin sans authentification
+    if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+      setIsAdmin(true);
+      setCheckingAdmin(false);
+      return;
+    }
+    
     if (!user) {
       setIsAdmin(false);
       setCheckingAdmin(false);
